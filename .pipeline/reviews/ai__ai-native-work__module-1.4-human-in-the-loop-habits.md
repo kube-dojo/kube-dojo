@@ -1,0 +1,2 @@
+## 2026-06-07T22:12:13Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 118, #1839). Reviewer: cursor (composer-2.5). Verifier-T0 (7683w). Durable-content PASS. R1 NEEDS_CHANGES: 2× 'The original module' rewrite-artifacts (L130/L252) + K8s-1.35 'and later' framing (L105) + 'Next module coming soon' placeholder. Orchestrator-applied fix (PR #1840): artifacts rephrased direct, framing→'target cluster', Next-Module→AI-Building link (resolves in dist). T0 re-verified. APPROVE.

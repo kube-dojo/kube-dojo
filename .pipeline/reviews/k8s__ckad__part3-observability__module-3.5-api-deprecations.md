@@ -1,0 +1,2 @@
+## 2026-05-31T20:15:35Z — `REVIEW` — `APPROVE`
+CKAD wave-3 (part3-observability) cross-family R1 (session 84). Reviewer: cursor R1 + codex fix (live cluster). NEEDS_CHANGES 4.9/5, no P1, 2 P2: kubectl explain output comments showed combined VERSION: apps/v1 but 1.35 prints GROUP+VERSION on separate lines -> fixed comments + both audit loops now echo ${group}/${version} to match the prose. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1724.

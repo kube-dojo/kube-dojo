@@ -1,0 +1,2 @@
+## 2026-06-01T23:28:39Z — `REVIEW` — `APPROVE`
+KCSA wave-2 cross-family R1 (session 91). Reviewer: deepseek-v4-pro. NEEDS_CHANGES 36/40 (T3->T0); Tesla 2018 -> cross-ref canonical CKS 1.5 (incident-xref, dedup-safe); 2 composite war stories -> Hypothetical/recurring-pattern; Weave Net unmaintained note (Weaveworks 2024); DNS egress -> kube-system + TCP/53; Cilium/Linkerd nits. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1744.

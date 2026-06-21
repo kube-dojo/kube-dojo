@@ -1,0 +1,2 @@
+## 2026-05-31T15:08:06Z — `REVIEW` — `APPROVE`
+Wave-6 cross-family R1 (session 81). Reviewer: cursor --model auto. NEEDS_CHANGES 4.4/5 (no P1, 5xP2), fixed by cursor: from-empty-list deny-all reveal; node->pod ingress note; kubernetes.io/metadata.name namespaceSelector label; TCP/53 DNS egress alongside UDP; Drill-8 consistency. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1707.

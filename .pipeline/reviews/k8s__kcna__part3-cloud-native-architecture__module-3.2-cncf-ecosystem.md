@@ -1,0 +1,2 @@
+## 2026-06-01T22:24:16Z — `REVIEW` — `APPROVE`
+KCNA wave-4 cross-family R1 (session 90). Reviewer: claude-opus-4.8. NEEDS_CHANGES 3.5/5; P1 Istio 'Not CNCF'->CNCF Graduated (+ lesson moved to Grafana); OTel Incubating->Graduated (web-verified, reviewer cutoff missed); removed 'k version --short'; 2 anecdotes -> Hypothetical. Verifier T0/PASS; ground-checked + maturity web-verified by orchestrator; fixed via PR #1739.

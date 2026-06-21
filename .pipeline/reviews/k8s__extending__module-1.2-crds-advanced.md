@@ -1,0 +1,2 @@
+## 2026-06-02T01:05:15Z — `REVIEW` — `APPROVE`
+Extending-K8s wave-1 cross-family R1 (session 92). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.1/5; P1 None-vs-Webhook conversion accuracy (L471-472 + BackupPolicy hands-on); CEL x-kubernetes-validations GA 1.29; has(self.ingress) guard; HPA needs Metrics Server; quiz-8 required-image logic; valueFrom object; cron regex un-escaped; body_words 4984->5131. Verifier T0/PASS; ground-checked + versions web-verified by orchestrator; fixed via PR #1749.

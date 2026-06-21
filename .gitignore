@@ -95,7 +95,8 @@ test_script.sh
 .pipeline/citation-revisions/
 .pipeline/knowledge-cards/
 .pipeline/reviews/*.lock
-.pipeline/reviews/*.md
+# .pipeline/reviews/*.md are review records — TRACKED on purpose (cross-family
+# review audit trail). Do not re-ignore: a clone/CI must see them. (s175 hygiene)
 .pipeline/lab-reviews/
 .pipeline/lab-state.lock
 .pipeline/lab-state.yaml

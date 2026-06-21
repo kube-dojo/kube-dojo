@@ -1,0 +1,2 @@
+## 2026-06-01T05:57:25Z — `REVIEW` — `APPROVE`
+CKS part5 cross-family R1 (session 87, reviewer cursor composer-2.5 --model auto, verified live kind v1.35). NC P1: kind+local-registry hands-on did not run (registry:5000 wrong host -> kind-registry, missing docker network connect, incomplete hosts.toml) — cluster-reproduced + fixed. P2: imagePullPolicy:Never -> ErrImageNeverPull; digest-default pull policy; +2 inline active-learning prompts. Ground-checked; CI gemini-3.1-pro secondary APPROVE; T0/PASS 5884 body_words; merged PR #1733.

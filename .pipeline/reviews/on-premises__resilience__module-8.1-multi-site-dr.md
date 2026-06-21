@@ -1,0 +1,3 @@
+
+## 2026-06-11T16:00:00Z — `REVIEW` — `APPROVE`
+On-premises resilience chapter (#1881, PR #1895). T3→T0 expand 693→5203w (17 src). Author: codex gpt-5.5. Reviewer: opus 4.8 (R1, cross-family) NEEDS_CHANGES (1 P1 + 5 P2) → cursor fix. P1: etcd write-path diagram mis-taught Raft commit latency (implied cross-site RTT gates every write) → redrawn with steady-state (local majority Leader+M2 commits ~sub-ms, M3 off the commit path) + failure-case (M2 down → wait M3 → latency jumps to RTT) panels; ground-checked correct. P2: RPO=0 data-layer conflation, canonical kubeadm etcd-restore sequence, RTT-aligned tuning, Velero plugin v1.13.0 + etcd 3.5.21-0 currency, etcdutl snapshot status. opus confirmed anti-fab CLEAN. Re-verified T0 5203w. Build green PRIMARY 2171p. APPROVE.

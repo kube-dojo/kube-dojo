@@ -1,0 +1,2 @@
+## 2026-06-01T22:24:16Z — `REVIEW` — `APPROVE`
+KCNA wave-4 cross-family R1 (session 90). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.6/5; P2 Restricted PSS controls corrected (no read-only-rootfs); Q5 per-ns default SA vs cluster-wide CRB; war story -> Hypothetical; NetworkPolicy selectors; body_words 4987->5002. Verifier T0/PASS; ground-checked + maturity web-verified by orchestrator; fixed via PR #1739.

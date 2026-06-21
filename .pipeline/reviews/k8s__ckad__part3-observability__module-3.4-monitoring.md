@@ -1,0 +1,2 @@
+## 2026-05-31T20:15:35Z — `REVIEW` — `APPROVE`
+CKAD wave-3 (part3-observability) cross-family R1 (session 84). Reviewer: codex gpt-5.5 (kind v1.35.0). NEEDS_CHANGES 4.2/5, no P1, 2 P2: kubectl top node % is Allocatable by default not Capacity (--show-capacity for capacity); container-only resources clarified for 1.35 (pod-level spec.resources exists); top ... | head -10 header off-by-one -> --no-headers. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1724.

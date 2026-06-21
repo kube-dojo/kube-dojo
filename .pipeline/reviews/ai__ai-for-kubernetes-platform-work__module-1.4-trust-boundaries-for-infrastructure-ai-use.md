@@ -1,0 +1,2 @@
+## 2026-06-07T22:12:13Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 118, #1839). T3→T0 EXPANSION: author codex (1925→5038 body words, 3→15 web-verified sources, +Common-Mistakes/DYK/8th-quiz, order fixed). Reviewer: cursor (composer-2.5), cross-family. Orchestrator independently verified T0 + 15 sources HTTP 200 + no fabrication + Kyverno/OPA as peers. 5 P3 polish (jq hardening, 2 overstatements, illustrative) applied in PR #1840. APPROVE.

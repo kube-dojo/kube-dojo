@@ -1,0 +1,2 @@
+## 2026-06-01T22:39:35Z — `REVIEW` — `APPROVE`
+KCNA wave-5 cross-family R1 (session 90). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.4/5; P1 misplaced 'KCNA Curriculum Complete' block relocated to 4.3; P1 L27 dated incident -> Hypothetical; Artifact Hub CNCF Incubating (web-verified); helm search -> helm search repo. Verifier T0/PASS; ground-checked + maturity web-verified by orchestrator; fixed via PR #1740.

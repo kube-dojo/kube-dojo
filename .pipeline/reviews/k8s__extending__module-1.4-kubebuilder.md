@@ -1,0 +1,2 @@
+## 2026-06-02T01:18:52Z — `REVIEW` — `APPROVE`
+Extending-K8s wave-2 cross-family R1 (session 92). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4/5; P1 Service CreateOrUpdate wiped immutable clusterIP (whole-Spec assign) -> owned-fields-only mutate; Deployment mutate owned-fields-only (Selector create-only); EventRecorder wired; SDK-layout v1.25->v1.0; metrics-disabled note. Verifier T0/PASS; ground-checked + versions web-verified by orchestrator; fixed via PR #1750.

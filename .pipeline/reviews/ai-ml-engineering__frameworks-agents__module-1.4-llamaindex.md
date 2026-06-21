@@ -1,0 +1,2 @@
+## 2026-06-08T19:49:13Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 119, #1842 frameworks-agents batch 3b). Reviewer: cursor (cross-family). R1 NEEDS_CHANGES → fixed (codex): labeled hypothetical opener; quarantined volatile LlamaIndex package-layout facts into a dated landscape snapshot; recorded both llama-index + llama-index-core install paths. T0/5439w. npm build green. Merged PR #1848 → main ea25a4a8. APPROVE.

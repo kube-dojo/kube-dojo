@@ -1,0 +1,2 @@
+## 2026-05-31T16:10:11Z — `REVIEW` — `APPROVE`
+Part4-storage cross-family R1 (session 82). Reviewer: codex gpt-5.5. NEEDS_CHANGES 4.3/5, no P1. Fixed: unfenced ASCII resource-chain diagram -> text fence; PVC sample output corrected to Pending -> consumer-Pod -> Bound for WaitForFirstConsumer standard class. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1712.

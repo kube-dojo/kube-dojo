@@ -1,0 +1,2 @@
+## 2026-06-01T20:09:30Z — `REVIEW` — `APPROVE`
+KCNA wave-3 cross-family R1 (session 89). Reviewer: deepseek-v4-pro. NEEDS_CHANGES; P1 regex-missed late-2023/$tens-of-millions incident reframed + war story L198; P2 9 leaked 'original module'/'preserved' rewrite artifacts cleaned (learner-facing meta-leak); large-cluster scalability source added; scaleUp-defaults note. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1738.

@@ -1,0 +1,2 @@
+## 2026-05-31T20:46:30Z — `REVIEW` — `APPROVE`
+CKAD wave-5 (part5-networking) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). APPROVE 4.6/5, no P1, 2 P2: object-name mismatches (expose deployment my-app -> Service my-app, but follow-ons used my-service/my-loadbalancer; NodePort curl hardcoded 30080) -> made explicit with --name= + --node-port=30080; duration 30 -> 45-55 min. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1726.

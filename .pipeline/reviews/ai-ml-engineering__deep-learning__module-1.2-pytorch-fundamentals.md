@@ -1,0 +1,2 @@
+## 2026-06-10T09:59:21Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (#1842 AI campaign tail). Already-T0 review-flip. Reviewer: cursor (--model auto, R1, RAN on PyTorch 2.12). cursor APPROVE_WITH_NITS -> orchestrator fixed: P2 device-equality assert bug (param '.device mps:0' != device 'mps') -> compare .device.type (CUDA/MPS); + 'continues the running example' notes on the two incremental Part-5/7 snippets. 5216 body_words T0. Merged PR #1879 -> main. APPROVE.

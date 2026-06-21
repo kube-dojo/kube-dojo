@@ -1,0 +1,2 @@
+## 2026-06-02T00:18:35Z — `REVIEW` — `APPROVE`
+KCSA wave-5 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.5/5 (T3->T0); 3 anecdotes -> Hypothetical; 'all auth failures' -> anonymous-only (audit matches system:anonymous); StackRox -> RHACS; kept Falco-graduated-2024 (verified). Verifier T0/PASS; ground-checked + CNCF maturity web-verified by orchestrator; fixed via PR #1747.

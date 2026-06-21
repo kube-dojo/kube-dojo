@@ -1,0 +1,2 @@
+## 2026-05-31T20:33:29Z — `REVIEW` — `APPROVE`
+CKAD wave-4 (part4-environment) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). APPROVE_WITH_NITS 4.6/5, no P1, 2 P2: set env rotation over-generalization -> kubelet-native path (secretKeyRef.name/volume secretName) set as default + inline application-side-only caveat; -n secret-lab added to the earlier rotation snippet. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1725.

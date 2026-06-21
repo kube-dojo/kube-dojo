@@ -1,0 +1,2 @@
+## 2026-05-31T20:33:29Z — `REVIEW` — `APPROVE`
+CKAD wave-4 (part4-environment) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). NEEDS_CHANGES, no P1, 2 P2: kubectl exec -- id/touch missing pod name (errors) -> kubectl exec secure-pod -- ...; low-port teaching inconsistency (drops all caps yet binds :80) reconciled with ip_unprivileged_port_start/NET_BIND_SERVICE note. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1725.

@@ -1,0 +1,2 @@
+## 2026-06-02T00:33:20Z — `REVIEW` — `APPROVE`
+KCSA wave-6 cross-family R1 (session 91). Reviewer: deepseek-v4-pro. NEEDS_CHANGES 4.0/5 (T3->T0); Capital One 'War Story:' -> cross-ref to canonical CKS 1.4 + incident-xref marker (dedup-safe, NOT a fresh citation) + relabel; STRIDE view-role scenario corrected (view excludes Secrets); Tesla 'documented in' -> 'applying this module's framework' phrasing. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1748.

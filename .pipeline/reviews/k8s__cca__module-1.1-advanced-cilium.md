@@ -1,0 +1,2 @@
+## 2026-06-02T10:43:43Z — `REVIEW` — `APPROVE`
+Tool-certs wave-2 cross-family R1 (session 93). Reviewer: claude-opus-4.8. NEEDS_CHANGES 3/5 → fixed via PR #1752. 2 P1 verifier-blind CRD defects: (1) CiliumBGPPeeringPolicy/BGPv1 REMOVED in Cilium 1.19 → migrated to BGPv2 (CiliumBGPClusterConfig/PeerConfig/Advertisement, cilium.io/v2); (2) fabricated CiliumBandwidthPolicy CRD → real kubernetes.io/egress-bandwidth annotation. P2 broken Next-Module link repointed. All facts orchestrator web-verified vs Cilium 1.19 docs; verifier T0/PASS body_words 5069.

@@ -1,0 +1,2 @@
+## 2026-05-31T23:15:10Z — `REVIEW` — `APPROVE`
+CKS part3 system-hardening cross-family R1 (session 87, reviewer cursor composer-2.5 --model auto). APPROVE (no P1). P2 swoop: legacy AppArmor annotation -> display-only + modern appArmorProfile securityContext runnable; containerd-first node hardening check; PSA wording; AppArmor-enabled-node prereq. Ground-checked T0/PASS 5222 body_words; CI gemini-3.1-pro secondary APPROVE 5/5; merged PR #1731.

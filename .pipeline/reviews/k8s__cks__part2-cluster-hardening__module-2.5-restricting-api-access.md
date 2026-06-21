@@ -1,0 +1,2 @@
+## 2026-05-31T22:37:19Z — `REVIEW` — `APPROVE`
+CKS part2 batch-3 cross-family R1 (session 86). TWO convergent R1s (cursor composer-2.5 + codex gpt-5.5, both verified live kind v1.35). NC P1: APF FlowSchema referenced nonexistent PLC low-priority -> workload-low + scoped namespaces. P2: anonymous probe taught 401-only, real cluster returns 403 system:anonymous -> full ladder; audit policy first rule mislabeled (Metadata fix). Ground-checked; codex fix verified T0; CI green; merged in PR #1729.

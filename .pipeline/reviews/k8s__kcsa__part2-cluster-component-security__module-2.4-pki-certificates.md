@@ -1,0 +1,2 @@
+## 2026-06-01T23:28:39Z — `REVIEW` — `APPROVE`
+KCSA wave-2 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.3/5; Let's Encrypt CAA incident named+sourced (2020-02-29 web-verified); CSR monitoring via 'k get csr' (not Events field-selector); legacy SA-token wording; composite outage -> Hypothetical scenario; signer-controller nit. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1744.

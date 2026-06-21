@@ -1,0 +1,2 @@
+## 2026-06-07T20:08:04Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 117, #1835 ai-native-development wave). Reviewer: deepseek (cross-family from codex author). De-fab + reframe to "Configuring an Agentic Harness" (rules/AGENTS.md, MCP, hooks, sub-agents); AGENTS.md honesty note correct; leaked example headings fenced; T0 6684w. deepseek P1 (bash quote bug) was a hallucination — ground-checked false; verify_module T0/passed. PR #1837 merged.

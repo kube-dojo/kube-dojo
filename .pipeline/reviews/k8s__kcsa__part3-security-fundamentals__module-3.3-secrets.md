@@ -1,0 +1,2 @@
+## 2026-06-01T23:41:28Z — `REVIEW` — `APPROVE`
+KCSA wave-3 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.7/5 (T3->T0); 2 war stories -> Hypothetical; encryption table fixed (kms v2 stable 1.29 recommended; aescbc/aesgcm legacy; kms v1 deprecated 1.28 — web-verified); SA-token-type 1.24 note; Vault moved to external secret stores (not native KMS); hands-on volume-mount. Verifier T0/PASS; ground-checked + KMS version facts web-verified by orchestrator; fixed via PR #1745.

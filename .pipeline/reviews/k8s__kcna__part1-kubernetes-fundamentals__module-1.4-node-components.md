@@ -1,0 +1,2 @@
+## 2026-06-01T19:50:06Z — `REVIEW` — `APPROVE`
+KCNA wave-2 cross-family R1 (session 89). Reviewer: cursor (composer-2.5). NEEDS_CHANGES 4.2/5; 2 unsourced incidents (regex-missed) reframed; added nftables kube-proxy mode (1.35); 'endpoints controller'->'EndpointSlice controller' + Endpoints-deprecated note; iptables-grep FP rejected; runnability + wording nits. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1737.

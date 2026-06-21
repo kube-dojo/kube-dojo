@@ -1,0 +1,2 @@
+## 2026-06-01T05:57:25Z — `REVIEW` — `APPROVE`
+CKS part5 cross-family R1 (session 87, reviewer cursor composer-2.5 --model auto, Trivy v0.70.0 + lab snippets verified). NC P1: Quiz Q8 called CVE-2024-3094 (xz-utils backdoor) "Medium" — it is Critical 10.0 -> reframed Critical + triage scenario. P2: GitLab CI pushed before scanning; .trivyignore modeled ignoring the xz backdoor; +inline active-learning. Ground-checked; CI gemini-3.1-pro secondary APPROVE; T0/PASS 5811 body_words; merged PR #1733.

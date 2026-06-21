@@ -1,0 +1,2 @@
+## 2026-06-07T22:12:13Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 118, #1839). Reviewer: codex (web-verified volatile claims vs Docker Hub/NVIDIA/HF/vLLM docs). Verifier-T0 (7351w). Durable-content PASS (peer runtimes, no leader claims). R1 NEEDS_CHANGES: volatile CUDA tag embedded timeless (L106) + invented 'nine tokens/sec' metric (L165). Orchestrator-applied fix (PR #1840): CUDA tag marked illustrative+dated 2026-06; metric→non-numeric. T0 re-verified. APPROVE.

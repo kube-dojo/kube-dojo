@@ -1,0 +1,2 @@
+## 2026-05-31T11:55:47Z — `REVIEW` — `APPROVE`
+Wave-5 cross-family R1 (session 80). Reviewer: codex. Removed invalid 'kubectl get eps' alias; busybox nslookup exit-code note; --ignore-not-found on Drill-3 check + manual-svc cleanup; Endpoints-API v1.33 deprecation + over-capacity hedge; pod-backed nil-condition scoping. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1706.

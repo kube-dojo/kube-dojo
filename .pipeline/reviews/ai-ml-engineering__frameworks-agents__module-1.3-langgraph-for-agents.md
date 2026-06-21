@@ -1,0 +1,2 @@
+## 2026-06-08T19:49:13Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review (session 119, #1842 frameworks-agents batch 3b). Reviewer: deepseek-v4-pro (cross-family). R1 NEEDS_CHANGES → 2/5 findings REJECTED via web-verify (LangGraph v1.x REAL=1.2.4 PyPI 2026-06; positional StateGraph(X) is correct current API per signature) + real fixes applied (cursor): de-fab invented $180K ROI figures→qualitative; decouple gemini-2.0-flash. Protected content (v1.x, StateGraph constructors) confirmed untouched. T0/5918w. npm build green. Merged PR #1848 → main ea25a4a8. APPROVE.

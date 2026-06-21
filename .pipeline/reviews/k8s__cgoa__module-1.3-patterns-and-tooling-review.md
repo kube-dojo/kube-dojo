@@ -1,0 +1,2 @@
+## 2026-06-02T11:07:51Z — `REVIEW` — `APPROVE`
+Tool-certs wave-2 CGOA cross-family R1 (session 93). Reviewer: cursor (composer/auto). APPROVE_WITH_NITS; 7/7 quiz keys + ArgoCD-vs-Flux models + render/reconcile boundary verified correct. Fixed via PR #1753: Argo-project Graduated-Dec-2022 parity + ApplicationSet coverage + k diff->kubectl diff; reworded Argo-graduation line to avoid an incident-dedup-gate false-positive (Argo CD...2022 regex). Verifier T0/PASS bw5444.

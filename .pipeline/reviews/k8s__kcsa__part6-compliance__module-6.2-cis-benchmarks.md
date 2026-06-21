@@ -1,0 +1,2 @@
+## 2026-06-02T00:33:20Z — `REVIEW` — `APPROVE`
+KCSA wave-6 cross-family R1 (session 91). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4.0/5 (T2->T0); war-story -> Hypothetical; added Control Plane Configuration subsection (closes body_words floor + skipped Section 3); insecure-port removed-in-1.24 (was live CRITICAL on 1.35+); CIS NetworkPolicy ID 5.7.1 -> 5.3.2. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1748.

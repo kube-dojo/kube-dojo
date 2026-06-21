@@ -1,0 +1,2 @@
+## 2026-05-31T22:37:19Z — `REVIEW` — `APPROVE`
+CKS part2 batch-3 cross-family R1 (session 86). Reviewer: cursor (composer-2.5, live kind v1.35). NC P1: kubelet version-skew taught "two minors" (policy is three for kubelet >=1.25). P2: NetworkPolicy selected 0 pods (missing labels); kubectl version --short x3 removed; deprecated-API metric method; trivy v1.35; runnable RBAC/admission probes. Ground-checked; verified T0; CI green; merged in PR #1729.

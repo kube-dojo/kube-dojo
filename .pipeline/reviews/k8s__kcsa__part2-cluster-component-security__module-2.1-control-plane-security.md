@@ -1,0 +1,2 @@
+## 2026-06-01T23:28:39Z — `REVIEW` — `APPROVE`
+KCSA wave-2 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.4/5; OPA/Gatekeeper authz-Webhook -> admission (SubjectAccessReview/ValidatingAdmission); SA-token 1.24+ accuracy; PodSecurity default-on-1.25; rejected false 'ABAC removed in 1.24' nit. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1744.

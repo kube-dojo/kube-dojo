@@ -1,0 +1,2 @@
+## 2026-06-02T01:05:15Z — `REVIEW` — `APPROVE`
+Extending-K8s wave-1 cross-family R1 (session 92). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4/5; P1 pod-watcher main.go deadlock on Ctrl+C (cancel() only, worker parked in queue.Get(), deferred ShutDown unreachable) -> Run mirrors module 1.3 (go wait.Until + <-ctx.Done + deferred ShutDown); AddEventHandler errs checked; protobuf-vs-JSON(CRD); VAP stable-since-1.30; nginx pinned 1.27. Verifier T0/PASS; ground-checked + versions web-verified by orchestrator; fixed via PR #1749.

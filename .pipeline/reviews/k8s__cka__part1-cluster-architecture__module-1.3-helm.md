@@ -1,0 +1,2 @@
+## 2026-05-31T08:25:38Z — `REVIEW` — `APPROVE`
+Phase-1 cross-family review CKA wave 1 (session 79). Reviewer: codex. Helm 4 accuracy (live-verified): Buildkite apt repo, get-helm-4, --reuse-values semantics, --dry-run=client, Bitnami caveat+cite, lab version-pin, kustomize next-link. verify_module T0/5102w. Fixes self-verified by orchestrator vs R1; ground-checked FPs rejected. Build green; merged.

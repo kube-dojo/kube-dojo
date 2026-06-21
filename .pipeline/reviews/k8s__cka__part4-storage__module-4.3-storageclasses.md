@@ -1,0 +1,2 @@
+## 2026-05-31T16:10:11Z — `REVIEW` — `APPROVE`
+Part4-storage cross-family R1 (session 82). Reviewer: cursor --model auto. NEEDS_CHANGES 4.4/5, no P1. Fixed: Azure CSI in-tree params -> skuName + lowercase kind: managed (example + cheat-sheet); invalid mountOptions [debug] -> discard (both blocks); line-131 CSI-example reference slip; quantified aws-ebs-removed-1.27 fact; local-path expansion caveat. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1710.

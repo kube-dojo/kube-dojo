@@ -1,0 +1,2 @@
+## 2026-06-01T22:24:16Z — `REVIEW` — `APPROVE`
+KCNA wave-4 cross-family R1 (session 90). Reviewer: grok-build (grok-4.3, candidate). NEEDS_CHANGES 4.0/5; alias k=kubectl in runnable block (gate); Knight Capital visible link + xref marker re-anchored (incident-dedup green); nginx 1.27. grok fabricated KEDA-date provenance -> ignored. Verifier T0/PASS; ground-checked + maturity web-verified by orchestrator; fixed via PR #1739.

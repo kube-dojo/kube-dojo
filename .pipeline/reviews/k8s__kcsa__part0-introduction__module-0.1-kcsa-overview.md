@@ -1,0 +1,2 @@
+## 2026-06-01T23:12:06Z — `REVIEW` — `APPROVE`
+KCSA wave-1 cross-family R1 (session 91). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4.5/5; opener anecdote past-tense->conditional; exam format -> 'multiple-choice and multi-select' (LF web-verified, all refs); cert validity 2yr / weights 22-22-16-16-14-10 web-confirmed correct. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1743.

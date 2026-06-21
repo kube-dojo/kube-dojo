@@ -1,0 +1,2 @@
+## 2026-06-02T01:18:52Z — `REVIEW` — `APPROVE`
+Extending-K8s wave-2 cross-family R1 (session 92). Reviewer: cursor (composer-2.5/auto). APPROVE_WITH_NITS 4.7/5; matchConditions has() guard (fail-closed under failurePolicy:Fail); standalone server returns AdmissionReview envelope not http.Error; Pod webhook renamed sidecar-injector; MutatingAdmissionPolicy beta-in-1.35 note. Verifier T0/PASS; ground-checked + versions web-verified by orchestrator; fixed via PR #1750.

@@ -1,0 +1,2 @@
+## 2026-05-31T23:15:10Z — `REVIEW` — `APPROVE`
+CKS part3 system-hardening cross-family R1 (session 87, reviewer cursor composer-2.5 --model auto). NEEDS_CHANGES P1: Scenario-3 iptables left internal IPs able to reach the kubelet -> allow-/32-then-unconditional-DROP ordering; kubelet health port 10256; CNI segmentation; insecure-port wording. Fixed by cursor; ground-checked T0/PASS 5263 body_words; CI gemini-3.1-pro secondary APPROVE 5/5; merged PR #1731.

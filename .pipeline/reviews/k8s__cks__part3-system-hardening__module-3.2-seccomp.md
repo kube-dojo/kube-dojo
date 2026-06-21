@@ -1,0 +1,2 @@
+## 2026-05-31T23:15:10Z — `REVIEW` — `APPROVE`
+CKS part3 system-hardening cross-family R1 (session 87, reviewer agy Gemini 3.5 Flash, review-only). NEEDS_CHANGES P1: strace-in-busybox false-pass (`|| echo blocked` masked the missing-binary error) -> alpine+strace with explicit Unconfined comparison across two pods; JSON `//` comments moved out of code fences; sidecar command fix. Fixed by cursor; ground-checked T0/PASS 5074 body_words; CI gemini-3.1-pro secondary APPROVE 5/5; merged PR #1731.

@@ -1,0 +1,2 @@
+## 2026-06-01T23:54:40Z — `REVIEW` — `APPROVE`
+KCSA wave-4 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.9/5; PSS Baseline forbids ALL hostPath; drop-ALL-caps -> Restricted-only; RuntimeClass vs Pod-spec split; 2019 'cloud provider' -> real runC CVE-2019-5736 + NVD source; SELinux/privileged/ubuntu nits. Verifier T0/PASS; ground-checked + SLSA/KEV facts web-verified by orchestrator; fixed via PR #1746.

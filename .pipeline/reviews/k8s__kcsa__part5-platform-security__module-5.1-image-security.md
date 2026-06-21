@@ -1,0 +1,2 @@
+## 2026-06-02T00:18:35Z — `REVIEW` — `APPROVE`
+KCSA wave-5 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.1/5 (T3->T0); 2 anecdotes -> Hypothetical; Dockerfile layer order; unsourced stats softened; cosign/sigstore in core prose; Kyverno init/ephemeral note; Clair branding. Verifier T0/PASS; ground-checked + CNCF maturity web-verified by orchestrator; fixed via PR #1747.

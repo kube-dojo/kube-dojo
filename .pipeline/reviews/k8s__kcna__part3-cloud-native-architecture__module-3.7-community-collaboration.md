@@ -1,0 +1,2 @@
+## 2026-06-01T22:24:16Z — `REVIEW` — `APPROVE`
+KCNA wave-4 cross-family R1 (session 90). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.7/5; P1 stale maturity table fixed (Kyverno Graduated / Backstage,OpenKruise Incubating / Cilium Graduated / Sandbox=WasmEdge,SpinKube; KubeEdge graduated-2024 caught + removed); contributor stats softened+sourced; K8s CNCF date clarified; TOC 'voting members'. Verifier T0/PASS; ground-checked + maturity web-verified by orchestrator; fixed via PR #1739.

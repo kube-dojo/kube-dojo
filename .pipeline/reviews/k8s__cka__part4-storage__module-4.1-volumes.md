@@ -1,0 +1,2 @@
+## 2026-05-31T16:10:11Z — `REVIEW` — `APPROVE`
+Part4-storage cross-family R1 (session 82). Reviewer: cursor --model auto. NEEDS_CHANGES 4.7/5, no P1. Fixed: hostPath /var/lib/docker/containers -> /var/log/containers (containerd-safe) + CRI note; projected-vol resourceFieldRef given resources.limits.cpu; image-volume GA-1.36/beta-1.35 hedge; busybox:latest x5 -> 1.36; fluentd/myapp pinned; kill-1 restart-policy clarification. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1709.

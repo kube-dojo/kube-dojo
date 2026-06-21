@@ -1,0 +1,2 @@
+## 2026-06-01T23:12:06Z — `REVIEW` — `APPROVE`
+KCSA wave-1 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.1/5; P1 4 Cs 'K8s-specific'->CNCF cloud-native vocabulary adopted in K8s guidance; dashboard incident -> Hypothetical scenario:; API-access quiz answer corrected (RBAC+automountServiceAccountToken:false+egress, not NetworkPolicy); dup Sources URL removed. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1743.

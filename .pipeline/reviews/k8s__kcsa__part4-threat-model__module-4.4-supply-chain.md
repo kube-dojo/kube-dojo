@@ -1,0 +1,2 @@
+## 2026-06-01T23:54:40Z — `REVIEW` — `APPROVE`
+KCSA wave-4 cross-family R1 (session 91). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4.3/5; SLSA ladder -> v1.0 (Build L0-L3, L4 future/deferred, removed 0.1 two-person review — web-verified slsa.dev); digest-pin VAP CEL extended to initContainers (closes bypass); Kyverno per-rule failureAction; KEV date -> Mar 18 2025 (web-verified); NotPetya wording. No CNCF tier claims; SolarWinds xref kept. Verifier T0/PASS; ground-checked + SLSA/KEV facts web-verified by orchestrator; fixed via PR #1746.

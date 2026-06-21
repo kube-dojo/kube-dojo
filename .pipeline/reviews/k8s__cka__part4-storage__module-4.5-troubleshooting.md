@@ -1,0 +1,2 @@
+## 2026-05-31T16:10:11Z — `REVIEW` — `APPROVE`
+Part4-storage cross-family R1 (session 82). Reviewer: cursor --model auto. NEEDS_CHANGES 4.4/5, ONE P1: forbidden storageClassName PVC patch (spec immutable post-create) removed -> delete+recreate, plus 3 sibling 'or patch' spots fixed; valid size-expansion patch preserved. P2: missing-PVC FailedScheduling coverage; WaitForFirstConsumer Pending caveat after Scenario-1 fix. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1713.

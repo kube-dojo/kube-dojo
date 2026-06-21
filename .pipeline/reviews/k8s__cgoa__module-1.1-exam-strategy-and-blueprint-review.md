@@ -1,0 +1,2 @@
+## 2026-06-02T11:07:51Z — `REVIEW` — `APPROVE`
+Tool-certs wave-2 CGOA cross-family R1 (session 93). Reviewer: cursor (composer/auto). APPROVE_WITH_NITS 4.6; all 5 domains+weights (20/30/16/20/14) + OpenGitOps principles + 8/8 quiz keys verified correct. Fixed via PR #1753: added DevOps&DevSecOps to Related-Practices (web-verified vs cncf.io CGOA scope) + a quantified blueprint-weights Did-You-Know. Verifier T0/PASS bw5131.

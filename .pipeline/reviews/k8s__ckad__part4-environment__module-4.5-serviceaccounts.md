@@ -1,0 +1,2 @@
+## 2026-05-31T20:33:29Z — `REVIEW` — `APPROVE`
+CKAD wave-4 (part4-environment) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). APPROVE_WITH_NITS 4.7/5, no P1, 2 P2: stale SECRETS column (removed in 1.24+) -> current NAME/AGE output; '# Old way (deprecated)' mislabel on current kubectl create token -> reframed (command is current; misuse as a secret factory is the anti-pattern, reinforced in mistakes table + quiz). All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1725.

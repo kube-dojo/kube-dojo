@@ -1,0 +1,2 @@
+## 2026-06-01T23:28:39Z — `REVIEW` — `APPROVE`
+KCSA wave-2 cross-family R1 (session 91). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4.3/5 (T3->T0); alias k=kubectl in runnable block; Siloscape sourced (Unit 42, facts web-verified); CVE-2020-15257 -> containerd-shim API/abstract UDS from host-network containers; War story -> Illustrative scenario. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1744.

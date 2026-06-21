@@ -1,0 +1,2 @@
+## 2026-06-01T19:10:50Z — `REVIEW` — `APPROVE`
+KCNA wave-1 cross-family R1 (session 88). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4/5; caught a heuristic-missed fluent anti-fab anecdote + web-verified currency errors (2yr validity, Nov-2025 five-domain split is current not 'older lens', 75%-less-forgiving, CKA-not-only-option) -> all fixed. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1736.

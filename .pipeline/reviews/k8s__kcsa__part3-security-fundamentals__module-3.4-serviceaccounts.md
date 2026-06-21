@@ -1,0 +1,2 @@
+## 2026-06-01T23:41:28Z — `REVIEW` — `APPROVE`
+KCSA wave-3 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.0/5 (T3->T0); War Story -> Hypothetical + de-duplicated twice-told $50k incident; RBAC verb get->get+list; TokenRequest shown as illustrative subresource body (kubectl create token / projected volume). Verifier T0/PASS; ground-checked + KMS version facts web-verified by orchestrator; fixed via PR #1745.

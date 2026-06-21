@@ -1,0 +1,2 @@
+## 2026-05-31T20:33:29Z — `REVIEW` — `APPROVE`
+CKAD wave-4 (part4-environment) cross-family R1 (session 84). Reviewer: codex gpt-5.5 (ran all 6 lab tasks on kind v1.35.0). APPROVE 4.7/5, ZERO findings (no P1/P2/nits). All 6 hands-on tasks verified live: OOMKilled exit 137, Burstable/Guaranteed QoS, LimitRange defaults. Finalized as-is (no content change needed). All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1725.

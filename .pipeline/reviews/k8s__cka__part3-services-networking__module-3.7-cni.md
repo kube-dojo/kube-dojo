@@ -1,0 +1,2 @@
+## 2026-05-31T15:08:06Z — `REVIEW` — `APPROVE`
+Wave-6 cross-family R1 (session 81). Reviewer: cursor --model auto. NEEDS_CHANGES 4.6/5 with one real P1 (module wrongly called nftables the default kube-proxy mode in 1.33+ — it's iptables; nftables GA-but-opt-in), fixed by codex: P1 correction + CNI-netns diagram ownership + kindnet greps + ConfigMap-first mode detection. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1708.

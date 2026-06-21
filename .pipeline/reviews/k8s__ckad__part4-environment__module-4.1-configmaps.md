@@ -1,0 +1,2 @@
+## 2026-05-31T20:33:29Z — `REVIEW` — `APPROVE`
+CKAD wave-4 (part4-environment) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). NEEDS_CHANGES, ONE P1: kubectl delete pod drillN cm drillN parsed cm as a pod name -> ConfigMaps never deleted -> slash notation pod/drillN cm/drillN (4 drills). P2: added directory + declarative-YAML creation lab steps the LO promised. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1725.

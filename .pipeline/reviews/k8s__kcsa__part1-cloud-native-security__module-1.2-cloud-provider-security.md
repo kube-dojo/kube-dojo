@@ -1,0 +1,2 @@
+## 2026-06-01T23:12:06Z — `REVIEW` — `APPROVE`
+KCSA wave-1 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.4/5; P1 Capital One -> attack-pattern cross-ref (incident-xref kept, absolute /k8s/cks/ link, ~100M / $80M OCC NR 2020-101 web-verified); '85%' stat dropped; GKE Dataplane V2 NetworkPolicy posture qualified; EKS Access Entries added; AL2023/Entra nits. Verifier T0/PASS; ground-checked + incident citations web-verified by orchestrator; fixed via PR #1743.

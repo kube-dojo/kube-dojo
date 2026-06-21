@@ -1,0 +1,2 @@
+## 2026-06-01T19:50:06Z — `REVIEW` — `APPROVE`
+KCNA wave-2 cross-family R1 (session 89). Reviewer: cursor (composer-2.5). NEEDS_CHANGES 4.7/5; fingerprinted $120k retail incident (regex-missed) reframed + precision stripped; 'A real operations war story' reframed; diagram 'Automatic rollback'->manual rollout-undo (accuracy); Replicas column clarified. Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1737.

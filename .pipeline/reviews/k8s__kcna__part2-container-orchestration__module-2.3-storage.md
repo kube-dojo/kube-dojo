@@ -1,0 +1,2 @@
+## 2026-06-01T20:09:30Z — `REVIEW` — `APPROVE`
+KCNA wave-3 cross-family R1 (session 89). Reviewer: cursor (composer-2.5). NEEDS_CHANGES 4.7/5; P1 CSI-migration GA version corrected (1.23 beta -> core GA 1.25, was wrongly 'GA in 1.23'); object-storage LO#1 gap closed; volumeClaimTemplates mermaid label. GitLab-2017 opening reframed to Hypothetical (incident-dedup gate: 1.5-pods owns it; each incident told once). Was T0 (no war-story gate issue). Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1738.

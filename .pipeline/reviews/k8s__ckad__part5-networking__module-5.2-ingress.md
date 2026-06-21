@@ -1,0 +1,2 @@
+## 2026-05-31T20:46:30Z — `REVIEW` — `APPROVE`
+CKAD wave-5 (part5-networking) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). APPROVE 4.6/5, no P1, 3 P2: kubectl wait pod -l app=api race -> wait on deployment/web deployment/api; ingress address jsonpath was IP-only (empty on kind/cloud-LB) -> added hostname; kubectl create ingress missing --class -> --class=nginx (quick-ref + drill5). All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1726.

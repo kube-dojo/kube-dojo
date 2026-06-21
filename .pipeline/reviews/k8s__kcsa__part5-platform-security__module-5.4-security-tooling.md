@@ -1,0 +1,2 @@
+## 2026-06-02T00:18:35Z — `REVIEW` — `APPROVE`
+KCSA wave-5 cross-family R1 (session 91). Reviewer: claude-opus-4.8. NEEDS_CHANGES 4.0/5 (T3->T0); BOTH War story: -> Hypothetical (verifier-required, corrected vs reviewer); Log4Shell -> CVE-2021-44228 anchor + de-fingerprinted; kubeaudit (archived 2024) + kube-hunter (EOL->Trivy) status notes web-verified; Istio v1beta1->v1; --dry-run=client. Kept Falco-graduated/Tetragon-Cilium/Cosign-Sigstore (verified). Verifier T0/PASS; ground-checked + CNCF maturity web-verified by orchestrator; fixed via PR #1747.

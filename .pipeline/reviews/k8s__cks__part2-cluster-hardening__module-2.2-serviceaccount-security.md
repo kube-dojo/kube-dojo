@@ -1,0 +1,2 @@
+## 2026-05-31T22:37:19Z — `REVIEW` — `APPROVE`
+CKS part2 batch-3 cross-family R1 (session 86). Reviewer: cursor (composer-2.5). NC P2: reports-broker-client SA used before creation (apply failed); nonexistent reports-config-watcher-example pod; agnhost exec alignment; audit custom-columns subject kind. (NOTE: agy/Gemini-3.5-Flash fabricated a fix here — empty git diff + wrong branch — re-fixed on cursor.) Ground-checked; verified T0; CI green; merged in PR #1729.

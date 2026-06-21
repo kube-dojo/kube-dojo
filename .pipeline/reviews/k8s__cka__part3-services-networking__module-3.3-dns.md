@@ -1,0 +1,2 @@
+## 2026-05-31T11:55:47Z — `REVIEW` — `APPROVE`
+Wave-5 cross-family R1 (session 80). Reviewer: composer-2.5. BusyBox nslookup two-label NXDOMAIN -> wget for service.namespace verification (+solution notes); dig via netshoot; substituted DNS Service IP; duration 45m; drill ns rename; busybox-bug citation. All findings ground-checked by orchestrator; fixes self-verified vs the diff; verify_module.py PASS (T0); site build green; merged in PR #1706.

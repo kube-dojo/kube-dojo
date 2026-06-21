@@ -1,0 +1,2 @@
+## 2026-05-31T22:53:59Z — `REVIEW` — `APPROVE`
+CKS 1.4 GENUINE rewrite T3->T0 (session 86). Author: codex (1358->5068 body_words). Reviewer: cursor (composer-2.5) cross-family R1 on live kind v1.35 -> APPROVE_WITH_NITS no P1. Fixed 3 P2 (GKE workload-metadata mislabel, kind kindnet-enforces correction, learning-outcomes order) + 3 nits (Azure probe, hostPID drop, alpine pin). Verified T0; CI green; merged PR #1730.

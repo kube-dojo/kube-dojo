@@ -1,0 +1,2 @@
+## 2026-06-01T23:41:28Z — `REVIEW` — `APPROVE`
+KCSA wave-3 cross-family R1 (session 91). Reviewer: deepseek-v4-pro. NEEDS_CHANGES 4/5 (T3->T0); personal anecdote -> generalized rollout observation; DNS egress solution gains TCP/53 in web-egress+api-egress (matches body); from:[] omitted; DNS namespaceSelector constrained to kube-system. Verifier T0/PASS; ground-checked + KMS version facts web-verified by orchestrator; fixed via PR #1745.

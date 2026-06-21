@@ -1,0 +1,2 @@
+## 2026-05-31T20:15:35Z — `REVIEW` — `APPROVE`
+CKAD wave-3 (part3-observability) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). NEEDS_CHANGES 4.3/5, no P1, 4 P2: busybox nslookup short-name NXDOMAIN -> FQDN; kubectl debug --share-processes misused with --target (no-op without --copy-to) -> corrected to --target-only + --copy-to alt; ss absent from busybox -> qualified; --previous Last-State/terminationMessage fallback. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1724.

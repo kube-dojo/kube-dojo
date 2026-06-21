@@ -1,0 +1,2 @@
+## 2026-06-02T00:33:20Z — `REVIEW` — `APPROVE`
+KCSA wave-6 cross-family R1 (session 91). Reviewer: cursor (composer-2.5/auto). NEEDS_CHANGES 4.1/5 (T3->T0); GDPR Art30->Art32/Art5(2) audit-log mapping; war-story -> Hypothetical; +real prose to clear body_words floor; HIPAA NetworkPolicy -> Access Control/Transmission Security; 'always compliant' softened; dead PCI-DSS PDF -> pcisecuritystandards.org/standards/pci-dss (sources_all_reachable). Verifier T0/PASS; ground-checked by orchestrator; fixed via PR #1748.

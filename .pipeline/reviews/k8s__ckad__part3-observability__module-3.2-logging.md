@@ -1,0 +1,2 @@
+## 2026-05-31T20:15:35Z — `REVIEW` — `APPROVE`
+CKAD wave-3 (part3-observability) cross-family R1 (session 84). Reviewer: cursor --model auto (kind v1.35.0). NEEDS_CHANGES 4.6/5, no P1, 3 P2: 3x kubectl logs --previous ran before the pod restarted (fails on 1.35/containerd) -> replaced fixed sleep/no-wait with restartCount-poll gates + current-logs fallback note. All findings ground-checked; fixes self-verified vs the diff; verify_module.py PASS (T0); CI green; merged in PR #1724.
