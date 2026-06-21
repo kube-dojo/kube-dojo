@@ -25,7 +25,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A platform engineer at a payments company once reviewed a production incident that looked boring at first: one service had three slightly different Deployment manifests across development, staging, and production. The staging file had the new resource limits, the production file had the old image tag, and the development file had a debug environment variable that should never have left a sandbox. Nobody had intentionally created a risky deployment system. They had simply copied YAML when the team was small, then kept copying it as the business grew.
+**Hypothetical scenario:** a platform engineer reviews a production incident that looks boring at first: one service has three slightly different Deployment manifests across development, staging, and production. The staging file had the new resource limits, the production file had the old image tag, and the development file had a debug environment variable that should never have left a sandbox. Nobody had intentionally created a risky deployment system. They had simply copied YAML when the team was small, then kept copying it as the business grew.
 
 That pattern breaks quietly before it breaks loudly. The first failure is usually wasted review time, because engineers must inspect entire manifests to understand one environment-specific difference. The second failure is drift, because a critical field gets fixed in one environment and forgotten in another. The third failure is an incident, because production no longer represents a controlled promotion of tested state; it becomes a manually maintained sibling of tested state.
 
@@ -1206,9 +1206,9 @@ kubectl diff -f rendered.yaml
 
 A second senior habit is to keep release boundaries small. One chart controlling an entire platform can create impressive demos and painful incidents. One overlay patching every Deployment in a repository can create quick compliance and broad accidental damage. Prefer small, composable units whose rendered output a human can inspect during review.
 
-## 9. War Story: When Chart Complexity Became a Deployment Risk
+## 9. Hypothetical Scenario: When Chart Complexity Becomes a Deployment Risk
 
-A healthcare software team let a Helm chart grow from a simple package into a large, hard-to-review set of values and conditionals. The chart supported a sensitive application, and its growing complexity made deployments hard to review confidently. Nobody set out to disable encryption. They created enough nested configuration that reviewers stopped being able to prove encryption was always enabled.
+**Hypothetical scenario:** a healthcare software team lets a Helm chart grow from a simple package into a large, hard-to-review set of values and conditionals. The chart supported a sensitive application, and its growing complexity made deployments hard to review confidently. Nobody set out to disable encryption. They created enough nested configuration that reviewers stopped being able to prove encryption was always enabled.
 
 ```yaml
 encryption:

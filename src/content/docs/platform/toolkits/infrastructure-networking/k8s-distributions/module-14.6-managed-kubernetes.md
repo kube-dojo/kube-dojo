@@ -1218,7 +1218,7 @@ A platform team enabled automatic control-plane upgrades on a managed cluster. A
 <details>
 <summary>Show Answer</summary>
 
-Separate provider-managed health from customer-owned extension health. The API server can be healthy while a customer-installed admission webhook blocks object creation. Start by checking events, webhook configurations, webhook pod readiness, service endpoints, and logs for the webhook backing service. Then review whether the webhook version was tested against the new Kubernetes minor version. The incident explanation should say that the managed upgrade succeeded at the control-plane layer, but the platform's upgrade process failed to validate customer-owned admission components.
+Debug this common managed-cluster failure by separating the provider-managed control plane from the customer-managed nodes and components. The API server can be healthy while a customer-installed admission webhook blocks object creation. Start by checking events, webhook configurations, webhook pod readiness, service endpoints, and logs for the webhook backing service. Then review whether the webhook version was tested against the new Kubernetes minor version. The incident explanation should say that the managed upgrade succeeded at the control-plane layer, but the platform's upgrade process failed to validate customer-owned admission components.
 </details>
 
 ### Question 6
