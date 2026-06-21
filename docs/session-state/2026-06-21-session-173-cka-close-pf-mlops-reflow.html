@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session 173 — cka #2020 close + pf-mlops reflow wave (8/9)</title>
+<title>Session 173 — cka #2020 close + pf-mlops reflow wave (9/9 COMPLETE)</title>
 <style>
   :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
@@ -19,10 +19,10 @@
 </style>
 </head>
 <body>
-<h1>Session 173 — cka #2020 close + pf-mlops <span class="ok">reflow wave 8/9</span></h1>
+<h1>Session 173 — cka #2020 close + pf-mlops <span class="ok">reflow wave 9/9 COMPLETE</span></h1>
 
 <p class="tldr"><strong>2026-06-21 · standalone orchestrator · continues the #2020 quality-coverage stream from s172b.</strong>
-Closed the <strong>k8s-cka</strong> slice of #2020 (2 modules) and drove the <strong>pf-mlops</strong> heavy-remediation wave from 0 to <strong>8 of 9</strong> using a corrected diagnosis: the modules weren't thin, they were written <strong>one-sentence-per-paragraph</strong> → the fix is a cheap <strong>prose reflow</strong>, not a rewrite. 9 content PRs merged (#2053–#2061), all required-CI-green. Cross-family review (cursor author / opus-inline) caught defects the verifier is blind to: <strong>wrong NeurIPS slug URLs</strong> (→ unrelated papers) and an <strong>over-merge regression</strong> (200-word walls). Only the <strong>5.2 feature-stores stub</strong> (403 words → full authoring) remains.</p>
+Closed the <strong>k8s-cka</strong> slice of #2020 (2 modules) and drove the <strong>pf-mlops</strong> heavy-remediation wave from 0 to <strong>9 of 9</strong> using a corrected diagnosis: the modules weren't thin, they were written <strong>one-sentence-per-paragraph</strong> → the fix is a cheap <strong>prose reflow</strong>, not a rewrite. 10 content PRs merged (#2053–#2062), all required-CI-green; <strong>pf-mlops section 5 is now 12/12 COMMITTED+approve</strong> (also tidied 5.11/5.12). Cross-family review (cursor author / opus-inline) caught defects the verifier is blind to: <strong>wrong NeurIPS slug URLs</strong> (→ unrelated papers), an <strong>over-merge regression</strong> (200-word walls), and (on 5.2) <strong>fabricated stats hidden inside a code-heavy module</strong>.</p>
 
 <h2>What shipped — k8s-cka (#2020 scoped "2")</h2>
 <ul>
@@ -41,6 +41,7 @@ Closed the <strong>k8s-cka</strong> slice of #2020 (2 modules) and drove the <st
 <tr><td>5.9 ml-repository-hygiene</td><td>LO 7→5; +DYK/CM; anti-leak fix; <strong>2nd de-wall pass</strong></td><td>#2059</td></tr>
 <tr><td>5.10 traffic-patterns</td><td>LO 8→5; +DYK; <code>Scenario Quiz</code>→<code>Quiz</code>; +checkboxes</td><td>#2060</td></tr>
 <tr><td>5.6 ml-pipelines</td><td><strong>expand 3890→5238</strong> (sub-floor) + reflow</td><td>#2061</td></tr>
+<tr><td>5.2 feature-stores</td><td><strong>expand 403→5000</strong> (code-heavy/prose-thin) + <strong>de-fabricate</strong> ($10M war story, 30%/80% stats) + dated vendor snapshot</td><td>#2062</td></tr>
 </table>
 <p>All 8 → <strong>T0, COMMITTED+approve</strong> on the board. Each #1354-era module needed a hand-written <code>.pipeline/quality-pipeline/&lt;slug&gt;.json</code> at <code>stage:COMMITTED</code> (finalize_module.sh no-ops "no state" otherwise — clone a sibling, drop the <code>.json.lock</code>, restart api).</p>
 
@@ -60,11 +61,14 @@ Closed the <strong>k8s-cka</strong> slice of #2020 (2 modules) and drove the <st
 <li><strong>Over-merge regression</strong> — 5.9 pass-1 reflow joined too many sentences into walls (median 96 wpp, a 204-word run-on with comma-splices). Caught via the paragraph-wall distribution check → de-wall pass-2 (median 40). Now every brief caps paragraph size.</li>
 </ul>
 
-<h2>Remaining + carry-forward</h2>
+<h2>5.2 — a code-heavy module that hid prose-thinness AND fabrication (durable lesson)</h2>
+<p>5.2 looked "complete" (700 lines, every section, lots of code/mermaid) but was <strong>prose-thin</strong> (body_words 403 — the prose between the code was sparse) AND <strong>fabrication-laden</strong>. The fix was <strong>expand 403→5000</strong> (add real teaching prose between the existing code/diagrams — all 50 code fences + 5 mermaid + the Feast lab preserved unchanged) + <strong>de-fabricate</strong>. Key blind-spot: the verifier's <code>anti_fabrication</code> gate caught the labeled <code>### War Story:</code> heading (→ relabeled <code>**Hypothetical scenario:**</code>, no $ figure), but the <strong>fabricated numeric stats inside Did-You-Know bullets ("30% of debugging", "80% of pipeline time") were verifier-blind</strong> — only the manual numeric fab-grep caught them. Vendor table got a dated <code>as of 2026-06</code> snapshot with web-verified Feast facts (LF AI &amp; Data <strong>incubation</strong>, Gojek+Google, PyTorch Ecosystem) and no leadership claims.</p>
+
+<h2>Carry-forward</h2>
 <ul>
-<li><strong class="warn">5.2-feature-stores</strong> — the last pf-mlops module: a <strong>403-word stub</strong> (board shows COMMITTED/None, no review record). Needs <strong>full module authoring</strong> (not reflow): ~5000w, all sections, via <code>scripts/prompts/module-writer.md</code>, with the <strong>durable-vendor rule applied hard</strong> (Feast/Tecton/Hopsworks/Databricks-FS versions + maturity churn → dated snapshot, no leadership claims), then cross-family review. Dedicated authoring task — do not rush at session tail.</li>
-<li><strong>5.11 / 5.12</strong> show <code>UNAUDITED/approve</code> on the board (reviewed s172b, records exist, stage just never flipped to COMMITTED). Out of this wave's scope; a 1-line state flip would tidy them.</li>
-<li><strong>Services:</strong> the <code>feedback</code> service is the pre-existing stale-pid one from cold-start (down, non-critical); not restarted (dispatches were in flight). api was restarted twice to reload hand-written pipeline state.</li>
+<li><strong class="ok">pf-mlops section 5 = 12/12 COMMITTED+approve</strong> — wave complete. The 9 remediated this session + 5.3 (s153) + 5.11/5.12 (reviewed s172b, stage-flipped this session). No pf-mlops work remains.</li>
+<li><strong>#2020 elsewhere:</strong> anchor on the issue's by-track scope for any remaining scattered clusters; the AI/ML track (124) + platform + cloud clusters are done.</li>
+<li><strong>Services:</strong> the <code>feedback</code> service is the pre-existing stale-pid one from cold-start (down, non-critical); not restarted (dispatches were in flight). api was restarted several times to reload hand-written pipeline state for #1354-era modules.</li>
 <li>Other open streams unchanged: #1911 UK currency · #1876 AI-history book review · What's-New post · the infra follow-ups (#2024, #2036, #2030, #1623).</li>
 </ul>
 
