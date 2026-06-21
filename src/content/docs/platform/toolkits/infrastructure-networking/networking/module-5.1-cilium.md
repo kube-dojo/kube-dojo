@@ -7,1291 +7,241 @@ sidebar:
 ---
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 60-75 minutes
 
-## The 3 AM Wake-Up Call
-
-*Your phone buzzes. Production is down. The ops channel is on fire.*
-
-```
-[03:12 AM] @oncall ALERT: Payment service timeouts
-[03:14 AM] @oncall Network team says "looks fine on their end"
-[03:17 AM] @oncall It's DNS
-[03:18 AM] @oncall It's always DNS
-[03:23 AM] @oncall Wait, it's not DNS. Something is dropping packets.
-[03:31 AM] @oncall Running tcpdump on all 47 pods. Send coffee.
-[03:52 AM] @oncall Found it. NetworkPolicy was blocking the new service.
-[03:54 AM] @oncall We have 200+ NetworkPolicies. Which one? No idea.
-[04:23 AM] @oncall Fixed by adding another allow rule. We'll clean up later.
-[04:24 AM] @oncall We never clean up later.
-```
-
-**Sound familiar?**
-
-This is what Kubernetes networking feels like without proper tooling. You're blind. Packets vanish into the void. Policies are write-only—you create them but often can't tell which one is actually doing what.
-
-Cilium changes everything. By the end of this module, when something drops packets, you'll know *exactly* [which policy dropped it, *why*](https://github.com/cilium/cilium), and you'll see it happen in real-time. No more 4 AM tcpdump sessions.
-
-**What You'll Learn**:
-- Why traditional networking can't keep up with Kubernetes
-- How eBPF lets you program the Linux kernel (without being a kernel developer)
-- [Identity-based security](https://github.com/cilium/cilium) that actually makes sense
-- Hubble: seeing every packet, every decision, every drop
-- Replacing kube-proxy and why you'll never miss it
+> **Landscape snapshot — as of 2026-06.** This changes fast; verify against [docs.cilium.io](https://docs.cilium.io/) and the CNCF project page before relying on specifics. Cilium is a CNCF Graduated project (accepted at Incubating on 2021-10-13, Graduated on 2023-10-11) and was the first graduated project in the cloud-native networking category.
+>
+> The current stable line is 1.19.x (for example 1.19.2), with 1.20 in development; the community maintains the most recent three minor releases. kube-proxy replacement is enabled with the Helm value `kubeProxyReplacement=true`; the Gateway API data plane additionally needs the L7 proxy enabled and the Gateway API v1.5.1 CRDs pre-installed. A reference stack verified together in mid-2026 is Kubernetes 1.35, Cilium 1.19.2, and Hubble 1.18.6.
 
 **Prerequisites**:
 - Kubernetes networking basics (Services, Pods)
 - [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/) for programs, maps, helpers, and verifier vocabulary
 - [Security Principles Foundations](/platform/foundations/security-principles/)
-- A healthy frustration with iptables (optional but helps)
 
 ---
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-- **Deploy Cilium as a CNI plugin with eBPF-based networking and transparent encryption**
-- **Configure Cilium network policies using L3/L4 and L7 identity-aware filtering rules**
-- **Implement Cilium's service mesh capabilities with sidecar-free mTLS and load balancing**
-- **Monitor network flows and troubleshoot connectivity using Hubble's observability dashboards**
+- **Explain how eBPF datapaths replace iptables-based kube-proxy** and what operational tradeoffs that shift introduces at cluster scale
+- **Design identity-based network policies** using CiliumNetworkPolicy and cluster-wide rules at L3, L4, and L7
+- **Use Hubble to observe flows** and troubleshoot DNS-aware policy drops without sidecar instrumentation
+- **Evaluate kube-proxy replacement modes** including socket balancing, Direct Server Return, Maglev hashing, and XDP
+- **Plan Cilium migration, encryption, Gateway API, and ClusterMesh** adoption with realistic validation checkpoints
 
+---
 
 ## Why This Module Matters
 
-Let me tell you about the moment I fell in love with Cilium.
+Kubernetes networking was designed around IP addresses that change constantly. Pods restart, Deployments roll, autoscaling adds replicas, and node drains move workloads across the fleet. Standard NetworkPolicy translates label selectors into IP allow lists that must be refreshed on every change. kube-proxy programs those same ephemeral endpoints into iptables or nftables chains that grow with every Service and EndpointSlice update. At modest scale the model works; at larger scale the rule sets become expensive to reconcile and painful to debug when a packet disappears with no explanation.
 
-We had a microservices architecture with enough moving parts that a network-policy mistake was hard to isolate. One service was failing health checks even though direct application tests passed, and each team initially believed its own layer was fine.
+Cilium addresses both problems at the layer where packets are actually handled: the Linux kernel. Instead of maintaining thousands of iptables rules per node, Cilium compiles Kubernetes intent into eBPF programs attached at TC, XDP, and socket hooks. Policy decisions use stable workload identities derived from labels, not transient pod IPs. Service load balancing happens in eBPF maps with constant-time lookups rather than linear chain walks. Hubble reads the same datapath events, so when traffic is dropped you can see the source identity, destination identity, protocol details, and the policy verdict without deploying tcpdump across dozens of pods.
 
-With traditional tools, we would've spent hours with tcpdump and iptables debugging. Instead, I ran one command:
+Peer CNIs such as Calico and Flannel solve overlapping problems with different architectural bets. Calico offers mature BGP routing and a choice of iptables, nftables, or eBPF dataplanes. Flannel prioritizes simplicity with overlay networking. Cilium's distinguishing combination is kernel-native eBPF for networking, security, load balancing, and observability in one agent, plus optional Gateway API and mesh features without a per-pod sidecar. None of these choices is universally correct; the durable skill is understanding the tradeoffs well enough to match a datapath to your cluster's scale, compliance requirements, and operational maturity.
 
-```bash
-hubble observe --pod production/payment-service --verdict DROPPED
-```
+When connectivity breaks in a policy-heavy cluster, the cost is measured in engineer attention and customer-visible latency, not in abstract architecture debates. A platform team that can answer "which policy dropped this flow, and which identity was on each side?" in seconds instead of hours has a fundamentally different incident response posture. That visibility is the practical reason Cilium has become a default evaluation target for teams outgrowing iptables-only CNIs.
 
-Three seconds later:
-
-```
-production/payment-service → production/health-checker DROPPED
-Policy: production/legacy-lockdown (ingress)
-```
-
-**An older policy was the culprit.** It had outlived the assumptions it was originally written for and blocked a dependency the team had overlooked.
-
-The root cause was visible quickly, turning a long network investigation into a straightforward policy fix.
-
-> 💡 **Did You Know?** eBPF-based dataplanes are attractive in Kubernetes because they reduce dependence on large iptables rule sets and enable richer observability.
+Adoption is also a staffing question. eBPF expertise is not required for day-one Cilium operations—the project ships compiled datapaths and a CLI—but advanced tuning, custom policy, and kernel interaction debugging benefit from engineers who have completed foundational eBPF material linked in the prerequisites. Budget training time the same way you budget cert-manager or ingress migrations: the tool reduces toil once the team trusts the observability signals.
 
 ---
 
-## Part 1: Understanding the Problem (Before We Solve It)
+## 1. The Problem Cilium Solves
 
-### The IPTables Nightmare
+### 1.1 iptables, kube-proxy, and rule-set growth
 
-Before we talk about Cilium's solution, you need to feel the pain of the old way.
+Every Kubernetes cluster that uses kube-proxy in iptables mode shares the same underlying mechanism. When you create a Service, kube-proxy installs NAT and forwarding rules so traffic to a virtual IP reaches healthy backend pods. Each Service and each backend endpoint contributes rules to chains that the kernel evaluates for every relevant packet. On a modest cluster with hundreds of Services, `iptables-save` output can already reach tens of thousands of lines. On larger fleets the counts climb into six figures, and the Kubernetes project has documented that iptables-mode kube-proxy can become an operational bottleneck as rule sets grow.
 
-Every Kubernetes cluster runs kube-proxy. Every time you create a Service, kube-proxy adds iptables rules. Let's see what that actually looks like:
+The debugging experience matches the scaling curve. When a packet is dropped or mis-routed, tracing it through nested kube-proxy chains across PREROUTING, KUBE-SERVICES, per-Service chains, and POSTROUTING is slow and error-prone. Adding LOG rules everywhere produces noisy logs and its own performance cost. Service updates trigger full rule rewrites rather than surgical edits, which can stall reconciliation for seconds on busy nodes and coincide with connection churn during rollouts. The Kubernetes community has been moving toward nftables-based kube-proxy and eBPF replacements precisely because the iptables model does not scale gracefully with Service cardinality.
 
-```bash
-# On a modest cluster with 500 services:
-iptables-save | wc -l
-# Output: 12,847 lines
+Cilium's kube-proxy replacement moves Service handling into eBPF programs and maps. Backend selection becomes a hash lookup keyed by Service IP and port rather than a walk through iptables chains. Updates touch only the entries that changed, which reduces reconciliation blast radius during EndpointSlice churn. The tradeoff is explicit configuration: Cilium must know which network devices receive NodePort and external traffic, whereas iptables hooks applied broadly by accident on every interface. Teams that remove kube-proxy without validating device bindings sometimes discover intermittent NodePort failures that pod-to-pod traffic masks.
 
-# On a large cluster with 5,000 services:
-iptables-save | wc -l
-# Output: 147,291 lines
-```
+The Kubernetes project has documented nftables as a successor mode for kube-proxy because both iptables and nftables still scale with rule cardinality even when individual operations improve. eBPF-based replacements attack the problem from a different angle: fewer rules, more maps, and programs that encode Kubernetes semantics directly. That does not make Cilium free to operate; it shifts complexity from rule-list maintenance to agent configuration, kernel version requirements, and observability discipline. Operators who understand both sides can explain to security auditors why a cluster no longer carries six-figure iptables dumps while still enforcing default-deny policy.
 
-**Very large iptables rule sets are common in bigger clusters.**
+When comparing CNIs for a greenfield cluster, ask how each option handles three growth axes: Service count, policy density, and observability requirements. Flannel optimizes for getting clusters online quickly with overlays. Calico offers flexible routing and multiple dataplane modes including eBPF. Cilium bets that one eBPF datapath can unify CNI, kube-proxy replacement, policy, encryption, and flow visibility. Your environment's kernel baseline, hardware NIC capabilities, and team familiarity with eBPF should drive the final choice more than headline features alone.
 
-Now imagine debugging why one specific packet was dropped.
+### 1.2 IP-based NetworkPolicy and ephemeral endpoints
 
-```
-THE IPTABLES DEBUGGING EXPERIENCE
-═══════════════════════════════════════════════════════════════════
+Standard Kubernetes NetworkPolicy expresses intent with label selectors, but many CNIs implement enforcement with IP sets. A policy that allows `app: frontend` to reach `app: backend` becomes a list of current frontend pod IPs attached to backend endpoints. When a frontend pod restarts and receives a new IP, the CNI must detect the change, recompute affected policies, and distribute updates to every node before enforcement converges. During that window, legitimate traffic can fail or stale allow rules can linger.
 
-You: "Why was my packet dropped?"
+This mismatch between semantic policy and IP enforcement is structural. Kubernetes assigns pod IPs from CNI-managed pools precisely so workloads can be scheduled freely; IPs are not stable identities. Security expressed as "this labeled workload may talk to that labeled workload" is durable; security expressed as "these thirty-two addresses may talk to those eighteen addresses" is not. Cilium's response is to assign each unique label set a cluster-wide numeric identity and evaluate policy on identities at the point of enforcement, while still using IPs for routing.
 
-iptables: "Let me check...
-          Chain PREROUTING → Chain KUBE-SERVICES → Chain KUBE-SVC-XYZABC123
-          → Chain KUBE-SEP-DEF456 → Chain KUBE-POSTROUTING →
-          Actually I lost track. Somewhere in these 147,000 rules."
+NetworkPolicy defaults in many clusters remain allow-all because teams fear locking themselves out during early development. That posture is understandable on day one and expensive on day three hundred when a compromised workload can reach every Service in every namespace. Moving to identity-aware default deny is a cultural change as much as a technical one. Platform teams publish baseline cluster policies, document required DNS and API exceptions, and give application teams templates for tier-to-tier allows. Cilium's entity shortcuts reduce the boilerplate that makes default deny feel unapproachable on other implementations.
 
-You: "Which rule specifically?"
+East-west traffic inside a namespace is not automatically safe just because it shares a network boundary. Compliance frameworks increasingly expect segmentation between application tiers even when Kubernetes places them in the same namespace for convenience. Identity-based rules let you express tier boundaries with labels such as `tier: frontend` and `tier: data` without renumbering IPs every time Helm upgrades rename Deployments. The same model extends to batch jobs that spin up briefly: a CronJob pod receives an identity for its label set for the duration of the run, then disappears from endpoint lists without leaving stale IP rules behind.
 
-iptables: "¯\_(ツ)_/¯"
-
-You: "How do I see what's being blocked?"
-
-iptables: "Add LOG rules everywhere. Parse the logs yourself.
-          Good luck with the performance impact."
-
-You: [opens job listings]
-```
-
-And it gets worse. When you update a Service:
-
-```
-TIME TO UPDATE 147,000 IPTABLES RULES
-═══════════════════════════════════════════════════════════════════
-
-1. kube-proxy receives Service update
-2. kube-proxy rewrites ALL rules (can't do incremental)
-3. Takes ~5-30 seconds on large clusters
-4. During rewrite: connections drop, new connections may fail
-5. All nodes do this simultaneously
-6. Your monitoring alerts go crazy
-
-This happens every time:
-- A pod scales up/down
-- A service is created/deleted
-- An endpoint changes
-
-At scale: dozens of times per minute
-```
-
-This isn't a hypothetical. [Datadog wrote about hitting this limit](https://www.datadoghq.com/blog/engineering/introducing-glommio/). So did [Shopify](https://shopify.engineering/resiliency-planning-how-we-prepared-for-black-friday). At larger cluster sizes, [iptables-based service routing can become a real operational bottleneck](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/).
-
-### The NetworkPolicy Problem
-
-Standard Kubernetes NetworkPolicies have a different problem: they're based on IP addresses.
-
-```yaml
-# This NetworkPolicy looks reasonable:
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-```
-
-Under the hood, this becomes:
-
-```
-"Allow traffic from IP 10.244.1.45 to port 80"
-"Allow traffic from IP 10.244.2.23 to port 80"
-"Allow traffic from IP 10.244.3.67 to port 80"
-```
-
-Now the frontend pod crashes and restarts. New IP: 10.244.1.99.
-
-The CNI has to:
-1. Detect the IP change
-2. Update every policy that references frontend
-3. Push those updates to every node
-4. Hope nothing breaks during the transition
-
-This happens constantly in Kubernetes. Pods restart, scale, move between nodes. IP addresses are ephemeral by design.
-
-**Building security on IP addresses is like building a house on quicksand.**
+**Hypothetical scenario:** A payment service fails health checks even though direct curl tests from an ops pod succeed. Hubble shows `DROPPED` flows from the health-checker identity to the payment service identity with a policy reference pointing at an older ingress rule that only allowlisted the previous Deployment's label value. The fix is a one-line label or policy selector update, not a tcpdump marathon across nodes. The scenario is common enough that identity-aware visibility pays for itself the first time it shortens a sev-2 bridge.
 
 ---
 
-## Part 2: Enter eBPF - Programming the Unprogrammable
+## 2. eBPF as Cilium's Datapath Foundation
 
-### What is eBPF?
+### 2.1 What eBPF changes about packet handling
 
-eBPF stands for "extended Berkeley Packet Filter," but that name is misleading. It's evolved far beyond packet filtering.
+eBPF began as an extended Berkeley Packet Filter and has grown into a general-purpose in-kernel virtual machine. Programs are loaded dynamically, verified for safety, and JIT-compiled to native instructions. They can attach to tracepoints, kprobes, cgroup hooks, TC classifiers, XDP drivers, and socket operations. For networking, the important property is that decision logic runs in kernel context without copying every packet to userspace.
 
-Here's the mental model that helped me understand it:
+Traditional service proxying often follows a path where the kernel receives a packet, traverses multiple iptables chains, copies the payload to a userspace proxy, and copies it back after processing. Each userspace transition costs CPU cycles and cache locality. eBPF programs can perform forwarding, NAT, policy checks, and load-balancing backend selection while the packet remains in kernel buffers. Cilium generates and loads these programs from Kubernetes state; you do not write raw eBPF bytecode for routine cluster operations.
 
-```
-THE JAVASCRIPT OF THE LINUX KERNEL
-═══════════════════════════════════════════════════════════════════
+The mental model that helps many operators is "JavaScript for the kernel," with a strict verifier playing the role of a static analyzer that rejects programs with unbounded loops, illegal memory access, or unreachable paths. Before any eBPF program runs on a production node, the verifier proves it terminates and accesses only allowed memory regions. Invalid programs fail at load time rather than panicking the kernel at runtime, which is why distributions ship eBPF tooling for observability and networking alongside their kernel packages.
 
-Remember when browsers only displayed static HTML?
-Then JavaScript came along: "What if we could run code IN the browser?"
-Suddenly browsers could do anything.
+The mental model that helps many operators is "JavaScript for the kernel," with a strict verifier playing the role of a static analyzer that rejects programs with unbounded loops, illegal memory access, or unreachable paths. Before any eBPF program runs on a production node, the verifier proves it terminates and accesses only allowed memory regions. Invalid programs fail at load time rather than panicking the kernel at runtime.
 
-eBPF is JavaScript for the Linux kernel.
+### 2.2 Verifier constraints and why they matter to Cilium
 
-Before eBPF:
-- Want to change how networking works? Modify kernel code, recompile, reboot.
-- Want to add tracing? Load a kernel module, pray it doesn't crash.
-- Want custom packet processing? Install a userspace proxy, accept the overhead.
+The eBPF verifier enforces complexity limits, including a bounded instruction count analyzed during static verification. Programs cannot contain unbounded loops or unverifiable pointer arithmetic. These constraints occasionally reject programs that a human reviewer would consider safe, which is why Cilium maintains a compiler pipeline that splits logic across multiple programs and maps while staying under verifier limits.
 
-With eBPF:
-- Write small programs that run INSIDE the kernel
-- [Load them dynamically, no reboot needed](https://github.com/cilium/cilium/blob/main/Documentation/overview/component-overview.rst)
-- Kernel verifies they're safe before running
-- Run at kernel speed (no userspace context switches)
-```
+Cilium contributors have upstreamed kernel changes over many release cycles to expand verifier expressiveness without sacrificing safety. From an operator perspective, the takeaway is that eBPF is not arbitrary kernel patching; it is a governed execution environment. When Cilium upgrades require a newer minimum kernel version, the reason is often a verifier or helper capability needed for a datapath feature rather than cosmetic churn.
 
-Here's a concrete example. Traditional packet processing:
+Programs attach at well-defined hook points with explicit context. A TC classifier sees packets after the kernel has allocated sk_buff structures; XDP sees frames earlier when drivers support native XDP offload or generic XDP fallback. Cilium chooses hooks based on whether traffic is north-south from a physical NIC, east-west between pods on the same host, or destined for a Service VIP handled at the socket layer. Misunderstanding which hook handles your symptom leads to debugging the wrong program slice; Hubble metadata that names the observation point helps narrow the search.
 
-```
-TRADITIONAL PACKET FLOW
-═══════════════════════════════════════════════════════════════════
+Because eBPF maps are the shared state between programs, policy and forwarding read consistent backend and identity tables. That coherence is harder to achieve when iptables rules, ipvs tables, and a separate policy firewall evolve independently on the same node. The tradeoff is that map pressure and verifier complexity become your scaling variables instead of raw rule count. Large clusters with dense policies still require capacity planning, but the failure modes look different: map fullness, identity churn storms, and agent reconcile lag rather than multi-second iptables restore windows.
 
-Packet arrives at network card
-         │
-         ▼
-    Kernel receives packet
-         │
-         ▼
-    iptables chain 1 (PREROUTING)
-         │
-         ▼
-    iptables chain 2 (INPUT/FORWARD)
-         │
-         ▼
-    Routing decision
-         │
-         ▼
-    iptables chain 3 (OUTPUT)
-         │
-         ▼
-    iptables chain 4 (POSTROUTING)
-         │
-         ▼
-    Copy packet to userspace ← EXPENSIVE!
-         │
-         ▼
-    Userspace proxy (kube-proxy/envoy/etc)
-         │
-         ▼
-    Copy packet back to kernel ← EXPENSIVE!
-         │
-         ▼
-    Finally reaches destination
+### 2.3 Where Cilium attaches in the stack
 
-Cost: ~50-100 microseconds per packet
-      Multiple memory copies
-      CPU cache thrashing
-```
+Cilium's datapath uses multiple hook points depending on feature and traffic direction. TC programs handle pod egress and ingress on veth pairs. XDP can accelerate north-south traffic at the NIC driver layer when supported. Socket-level load balancing hooks into `connect()` and `sendmsg()` for in-cluster Service access without extra NAT hops in some modes. Hubble observers attach alongside policy and forwarding programs so flow records reflect the same decisions applications experience.
 
-With eBPF:
-
-```
-eBPF PACKET FLOW
-═══════════════════════════════════════════════════════════════════
-
-Packet arrives at network card
-         │
-         ▼
-    eBPF program runs (in kernel)
-    - Looks up destination in hash map: O(1)
-    - Applies policy: O(1)
-    - Rewrites headers if needed
-    - Decides: forward, drop, or redirect
-         │
-         ▼
-    Packet reaches destination
-
-Cost: ~5-10 microseconds per packet
-      Zero memory copies
-      Runs in kernel context
-
-10x faster. Zero userspace involvement for most packets.
-```
-
-_Pause and predict: in your own cluster, before reading on, what would `iptables-save | wc -l` return today, and at what rule count do you expect kube-proxy reconciliation to start visibly stalling Service updates? Jot a number, then compare it to the figures in this module — the gap between intuition and reality is exactly the gap eBPF closes._
-
-### Why eBPF is Safe (Despite Running in the Kernel)
-
-"Wait," I hear you thinking, "running arbitrary code in the kernel sounds terrifying."
-
-You're right. That's why [eBPF has a verifier](https://github.com/torvalds/linux/blob/master/Documentation/bpf/verifier.rst):
-
-```
-THE eBPF VERIFIER: YOUR KERNEL'S BOUNCER
-═══════════════════════════════════════════════════════════════════
-
-Before ANY eBPF program runs, the verifier checks:
-
-✓ Does it terminate? (No infinite loops allowed)
-✓ Does it access only allowed memory? (No kernel crashes)
-✓ Does it use only allowed kernel functions?
-✓ Does it handle all code paths? (No undefined behavior)
-✓ Is the complexity bounded? ([Max 1 million instructions](https://github.com/torvalds/linux/blob/master/include/linux/bpf.h))
-
-If ANY check fails: program is rejected, never runs.
-
-This is why you can load eBPF programs on production systems
-without fear. The kernel itself guarantees they're safe.
-```
-
-> 💡 **Did You Know?** The eBPF verifier is so strict that it sometimes rejects valid programs that the human eye can see are safe. The Cilium team has contributed extensively to the Linux kernel to make the verifier smarter while maintaining safety. Writing eBPF programs that pass the verifier is an art—Cilium handles this complexity so you don't have to.
+Understanding hook placement explains feature interactions. Transparent encryption wraps payloads on the wire between nodes; policy checks typically evaluate identities before encryption on egress and after decryption on ingress. kube-proxy replacement programs share backend maps with policy enforcement so a drop verdict and a forwarding decision come from one coherent datapath state rather than competing subsystems.
 
 ---
 
-## Part 3: Cilium Architecture - The Big Picture
+## 3. Cilium Architecture
 
-Now that you understand eBPF, let's see how Cilium uses it:
+### 3.1 Control plane and per-node agents
+
+Cilium splits responsibilities between cluster-level coordination and per-node datapath programming. The Cilium Operator handles cluster-wide tasks such as IP address management modes, CRD-related housekeeping, and features that require a single leader. Each node runs a Cilium Agent as a DaemonSet pod that watches Kubernetes API objects, computes desired state, compiles eBPF programs, and loads them into the kernel.
+
+The agent also maintains the identity catalog, publishes endpoint state, and hosts the local Hubble observer. When a pod is scheduled to a node, the agent creates an endpoint representing that pod's networking identity, assigns or inherits an IP according to the configured IPAM mode, and installs routes and policy programs for the pod's veth pair. Deletion reverses the process and garbage-collects map entries so identities and IPs do not leak across rapid churn.
 
 ```
-CILIUM: THE COMPLETE PICTURE
+CILIUM CONTROL AND DATA PLANE (SIMPLIFIED)
 ═══════════════════════════════════════════════════════════════════
 
-                         ┌─────────────────────────────┐
-                         │      KUBERNETES API         │
-                         │  (Pods, Services, Policies) │
-                         └──────────────┬──────────────┘
-                                        │
-                    ┌───────────────────┼───────────────────┐
-                    │                   │                   │
-           ┌────────▼────────┐ ┌────────▼────────┐ ┌───────▼────────┐
-           │ CILIUM OPERATOR │ │  HUBBLE RELAY   │ │   HUBBLE UI    │
-           │   (1 per cluster)│ │ (aggregation)   │ │ (visualization)│
-           └─────────────────┘ └────────┬────────┘ └────────────────┘
-                                        │
-    ════════════════════════════════════╧════════════════════════════
-                               PER-NODE COMPONENTS
-    ═════════════════════════════════════════════════════════════════
+              ┌─────────────────────────────────────┐
+              │         Kubernetes API Server        │
+              │   Pods, Services, Policies, CRDs     │
+              └──────────────────┬──────────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         │                       │                       │
+  ┌──────▼──────┐        ┌───────▼───────┐       ┌───────▼───────┐
+  │   Cilium    │        │ Hubble Relay  │       │  Hubble UI    │
+  │  Operator   │        │ (aggregation) │       │ (optional)    │
+  └─────────────┘        └───────┬───────┘       └───────────────┘
+                                 │
+    ═════════════════════════════╧════════════════════════════════
+                         PER NODE
+    ═════════════════════════════════════════════════════════════
 
-    NODE 1                    NODE 2                    NODE 3
-    ┌─────────────────────┐  ┌─────────────────────┐  ┌──────────────────┐
-    │   CILIUM AGENT      │  │   CILIUM AGENT      │  │   CILIUM AGENT   │
-    │   ┌─────────────┐   │  │   ┌─────────────┐   │  │  ┌─────────────┐ │
-    │   │   Policy    │   │  │   │   Policy    │   │  │  │   Policy    │ │
-    │   │   Engine    │   │  │   │   Engine    │   │  │  │   Engine    │ │
-    │   ├─────────────┤   │  │   ├─────────────┤   │  │  ├─────────────┤ │
-    │   │  Identity   │   │  │   │  Identity   │   │  │  │  Identity   │ │
-    │   │  Manager    │   │  │   │  Manager    │   │  │  │  Manager    │ │
-    │   ├─────────────┤   │  │   ├─────────────┤   │  │  ├─────────────┤ │
-    │   │   Hubble    │   │  │   │   Hubble    │   │  │  │   Hubble    │ │
-    │   │  Observer   │   │  │   │  Observer   │   │  │  │  Observer   │ │
-    │   └──────┬──────┘   │  │   └──────┬──────┘   │  │  └──────┬──────┘ │
-    │          │          │  │          │          │  │         │        │
-    │   ┌──────▼──────┐   │  │   ┌──────▼──────┐   │  │  ┌──────▼──────┐ │
-    │   │    eBPF     │   │  │   │    eBPF     │   │  │  │    eBPF     │ │
-    │   │  DATAPLANE  │   │  │   │  DATAPLANE  │   │  │  │  DATAPLANE  │ │
-    │   │             │   │  │   │             │   │  │  │             │ │
-    │   │ • Networking│   │  │   │ • Networking│   │  │  │ • Networking│ │
-    │   │ • Policies  │   │  │   │ • Policies  │   │  │  │ • Policies  │ │
-    │   │ • Load Bal. │   │  │   │ • Load Bal. │   │  │  │ • Load Bal. │ │
-    │   │ • Encryption│   │  │   │ • Encryption│   │  │  │ • Encryption│ │
-    │   └─────────────┘   │  │   └─────────────┘   │  │  └─────────────┘ │
-    │                     │  │                     │  │                  │
-    │  ┌──────┐ ┌──────┐  │  │  ┌──────┐ ┌──────┐  │  │ ┌──────┐┌──────┐│
-    │  │Pod A │ │Pod B │  │  │  │Pod C │ │Pod D │  │  │ │Pod E ││Pod F ││
-    │  │id=123│ │id=456│  │  │  │id=789│ │id=123│  │  │ │id=456││id=999││
-    │  └──────┘ └──────┘  │  │  └──────┘ └──────┘  │  │ └──────┘└──────┘│
-    └─────────────────────┘  └─────────────────────┘  └──────────────────┘
+    ┌────────────────────────────────────────────────────────────┐
+    │ Cilium Agent                                                │
+    │  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
+    │  │  Identity   │  │ Policy engine │  │ Service LB / encrypt │ │
+    │  │  manager    │  │ (eBPF maps)   │  │ (eBPF maps)          │ │
+    │  └──────┬──────┘  └──────┬───────┘  └──────────┬──────────┘ │
+    │         └────────────────┴─────────────────────┘            │
+    │                            │                                  │
+    │                     ┌──────▼──────┐                           │
+    │                     │ eBPF datapath│                           │
+    │                     └──────┬──────┘                           │
+    │              ┌─────────────┴─────────────┐                    │
+    │         ┌────▼────┐                 ┌────▼────┐               │
+    │         │ Pod A   │                 │ Pod B   │               │
+    │         │ id=48291│                 │ id=73842│               │
+    │         └─────────┘                 └─────────┘               │
+    └────────────────────────────────────────────────────────────┘
 ```
 
-### The Components Explained (Like You're New Here)
+### 3.2 Installation baseline for labs and greenfield clusters
 
-**[Cilium Agent (DaemonSet)](https://github.com/cilium/cilium/blob/main/Documentation/overview/component-overview.rst)** - The worker bee on each node:
-- Watches Kubernetes for pod/service/policy changes
-- Compiles eBPF programs and loads them into the kernel
-- Assigns identities to pods (more on this soon)
-- Runs Hubble observer for local visibility
-
-**Cilium Operator** - The coordinator (1 per cluster):
-- Manages IP address allocation (IPAM)
-- Handles garbage collection of stale resources
-- Manages CRDs and cluster-wide operations
-
-**Hubble** - The observability layer:
-- **Hubble (per-node)**: Captures flows from eBPF in real-time
-- **Hubble Relay**: Aggregates flows from all nodes
-- **Hubble UI**: Beautiful web interface for visualization
-
-### Installation: Your First Cilium Cluster
+The Cilium CLI wraps Helm installs with sensible defaults for quick starts. A typical greenfield install enables kube-proxy replacement and Hubble together so you can validate forwarding and observability in one pass.
 
 ```bash
-# Step 1: Install Cilium CLI
-# (The CLI makes installation and management much easier)
+# Install Cilium CLI (check upstream releases for your architecture)
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-curl -L --fail -o cilium-linux-amd64.tar.gz "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz"
+curl -L --fail -o cilium-linux-amd64.tar.gz \
+  "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz"
 sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
 rm cilium-linux-amd64.tar.gz
 
-# Step 2: Install Cilium with the good defaults
+# Install with kube-proxy replacement and Hubble
 cilium install \
   --set kubeProxyReplacement=true \
   --set hubble.enabled=true \
   --set hubble.relay.enabled=true \
   --set hubble.ui.enabled=true
 
-# Step 3: Wait for it to be ready
 cilium status --wait
-
-# Step 4: Verify everything works
 cilium connectivity test
 ```
 
-**What `cilium connectivity test` actually does:**
+The connectivity test deploys short-lived workloads and checks pod-to-pod, pod-to-Service, policy, DNS, and Hubble visibility. Treat a passing run as a necessary but not sufficient gate; your application namespaces still need policy and MTU validation under real traffic patterns.
 
-[This isn't a simple ping test](https://github.com/cilium/cilium-cli). It [deploys test workloads and verifies](https://github.com/cilium/cilium-cli):
-- Pod-to-pod connectivity (same node and cross-node)
-- Pod-to-Service connectivity
-- Pod-to-external connectivity
-- Network policies are enforced correctly
-- DNS resolution works
-- Hubble observability captures flows
+IPAM mode selection affects operations more than newcomers expect. Kubernetes host-scope routing, cluster-pool CIDR allocation, and cloud-specific ENI modes each interact with overlay versus native routing choices. The operator configures the default mode; the agent implements it per node. Document your CIDR plan before install so ClusterMesh and external firewall rules do not collide later. When nodes join the cluster, the operator ensures new capacity receives consistent configuration without manual per-node edits for standard fields.
 
-If this test passes, your networking is solid. If it fails, you'll know exactly what's broken.
+The agent exposes a local API and metrics useful during incidents. Prometheus scrape targets on agents surface reconcile errors, endpoint regeneration counts, and BPF map pressure indicators depending on version. Pair agent metrics with Hubble drop counters to distinguish "policy is denying traffic" from "datapath failed to program." That distinction saves hours when multiple teams join a bridge and each assumes a different layer is at fault.
 
 ---
 
-## Part 4: Identity-Based Security - The Game Changer
+## 4. Identity-Based Security and Network Policy
 
-This is where Cilium fundamentally changes how you think about network security.
+### 4.1 How Cilium identities work
 
-### The Problem with IPs
+When a pod starts with a label set, Cilium allocates or reuses a numeric security identity for that set cluster-wide. All pods with identical relevant labels share one identity regardless of how many replicas run or which nodes host them. Reserved identities cover special cases: the host, external world, health probes, and kube-dns, among others. Identity numbers below a configured threshold are reserved; workload identities begin above that range.
 
-Remember this scenario?
+Policy enforcement asks whether source identity S may reach destination identity D on a given port and protocol, optionally with L7 constraints. The check is a map lookup in eBPF, not a scan of IP lists. When a frontend Deployment scales from two to two hundred replicas, the identity seen by backends remains unchanged if labels are stable. When a pod restarts with the same labels, policies continue to apply without waiting for IP set recomputation across the fleet.
 
-```yaml
-# You write a policy:
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-backend
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-```
-
-Behind the scenes, your CNI translates this to IP rules. Frontend pods have IPs 10.244.1.5 and 10.244.2.12, so the rule becomes "allow from 10.244.1.5 and 10.244.2.12."
-
-Now frontend scales from 2 pods to 20 pods. Each new pod needs to be added. Pod crashes and restarts with new IP? Rule needs updating. Rolling deployment? Constant IP churn.
-
-**Cilium throws this model away entirely.**
-
-### How Cilium Identity Works
-
-```
-CILIUM IDENTITY: THE "AHA!" MOMENT
-═══════════════════════════════════════════════════════════════════
-
-Step 1: Pod is created with labels
-┌─────────────────────────────────────────────────────────────────┐
-│ Pod: frontend-7b9f8c4d5-x2k9p                                   │
-│ Labels:                                                         │
-│   app: frontend                                                 │
-│   env: production                                               │
-│   team: checkout                                                │
-└─────────────────────────────────────────────────────────────────┘
-
-Step 2: [Cilium creates a NUMERIC IDENTITY from the labels](https://github.com/cilium/cilium/blob/main/Documentation/gettingstarted/terminology.rst)
-┌─────────────────────────────────────────────────────────────────┐
-│ Identity 48291 = {app=frontend, env=production, team=checkout}  │
-│                                                                 │
-│ This identity is:                                               │
-│ • Cluster-wide (same on all nodes)                              │
-│ • Stable (doesn't change when pod restarts)                     │
-│ • Shared (all pods with same labels = same identity)            │
-└─────────────────────────────────────────────────────────────────┘
-
-Step 3: Every packet carries the identity, NOT the IP
-┌─────────────────────────────────────────────────────────────────┐
-│  Network Packet                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Source Identity: 48291                                   │   │
-│  │ Dest Identity: 73842                                     │   │
-│  │ Payload: HTTP GET /api/checkout                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  The IP is still there for routing, but POLICY uses identity   │
-└─────────────────────────────────────────────────────────────────┘
-
-Step 4: Policy enforcement uses identity
-┌─────────────────────────────────────────────────────────────────┐
-│  eBPF Policy Check:                                             │
-│                                                                 │
-│  "Is identity 48291 allowed to reach identity 73842?"           │
-│                                                                 │
-│  Lookup in eBPF hash map: O(1) ← Constant time!                │
-│  Answer: ALLOW or DENY                                          │
-│                                                                 │
-│  No IP lookups. No rule scanning. Instant decision.            │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Why this matters:**
-
-1. **Pod restarts**: [Same labels = same identity](https://github.com/cilium/cilium). No policy updates needed.
-2. **Scaling**: 1 pod or 1000 pods with same labels = same identity. No rule explosion.
-3. **Cross-cluster**: Identity follows the workload. Works in multi-cluster setups.
-4. **Debugging**: "Who is identity 48291?" → `cilium identity get 48291` → Instant answer.
-
-### Seeing Identities in Action
+Inspect identities with the CLI during incidents and policy design reviews:
 
 ```bash
-# List all identities in your cluster
 cilium identity list
-
-# Output:
-# IDENTITY   LABELS
-# 1          reserved:host
-# 2          reserved:world
-# 4          reserved:health
-# 48291      k8s:app=frontend,k8s:env=production,k8s:team=checkout
-# 73842      k8s:app=backend,k8s:env=production
-# 99103      k8s:app=database,k8s:env=production
-
-# Get details on a specific identity
 cilium identity get 48291
-
-# See which endpoints have this identity
-kubectl exec -n kube-system cilium-xxxxx -- cilium endpoint list | grep 48291
 ```
 
-> 💡 **Did You Know?** [Cilium reserves identity numbers 1-255 for special purposes](https://github.com/cilium/cilium/blob/main/pkg/identity/numericidentity.go). Identity 1 is always the host (the node itself), identity 2 is "world" (anything external to the cluster), and identity 4 is for health checks. This means you can write policies like "allow health checks" without knowing which IP ranges your health checkers use. It's beautiful.
+### 4.2 Standard NetworkPolicy and CiliumNetworkPolicy
+
+Cilium implements standard Kubernetes NetworkPolicy resources, so existing policies continue to work during migration. CiliumNetworkPolicy adds CRD fields for identity-aware selectors, port rules with HTTP and Kafka matchers, DNS-based egress controls, and entity shortcuts such as `kube-apiserver`, `dns`, `health`, and `world`.
+
+An L7 HTTP policy can allow only specific methods and paths to an API pod. Requests outside the allow list are denied at the network layer before the application handles them. That is powerful for limiting lateral movement after a compromise, but it also surfaces traffic you may not have noticed—metrics scrapes, admin paths, or legacy cron calls—that previously returned application-level 404 responses instead of explicit drops.
+
+DNS-aware egress uses `toFQDNs` rules. Cilium's DNS proxy observes allowed queries, learns resolved IPs, and inserts them into ephemeral allow map entries with TTL awareness. This avoids hard-coding cloud provider IP ranges that change, but it requires explicit DNS egress allow rules in default-deny environments. Forgetting DNS is the most common reason a freshly locked-down namespace cannot resolve external APIs.
+
+Cluster-wide policies apply with `CiliumClusterwideNetworkPolicy` when namespace boundaries are too narrow for platform baselines such as default deny with shared exceptions for DNS and the Kubernetes API. Layer cluster policies carefully; a broad selector can unintentionally constrain namespaces owned by other teams.
+
+Kafka and DNS matchers in CiliumNetworkPolicy extend the same identity machinery to protocols beyond HTTP. A Kafka rule can allow particular API keys or topics between identities; DNS rules govern which names a workload may resolve before FQDN egress even enters the picture. These features reward teams that treat policy as product documentation: the allowed paths are explicit, reviewable in Git, and testable in CI with policy validation tools.
+
+Standard Kubernetes NetworkPolicy remains valuable during migration because security teams can stage Cilium without rewriting every manifest on day one. Run dual validation in staging: apply the same traffic tests against standard policies and enhanced Cilium policies to see where behavior diverges. Divergence usually appears at L7, DNS egress, or entity shortcuts—not at basic podSelector ingress. Document those gaps in your migration runbook so application owners know which manifests they must upgrade for parity.
+
+### 4.3 Policy design practices that survive churn
+
+Start from explicit allow lists rather than implicit open defaults unless you have a documented reason to defer hardening. Document which identities each tier requires: frontends, APIs, data stores, batch workers, and operators. When introducing a new Deployment, compare its labels to existing `fromEndpoints` selectors before rollout; identity mismatches are a frequent cause of "the old version worked" connectivity reports.
+
+Use Hubble dry runs in staging by applying policies while watching `--verdict DROPPED` flows under synthetic load. Production change windows benefit from the same command pair: apply policy, watch drops for five minutes, then promote or rollback. Calico and other CNIs offer overlapping policy models with different CRDs; the durable pattern—label-stable identities, default deny, explicit DNS—is portable even when the implementation details differ.
+
+Policy audit questions should be identity-centric: which identities may reach the database identity, on which ports, with which L7 constraints, and which identities are explicitly denied by default. Export Hubble flows to your SIEM if retention requirements exceed local Relay buffers. Flow logs complement Kubernetes audit logs: audit logs show who changed a policy object; Hubble shows which flows that policy affected afterward.
 
 ---
 
-## Part 5: Network Policies - From Basic to "Wow"
+## 5. Hubble Observability
 
-### Standard Kubernetes NetworkPolicy (Cilium Implements These)
+### 5.1 Flow visibility without sidecars
 
-[Cilium fully supports standard Kubernetes NetworkPolicies](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/policy.rst). If you have existing policies, they keep working:
+Hubble consumes events from the same eBPF hooks that enforce policy and forward packets. Each flow record can include L3/L4 tuples, identities, namespaces, pod names, DNS names, HTTP metadata when L7 parsing is enabled, and a verdict such as FORWARDED, DROPPED, or ERROR. Because collection happens in the kernel, you do not deploy per-pod tracing sidecars or modify application code to gain baseline network visibility.
 
-```yaml
-# Standard NetworkPolicy - Cilium handles this perfectly
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: backend-allow-frontend
-  namespace: production
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-    ports:
-    - protocol: TCP
-      port: 8080
-```
-
-### CiliumNetworkPolicy - The Enhanced Version
-
-This is where it gets interesting. [Cilium extends NetworkPolicies with features Kubernetes doesn't support](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer7.rst):
-
-```yaml
-# Layer 7 (HTTP) Policy - Kubernetes can't do this
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: api-http-policy
-  namespace: production
-spec:
-  endpointSelector:
-    matchLabels:
-      app: api-server
-  ingress:
-  - fromEndpoints:
-    - matchLabels:
-        app: frontend
-    toPorts:
-    - ports:
-      - port: "8080"
-        protocol: TCP
-      rules:
-        http:
-        # Only allow specific HTTP methods and paths
-        - method: "GET"
-          path: "/api/v1/products.*"
-        - method: "GET"
-          path: "/api/v1/users/[0-9]+"
-        - method: "POST"
-          path: "/api/v1/orders"
-          headers:
-          - 'Content-Type: application/json'
-```
-
-**What this policy says in plain English:**
-
-"Frontend pods can connect to the API server on port 8080, but ONLY for:
-- GET requests to `/api/v1/products*` (list/view products)
-- GET requests to `/api/v1/users/<id>` (view specific user)
-- [POST requests to `/api/v1/orders` with JSON content type](https://github.com/cilium/cilium) (create orders)
-
-Any other HTTP request? **DENIED at the network layer.**"
-
-This is insanely powerful. An attacker who compromises your frontend can't hit `/api/v1/admin` or send DELETE requests—the network itself blocks them.
-
-### DNS-Based Egress Policies
-
-One of my favorite Cilium features. Most security teams want to control what external services pods can reach:
-
-```yaml
-# Allow pods to reach only specific external services
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: payment-egress
-  namespace: production
-spec:
-  endpointSelector:
-    matchLabels:
-      app: payment-processor
-  egress:
-  # Allow internal services
-  - toEndpoints:
-    - matchLabels:
-        app: order-service
-  # Allow specific external APIs
-  - toFQDNs:
-    - matchName: "api.stripe.com"
-    - matchName: "api.paypal.com"
-    - matchPattern: "*.amazonaws.com"  # AWS services
-    toPorts:
-    - ports:
-      - port: "443"
-        protocol: TCP
-  # Allow DNS (required for FQDN resolution)
-  - toEndpoints:
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: kube-system
-        k8s:k8s-app: kube-dns
-    toPorts:
-    - ports:
-      - port: "53"
-        protocol: UDP
-```
-
-**How [FQDN policies](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer3.rst) work under the hood:**
-
-```
-FQDN POLICY MAGIC
-═══════════════════════════════════════════════════════════════════
-
-1. Policy says: "Allow egress to api.stripe.com"
-
-2. Cilium intercepts DNS queries from the pod
-
-3. Pod asks: "What's the IP of api.stripe.com?"
-
-4. DNS responds: "It's 52.84.150.1, 52.84.150.2, 52.84.150.3"
-
-5. Cilium automatically adds these IPs to the allow list
-   (stored in eBPF maps for O(1) lookup)
-
-6. Pod connects to 52.84.150.1:443 → ALLOWED
-
-7. Later, Stripe changes IPs (they do this a lot)
-
-8. Next DNS query returns new IPs
-
-9. Cilium updates the allow list automatically
-
-10. You never have to touch the policy!
-```
-
-No more hardcoding CIDR blocks that break when cloud providers change IPs. No more overly permissive "allow all egress to 0.0.0.0/0" rules.
-
-_Pause and predict: imagine your payment service has a `toFQDNs: api.stripe.com` egress rule. The DNS record's TTL is 30 seconds, but your pod cached the answer for 5 minutes due to a stale resolver. Stripe rotates IPs. What does Hubble show — and is the dropped flow Cilium's fault or the application's? Answer in your head before continuing — the resolution path matters more than the policy syntax._
-
-### Cluster-Wide Policies
-
-For policies that should apply everywhere (like "default deny"):
-
-```yaml
-# Default deny ALL traffic cluster-wide
-apiVersion: cilium.io/v2
-kind: CiliumClusterwideNetworkPolicy
-metadata:
-  name: default-deny
-spec:
-  endpointSelector: {}  # Applies to ALL pods
-  ingress:
-  - fromEndpoints:
-    - {}  # Only allow from endpoints with Cilium identity
-  egress:
-  - toEndpoints:
-    - {}
-  # Always allow essential services
-  - toEntities:
-    - kube-apiserver  # Pods need to reach API server
-    - dns             # Pods need DNS
-
----
-# Explicitly allow health checks (they'd be denied by default-deny)
-apiVersion: cilium.io/v2
-kind: CiliumClusterwideNetworkPolicy
-metadata:
-  name: allow-health-checks
-spec:
-  endpointSelector: {}
-  ingress:
-  - fromEntities:
-    - health  # Cilium's reserved identity for health checks
-```
-
-**The power of `toEntities`:**
-
-Instead of figuring out which IPs your kube-apiserver uses, which ports health checks come from, or which IPs your DNS servers have, Cilium provides semantic entities:
-
-| Entity | What it means |
-|--------|---------------|
-| `host` | The node the pod runs on |
-| `remote-node` | Other nodes in the cluster |
-| `kube-apiserver` | Kubernetes API server |
-| `health` | Health check probes |
-| `dns` | DNS servers (kube-dns/CoreDNS) |
-| `world` | Everything outside the cluster |
-
----
-
-## Part 6: Hubble - Seeing the Invisible
-
-If Cilium is the brain, [Hubble is the eyes](https://github.com/cilium/hubble).
-
-### The Old Way vs. The Hubble Way
-
-```
-DEBUGGING NETWORK ISSUES: OLD VS NEW
-═══════════════════════════════════════════════════════════════════
-
-THE OLD WAY:
-───────────────────────────────────────────────────────────────────
-1. Get alert: "Service unreachable"
-2. SSH into pod: kubectl exec -it pod -- sh
-3. Run tcpdump: tcpdump -i eth0 port 8080
-4. Wait for traffic...
-5. Stare at hex dumps
-6. Realize you need tcpdump on the OTHER pod too
-7. SSH into other pod
-8. Run tcpdump there
-9. Try to correlate timestamps across pods
-10. Give up, ask network team
-11. Network team says "network is fine"
-12. Cry
-
-THE HUBBLE WAY:
-───────────────────────────────────────────────────────────────────
-1. Get alert: "Service unreachable"
-2. Run: hubble observe --from-pod web --to-pod api --verdict DROPPED
-3. See exact policy that dropped the traffic
-4. Fix policy
-5. Go back to bed
-```
-
-### Installing and Accessing Hubble
+Hubble Relay aggregates flows from all nodes; the CLI and UI talk to Relay rather than individual agents in multi-node clusters. Enable Relay and optionally the UI during install, or upgrade an existing deployment with Helm values that turn on metrics exporters when you integrate with Prometheus.
 
 ```bash
-# Install Hubble CLI
+# Hubble CLI install (architecture-specific artifacts upstream)
 HUBBLE_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/main/stable.txt)
-curl -L --fail -o hubble-linux-amd64.tar.gz "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz"
+curl -L --fail -o hubble-linux-amd64.tar.gz \
+  "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz"
 sudo tar xzvfC hubble-linux-amd64.tar.gz /usr/local/bin
 rm hubble-linux-amd64.tar.gz
 
-# Port-forward to Hubble Relay (needed to aggregate from all nodes)
 cilium hubble port-forward &
-
-# Now you can use hubble observe
-hubble observe
-
-# Access the UI (optional but beautiful)
-cilium hubble ui
-# Opens browser to http://localhost:12000
-```
-
-### Hubble CLI - Your New Best Friend
-
-```bash
-# See ALL traffic in real-time
-hubble observe
-
-# Filter by namespace
-hubble observe --namespace production
-
-# Filter by specific pod
-hubble observe --pod production/frontend-abc
-
-# See only DROPPED traffic (the gold mine for debugging)
 hubble observe --verdict DROPPED
-
-# See traffic between two specific services
-hubble observe \
-  --from-pod production/frontend \
-  --to-pod production/backend
-
-# Filter by protocol
-hubble observe --protocol http
-hubble observe --protocol dns
-hubble observe --protocol tcp
-
-# See HTTP requests with details
-hubble observe --protocol http -o json | jq
-
-# See DNS queries
-hubble observe --protocol dns --namespace production
-
-# Output format options
-hubble observe -o compact    # One line per flow
-hubble observe -o dict       # Readable dictionary format
-hubble observe -o json       # JSON for scripting
-hubble observe -o table      # Table format
 ```
 
-### Understanding Hubble Output
+### 5.2 Troubleshooting patterns operators reuse
 
-```
-HUBBLE FLOW ANATOMY
-═══════════════════════════════════════════════════════════════════
-
-Dec  9 10:23:45.123  production/frontend-7b9f8c4d5-x2k9p:46532 (ID:48291)
-                     -> production/backend-5d8f7b3a2-k9p2m:8080 (ID:73842)
-                     http-request FORWARDED (HTTP/1.1 GET /api/users)
-
-Let's break this down:
-───────────────────────────────────────────────────────────────────
-
-TIMESTAMP           SOURCE
-Dec  9 10:23:45.123 production/frontend-7b9f8c4d5-x2k9p:46532 (ID:48291)
-                    │            │                    │      │   │
-                    namespace    pod name             port   │   └─ Cilium identity!
-                                                            └─ source port
-
-                    DESTINATION
-                    -> production/backend-5d8f7b3a2-k9p2m:8080 (ID:73842)
-                       │          │                     │      │
-                       namespace  pod name              port   └─ Cilium identity
-
-                    FLOW TYPE & VERDICT
-                    http-request FORWARDED (HTTP/1.1 GET /api/users)
-                    │            │          │
-                    protocol     │          └─ HTTP details (method, path)
-                                 └─ FORWARDED = allowed
-                                    DROPPED = blocked by policy
-                                    ERROR = something went wrong
-```
-
-### Real Debugging Scenarios
-
-**Scenario 1: "My pod can't reach the database"**
-
-```bash
-# Step 1: See what's being dropped
-hubble observe \
-  --from-pod production/myapp \
-  --to-pod production/postgres \
-  --verdict DROPPED
-
-# Output:
-# production/myapp-xxx -> production/postgres-yyy
-# policy-verdict:none DROPPED (Policy denied)
-
-# The "policy-verdict:none" tells you there's no ALLOW rule
-# You need to add a policy to permit this traffic
-```
-
-**Scenario 2: "External API calls are failing"**
-
-```bash
-# Check egress traffic
-hubble observe \
-  --from-pod production/myapp \
-  --verdict DROPPED \
-  --type l3/l4
-
-# Output:
-# production/myapp-xxx -> 52.84.150.1:443
-# policy-verdict:none DROPPED (Policy denied)
-
-# Your egress policy doesn't allow this IP
-# Check if you need to add FQDN rules
-```
-
-**Scenario 3: "DNS is slow/failing"**
-
-```bash
-# Watch DNS queries
-hubble observe --protocol dns --namespace production
-
-# Output:
-# production/myapp -> kube-system/coredns
-# dns-request FORWARDED (Query api.stripe.com A)
-# kube-system/coredns -> production/myapp
-# dns-response FORWARDED (Answer: 52.84.150.1)
-
-# If you see DROPPED DNS queries, check your egress policies
-```
-
-### [Hubble Metrics for Prometheus](https://github.com/cilium/cilium/blob/main/Documentation/observability/hubble/setup.rst)
-
-```bash
-# Enable metrics during Cilium install
-cilium install \
-  --set hubble.enabled=true \
-  --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,http}"
-
-# Or upgrade existing installation
-cilium upgrade \
-  --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,http}"
-```
-
-Key metrics to alert on:
-
-```yaml
-# Prometheus alert examples
-groups:
-- name: cilium
-  rules:
-  # Alert on packet drops (excluding expected drops)
-  - alert: HighPacketDropRate
-    expr: rate(hubble_drop_total{reason!="Policy denied"}[5m]) > 100
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "High packet drop rate on {{ $labels.instance }}"
-
-  # Alert on DNS failures
-  - alert: DNSErrors
-    expr: rate(hubble_dns_responses_total{rcode!="No Error"}[5m]) > 10
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "DNS errors detected: {{ $labels.rcode }}"
-
-  # Alert on HTTP 5xx errors
-  - alert: HTTP5xxErrors
-    expr: rate(hubble_http_responses_total{status=~"5.."}[5m]) > 10
-    for: 5m
-    labels:
-      severity: critical
-```
-
-> 💡 **Did You Know?** Hubble captures flows using eBPF, which means there's no sampling. Compared with coarse network monitoring, Hubble gives detailed flow-level visibility that is especially useful for troubleshooting and auditing. This makes Hubble invaluable for security auditing—you have a complete record of all network communication.
-
----
-
-## Part 7: Replacing Kube-Proxy
-
-### Why This Matters
-
-Remember those 147,000 iptables rules? [Let's get rid of them](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/kubeproxy-free.rst).
-
-```bash
-# Install Cilium as kube-proxy replacement
-cilium install --set kubeProxyReplacement=true
-
-# Verify it's working
-cilium status | grep KubeProxyReplacement
-# KubeProxyReplacement:   True [eth0 (Direct Routing)]
-
-# See all Services handled by Cilium
-kubectl exec -n kube-system ds/cilium -- cilium service list
-
-# Compare the difference:
-# BEFORE (kube-proxy):
-# iptables-save | wc -l
-# 147,291
-
-# AFTER (Cilium):
-# iptables-save | wc -l
-# 127  ← Only basic rules remain
-```
-
-### Performance Comparison
-
-Real benchmarks from production clusters:
-
-| Metric | kube-proxy (iptables) | Cilium eBPF | Improvement |
-|--------|----------------------|-------------|-------------|
-| Service lookup latency | Can increase as iptables rule sets grow | Often lower with eBPF-based service handling | Context-dependent |
-| Memory usage | Often grows with rule-set size | Often more predictable with eBPF maps | Workload-dependent |
-| Rule update time | Can slow down noticeably on large rule sets | Usually faster with eBPF-based updates | Environment-dependent |
-| Connection drops on update | More likely during disruptive rule churn | Typically reduced with eBPF-based updates | Depends on configuration and rollout path |
-| CPU usage at scale | Can rise with service and rule volume | Can be lower with eBPF-based handling | Depends on traffic and cluster shape |
-
-### The DSR Bonus: [Direct Server Return](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/kubeproxy-free.rst)
-
-```
-DIRECT SERVER RETURN (DSR)
-═══════════════════════════════════════════════════════════════════
-
-Without DSR (traditional):
-───────────────────────────────────────────────────────────────────
-Client → Load Balancer → Backend Pod
-Client ← Load Balancer ← Backend Pod
-                ↑
-        Return traffic goes through LB too
-        (extra hop, extra latency)
-
-With DSR (Cilium):
-───────────────────────────────────────────────────────────────────
-Client → Load Balancer → Backend Pod
-Client ←──────────────── Backend Pod
-                         ↑
-        Return traffic goes DIRECTLY to client
-        (faster response, less LB load)
-```
-
-Enable DSR:
-
-```bash
-cilium install \
-  --set kubeProxyReplacement=true \
-  --set loadBalancer.mode=dsr
-```
-
----
-
-## Part 8: Transparent Encryption with WireGuard
-
-Encrypting all pod-to-pod traffic sounds hard. With Cilium, it's one flag.
-
-### The Problem
-
-```
-UNENCRYPTED CLUSTER TRAFFIC
-═══════════════════════════════════════════════════════════════════
-
-Pod A ─────────────────────────────────────────────▶ Pod B
-         │                                    │
-         │  Network traffic crosses:          │
-         │  • Virtual switches               │
-         │  • Physical switches              │
-         │  • Sometimes public internet      │
-         │    (cross-AZ, cross-region)       │
-         │                                    │
-         └──── All visible to anyone ─────────┘
-              with network access
-
-Attackers can:
-• Read sensitive data
-• Capture credentials
-• Man-in-the-middle attacks
-```
-
-### The Solution
-
-```bash
-# [Enable WireGuard encryption](https://github.com/cilium/cilium/blob/main/Documentation/security/network/encryption-wireguard.rst)
-cilium install \
-  --set encryption.enabled=true \
-  --set encryption.type=wireguard
-
-# Verify encryption status
-cilium status | grep Encryption
-# Encryption: Wireguard [NodeEncryption: Disabled, cilium_wg0 (Pubkey: xxx)]
-
-# Check WireGuard peers
-kubectl exec -n kube-system ds/cilium -- cilium encrypt status
-```
-
-What happens now:
-
-```
-ENCRYPTED CLUSTER TRAFFIC
-═══════════════════════════════════════════════════════════════════
-
-Pod A ══════════════════════════════════════════════▶ Pod B
-         │                                    │
-         │  All traffic encrypted with        │
-         │  WireGuard (state-of-art crypto)   │
-         │                                    │
-         │  • No app changes needed           │
-         │  • No sidecar containers           │
-         │  • Kernel-level encryption         │
-         │  • ~5% overhead (negligible)       │
-         │                                    │
-         └──── Attackers see garbage ─────────┘
-```
-
-**Zero application changes.** Your apps don't know encryption is happening. It's transparent at the kernel level.
-
----
-
-## Part 9: Common Mistakes (Learn From Others' Pain)
-
-| Mistake | Why It Hurts | How To Avoid |
-|---------|--------------|--------------|
-| **Skipping connectivity test** | You think it's working, it's not | Always run `cilium connectivity test` after install |
-| **Installing over existing CNI** | CNI conflicts break everything | Remove old CNI completely first, or use fresh cluster |
-| **No default deny** | Wide open by default = security hole | In most production setups, set a cluster-wide default deny |
-| **Forgetting DNS in egress** | Pods can't resolve external hosts | Always allow `toEntities: [dns]` in egress policies |
-| **Overly broad FQDN patterns** | `*.com` defeats the purpose | Use specific FQDNs: `api.stripe.com` not `*.stripe.com` |
-| **Not enabling Hubble** | Flying blind | Hubble is free, so enable it in most cases |
-| **Ignoring Hubble metrics** | Miss issues until they're incidents | Alert on `hubble_drop_total` and `hubble_dns_*` |
-
----
-
-## War Story: The Policy That Ate Christmas
-
-*A realistic failure mode: a policy change can accidentally block an overlooked dependency during a busy production period.*
-
-A restrictive CiliumNetworkPolicy that looked correct in staging was deployed to production.
-
-```yaml
-# The policy that ruined Christmas
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: database-security
-  namespace: production
-spec:
-  endpointSelector:
-    matchLabels:
-      app: postgres
-  ingress:
-  - fromEndpoints:
-    - matchLabels:
-        app: backend
-        environment: production
-```
-
-**What they missed:** The caching service (Redis) also needed database access. It had `app: cache`, not `app: backend`.
-
-Soon after deployment:
-- Cache invalidation failed
-- Stale product data started serving
-- Wrong prices shown to customers
-
-A few minutes later:
-- Monitoring detected increased error rates
-- On-call engineer paged
-
-When the on-call engineer checked Hubble:
-- Engineer ran: `hubble observe --to-pod production/postgres --verdict DROPPED`
-- Output showed: `production/redis-xxx -> production/postgres DROPPED`
-- Root cause identified quickly from the drop verdict and destination
-
-After the policy was updated:
-- Policy updated to include cache service
-- Traffic restored
-
-**The outage stayed short because the policy drop was visible quickly.**
-
-Without clear policy visibility, this kind of problem can take much longer to isolate because teams often start by checking other layers first.
-
-**Lessons:**
-1. Test policies against all relevant services, not just the obvious ones
-2. Hubble is not optional—it's your incident response tool
-3. `--verdict DROPPED` is the most important filter you'll ever use
-
----
-
-## Did You Know?
-
-- **[Cilium graduated from the CNCF in October 2023](https://www.cncf.io/announcements/2023/10/11/cloud-native-computing-foundation-announces-cilium-graduation/)**, becoming the first graduated project in the cloud native networking category. Graduation is the CNCF's highest maturity level and signals that the project meets enterprise governance, security, and contributor-diversity bars — meaning Cilium is officially "boring infrastructure" in the best possible sense.
-- **WireGuard, the protocol Cilium uses for transparent encryption, was [merged into the Linux kernel in version 5.6](https://github.com/torvalds/linux/tree/v5.6/drivers/net/wireguard) ([released March 2020](https://github.com/torvalds/linux/releases/tag/v5.6)).** That mainline merge is why Cilium can flip on encryption with a single Helm flag — there is no out-of-tree module to install, no DKMS pain, just kernel-native crypto running in roughly a few thousand lines of audited code.
-- **The eBPF verifier enforces a hard upper bound on program complexity**, traditionally measured by the number of instructions it analyzes during static verification. This is why an eBPF program cannot contain unbounded loops or unverifiable memory accesses — the kernel literally refuses to load it. Cilium's compiler is structured to keep generated bytecode well under this ceiling so the dataplane stays loadable across kernel versions.
-- **Hubble was announced and open-sourced by Isovalent in November 2019** as the observability layer purpose-built on Cilium's eBPF dataplane. Because flow capture happens in-kernel, Hubble does not sample — every flow Cilium handles is observable, which is what makes "show me every dropped packet from this pod in the last minute" a one-line command instead of a tcpdump expedition.
-
----
-
-## Quiz
-
-### Question 1
-You deploy a default-deny policy and suddenly nothing works. Not even DNS. What's the minimum policy you need to restore basic functionality?
-
-<details>
-<summary>Show Answer</summary>
-
-```yaml
-apiVersion: cilium.io/v2
-kind: CiliumClusterwideNetworkPolicy
-metadata:
-  name: allow-essential
-spec:
-  endpointSelector: {}
-  egress:
-  - toEntities:
-    - dns           # Allows CoreDNS queries
-    - kube-apiserver # Allows pods to reach API server
-  ingress:
-  - fromEntities:
-    - health        # Allows health probes
-```
-
-This restores:
-- DNS resolution (pods can resolve names)
-- API server access (service accounts work)
-- Health checks (probes don't fail)
-
-From here, add specific policies for your workloads.
-
-</details>
-
-### Question 2
-A pod is failing to connect to `api.stripe.com`. How do you debug this with Hubble?
-
-<details>
-<summary>Show Answer</summary>
-
-```bash
-# Step 1: Check if connection attempts are being dropped
-hubble observe \
-  --from-pod production/payment-service \
-  --verdict DROPPED
-
-# Step 2: Check DNS is resolving
-hubble observe \
-  --from-pod production/payment-service \
-  --protocol dns
-
-# Step 3: Check specific destination
-hubble observe \
-  --from-pod production/payment-service \
-  --to-fqdn api.stripe.com
-
-# Common issues:
-# - DNS queries dropped → Add toEntities: [dns] to egress
-# - Connection dropped → Add toFQDNs with matchName: api.stripe.com
-# - Policy denied → Check your CiliumNetworkPolicy
-```
-
-</details>
-
-### Question 3
-Why does Cilium use identity numbers instead of IP addresses for policy enforcement?
-
-<details>
-<summary>Show Answer</summary>
-
-**IP-based problems:**
-- Pods get new IPs when restarting
-- Scaling creates new IPs constantly
-- Rolling updates = continuous IP churn
-- Policies must be updated for every IP change
-- Can't express "frontend talks to backend" semantically
-
-**Identity-based advantages:**
-- Identity is based on labels, not IPs
-- Same labels = same identity, regardless of IP
-- 1 pod or 1000 pods = same identity if labels match
-- Policies are stable (no updates needed when IPs change)
-- Human-readable: "identity 48291 = frontend" makes sense
-- O(1) lookup in eBPF hash maps
-
-**Example:**
-```
-Pod with labels {app: frontend, env: prod} → Identity 48291
-
-This pod can:
-- Restart 100 times
-- Scale to 50 replicas
-- Move across nodes
-
-Identity stays 48291. Policies keep working.
-```
-
-</details>
-
-### Question 4
-Your team rolled out a new `checkout-worker` Deployment yesterday. It mounts a service account, can resolve DNS, and `kubectl logs` shows it starting cleanly — but every call from `checkout-worker` to the existing `orders-api` Service times out. `cilium endpoint list` shows the new pods have a different identity number than the old `checkout-api` pods you previously allowlisted. What do you check, in order, and which Hubble filter pinpoints the problem fastest?
-
-<details>
-<summary>Show Answer</summary>
-
-The fastest path is identity-aware, not IP-aware. Run:
+Filter dropped traffic between two workloads to see policy verdicts immediately:
 
 ```bash
 hubble observe \
@@ -1300,64 +250,224 @@ hubble observe \
   --verdict DROPPED -o dict
 ```
 
-You will see a `policy-verdict:none DROPPED (Policy denied)` line that shows the source identity number — and that identity number will be different from the one your `orders-api` ingress policy allowlists. The root cause is that the new Deployment was given new labels (e.g. `app=checkout-worker` instead of `app=checkout-api`), so Cilium minted a fresh identity, and your `fromEndpoints` matchLabels selector does not match it. The fix is either to relabel `checkout-worker` so it shares the existing identity, or to update the policy's `fromEndpoints` to also match the new label set. The teaching point: in Cilium, "I deployed something new and it can't reach the API" is almost never a DNS or IP problem — it is an identity-membership problem, and Hubble's `policy-verdict` is the one signal that tells you which side of the identity boundary the drop happened on.
+DNS problems show up as dropped UDP/53 flows or successful queries with unexpected answers. External API failures often split into "DNS never resolved" versus "resolved but egress denied." HTTP filters help distinguish L7 denials from TCP-level blocks.
+
+Service map visualizations in the UI summarize dependency edges between identities over time. They are useful for onboarding and audits, not only incidents. Prometheus metrics such as `hubble_drop_total` and DNS response counters support alerting when drop reasons change after a policy rollout. Correlate rising policy drops with application error rates before deciding whether the policy is wrong or correctly blocking stale callers.
+
+Hubble's DNS visibility is underused during egress lockdown projects. Teams enable FQDN rules, forget to watch resolver paths, and blame application timeouts on code regressions. A five-minute DNS-only observe window after each egress change surfaces misconfigured CoreDNS allowances, search domain oddities, and pods that bypass the cluster resolver with hard-coded public resolvers. Fixing resolver policy first prevents endless iterations on application-level timeouts.
+
+Flow records include verdict reasons detailed enough to separate policy drops from forwarding errors. Teach on-call engineers to capture a short Hubble slice before rolling back policy changes; rollback restores service but erases evidence that explains which dependency was missing. Stored slices become regression fixtures for the next policy review.
+
+---
+
+## 6. kube-proxy Replacement and Load Balancing
+
+### 6.1 Socket-level balancing and backend maps
+
+With `kubeProxyReplacement=true`, Cilium programs Service IPs into eBPF maps that point to healthy backends selected from EndpointSlices. In-cluster clients using cluster IPs benefit from socket-level load balancing on supported paths, reducing extra NAT hops compared with legacy iptables-only flows. Verify replacement mode with `cilium status` and inspect programmed services via the agent's service list command.
+
+Removal of the kube-proxy DaemonSet should be deliberate. Confirm that NodePort, HostPort, externalIPs, and sessionAffinity cases you rely on are supported in your chosen Cilium version and configuration. The upstream kube-proxy-free documentation lists feature matrices that change between releases.
+
+SessionAffinity and local traffic policy interact with eBPF backend selection differently than with iptables probabilistic balancing. Applications that assumed kube-proxy stickiness may see different distribution until you configure affinity-aware maps or accept resharding behavior. Load tests after migration should include connection reuse patterns, not only stateless single-request probes.
+
+ExternalTrafficPolicy Local preserves client source IP on some paths at the cost of uneven backend utilization. Cilium honors Kubernetes semantics but implements them through its own service tables. Review cloud load balancer health checks when switching datapaths; probes that succeeded against kube-proxy programmed rules may need recalibration when NodePort handling moves to eBPF.
+
+### 6.2 Direct Server Return and Maglev hashing
+
+Direct Server Return allows reply traffic from backend pods to return directly to clients when topology permits, instead of hairpinning through the node that performed initial load balancing. DSR can reduce latency and node CPU for large responses, but it requires correct L2/L3 knowledge and compatible network fabrics. Asymmetric paths break silently when return routes bypass expected security or NAT points.
+
+Maglev consistent hashing provides stable backend selection that minimizes reshuffling when backend sets change size. That stability matters for long-lived connections and caches keyed by backend identity. Cilium exposes load balancer mode settings through Helm values; choose modes based on your underlay—overlay versus routed—and on whether external traffic enters through a bounded set of interfaces.
+
+### 6.3 XDP for north-south acceleration
+
+XDP attaches programs at the earliest driver hook, before sk_buff allocation, which can accelerate NodePort and external entry processing on supported NICs and drivers. Not every cloud instance type or kernel driver exposes the same XDP capabilities, so treat XDP as an optimization to validate in your environment rather than a universal default. When XDP is unavailable, TC programs still provide the core datapath; you trade some peak throughput for broader compatibility.
+
+Maglev consistent hashing deserves explicit testing when your workloads maintain long-lived TCP connections to specific backends. Change backend cardinality in a staging cluster while running connection churn tests and compare reset rates across Maglev and alternative modes documented for your Cilium version. Document the chosen mode in your platform runbook so future node pool upgrades do not silently change balancing behavior.
+
+North-south acceleration features never replace correct underlay design. If routing between nodes and load balancer subnets is asymmetric, eBPF optimisations cannot fix fundamental L3 mistakes. Validate return paths with traceroute and Hubble simultaneously when enabling DSR or XDP so you separate datapath tuning from fabric misconfiguration.
+
+**Hypothetical scenario:** After enabling kube-proxy replacement, internal Services are fast but NodePort 30080 is intermittently unreachable from CI runners outside the cluster. `cilium status` shows kube-proxy replacement bound only to the primary eth0 interface while runners reach nodes via a secondary interface. Widening the `devices` Helm list to include every interface that receives NodePort traffic resolves the asymmetry. The lesson is that explicit device binding replaces iptables' accidental global coverage.
+
+---
+
+## 7. Gateway API and the Sidecar-Free Mesh Data Plane
+
+### 7.1 Gateway API as the north-south contract
+
+The Kubernetes Gateway API separates role-oriented resources—GatewayClass, Gateway, HTTPRoute—from implementation details. Cilium can act as a Gateway API data plane when the L7 proxy is enabled and the Gateway API CRDs are installed at a supported version. This lets platform teams publish ingress contracts that application teams consume without sharing cloud-specific annotations scattered across Ingress resources.
+
+Enablement is more than flipping a single boolean. You need compatible CRD versions, Cilium's Envoy-based L7 proxy components, and RBAC that allows Gateways in the namespaces your model expects. Validate TLS termination, timeouts, retries, and traffic splitting in staging because Gateway API resources express richer routing than legacy Ingress.
+
+Sidecar-free mesh features still require operational ownership of certificates and L7 policy objects. Schedule the same review cadence you would for any ingress controller upgrade, because Gateway API CRD bumps can arrive on independent timelines from Cilium agent releases.
+
+### 7.2 Mesh features without per-pod sidecars
+
+Traditional service meshes inject sidecar proxies next to every pod. Cilium's mesh direction attaches L7 policy and mutual TLS at the node datapath where possible, avoiding duplicate memory and CPU per replica. Mutual TLS identity still ties back to workload labels and certificates managed by Cilium components rather than application libraries.
+
+Compare approaches on dimensions you actually operate: certificate rotation, L7 match expressiveness, multi-cluster routing, and blast radius when the datapath misconfigures. Istio and Linkerd provide mature control planes with different operational profiles. Cilium appeals when you want policy, load balancing, encryption, and observability to share one agent already present for CNI duties.
+
+Gateway API route attachment rules determine which namespaces may publish hostnames and which Gateway objects accept them. Platform teams usually own GatewayClasses and shared Gateways; application teams own HTTPRoutes. Document RBAC accordingly before enabling the Cilium Gateway controller in production. TLS certificate sourcing—Secrets, cert-manager integrations, or external KMS-wrapped keys—should match how you already operate ingress elsewhere to avoid two competing certificate pipelines.
+
+HTTPRoute filters for redirects, header mutations, and timeouts express ingress behavior that previously lived in cloud-specific annotations. That portability helps multi-cloud teams standardize edge behavior. It also means misconfigured routes can break clients before traffic reaches application pods, so staging validation with synthetic checks and Hubble HTTP metadata catches bad paths early.
+
+---
+
+## 8. Transparent Encryption
+
+### 8.1 WireGuard between nodes
+
+WireGuard encryption protects pod traffic crossing node boundaries with kernel-native cryptography. Enable it during install or upgrade with Helm values that turn on encryption and select WireGuard as the type. Applications do not need code changes; the agent wraps packets on egress and unwraps on ingress.
+
+Encryption reduces effective MTU because tunnel headers consume bytes. Small API requests may work while large bulk transfers fail if pod MTU is not adjusted. When large transfers fail after enabling encryption, compare WireGuard interface MTU to pod interface MTU and test path MTU with bounded ping sizes before blaming application timeouts.
+
+```bash
+cilium install \
+  --set encryption.enabled=true \
+  --set encryption.type=wireguard
+
+cilium status | grep Encryption
+kubectl exec -n kube-system ds/cilium -- cilium encrypt status
+```
+
+### 8.2 IPsec as an alternative
+
+Some environments standardize on IPsec for compliance or hardware integration reasons. Cilium supports IPsec-based transparent encryption as an alternative to WireGuard. The configuration surface differs: key rotation, SA management, and interoperability with existing IPsec gateways matter more in IPsec modes. Choose WireGuard for greenfield simplicity when security standards permit; choose IPsec when policy mandates it or existing tooling expects IKEv2 workflows.
+
+Node encryption modes extend protection beyond pod-to-pod traffic on the wire between nodes. Review CPU overhead and key distribution when every node must encrypt all cluster traffic by default. Regulatory narratives often care about encryption in transit even when workloads already speak TLS; transparent encryption satisfies auditors who ask about east-west coverage without requiring every application to implement mTLS libraries.
+
+Rotation drills should include encryption keys and identity certificates used by mesh features. A network outage during rotation is worse than a controlled maintenance window with documented steps. Practice disabling encryption in a staging cluster only if your compliance regime allows it; otherwise rehearse forward-only rotation with dual-key acceptance windows.
+
+---
+
+## 9. ClusterMesh for Multi-Cluster Connectivity
+
+ClusterMesh connects multiple Kubernetes clusters so pods in different clusters receive global identities and can reach each other with policy enforcement consistent with single-cluster rules. A clustermesh-apiserver component coordinates identity and service information across clusters. Operators must align pod CIDR allocations so networks do not overlap, and they must secure the etcd-backed synchronization paths ClusterMesh relies on.
+
+Multi-cluster policy extends the identity model: a service in cluster A can be allowlisted by label in cluster B when both run Cilium with ClusterMesh configured. This is attractive for active-active application tiers and for administrative domains that outgrow a single control plane. The cost is operational complexity—failure domains now span clusters, and DNS plus Service discovery semantics require explicit design.
+
+Test failover by simulating cluster partition and observing whether identities resync without manual intervention. Document which teams may create global services and which policies are allowed to reference remote clusters. Calico offers its own multi-cluster patterns; compare synchronization models and firewall integration when choosing a multi-cluster strategy.
+
+Global services in ClusterMesh expose backends across cluster boundaries with consistent identities. Clients resolve names through multicluster DNS conventions documented upstream. Misconfigured service exports look like intermittent 503 responses when only some clusters have backends healthy. Export only services that must be global; over-exporting increases policy and DNS complexity without benefit.
+
+Latency-sensitive workloads need placement policy alongside ClusterMesh. Cross-region ClusterMesh is technically feasible but not a substitute for regional affinity. Measure round-trip times and failure detection intervals before promising active-active semantics to application teams.
+
+---
+
+## 10. Migration and Adoption Considerations
+
+### 10.1 Replacing an existing CNI
+
+Migration is not a flag flip. Most teams provision a parallel environment first: install Cilium on a greenfield cluster, run connectivity tests, replay representative workloads, and validate policy equivalents before touching production. In-place migration requires cordoning nodes, removing the old CNI DaemonSet, installing Cilium, and rebooting or recreating pods so networking reattaches cleanly. Mixed CNI states on one node break catastrophically.
+
+Inventory dependencies before cutover: NetworkPolicy resources, custom egress controls, service mesh sidecars, host networking pods, and DaemonSets that assume specific interface names. MetalLB, external DNS, and ingress controllers may need coordination when kube-proxy disappears. Maintain a rollback path—keep the previous CNI manifests and a documented node rebuild procedure until Cilium has survived at least one full application rollout.
+
+Application owners should receive a migration checklist: label conventions for identities, required ports for policies, external dependencies that need FQDN rules, and health-check paths that L7 policies must allow. Platform teams that publish this checklist before cutover see fewer emergency policy holes punched during launch week. Treat migration as a joint exercise between networking and application squads, not a silent DaemonSet swap executed overnight.
+
+### 10.2 kube-proxy removal checklist
+
+Confirm EndpointSlice handling, NodePort exposure paths, hostNetwork pods, and sessionAffinity requirements. Compare `iptables-save` line counts before and after only as a sanity check, not a performance scorecard. Validate external traffic on every interface CI and customers use. Run Hubble drop baselines so you recognize normal versus abnormal policy denials after migration week.
+
+### 10.3 Operating Cilium long term
+
+Upgrade Cilium on a schedule aligned with Kubernetes minor releases. Read release notes for datapath defaults, minimum kernel versions, and CRD schema changes. Keep the Cilium CLI version roughly aligned with the agent image. Participate in community slack and GitHub discussions when you adopt bleeding-edge features such as Gateway API or BPF-based L7 load balancing—the surface evolves quickly, which is why the landscape snapshot at the top of this module includes a date.
+
+Brownfield migration benefits from a written rollback criterion: error rate thresholds, failed connectivity test suites, or inability to program NodePort on canary nodes. Run canary nodes or canary clusters before fleet-wide kube-proxy removal. Some teams keep kube-proxy in partial mode during transition; understand whether your target version supports the hybrid state you plan and for how long.
+
+Training platform engineers on Hubble and identity semantics pays dividends before migration week. Engineers accustomed to tcpdump-centric debugging may distrust flow summaries until they correlate one Hubble drop line with a policy object name. A short internal workshop with staged policy mistakes builds confidence faster than learning during a production sev.
+
+---
+
+## Did You Know?
+
+- **[Cilium graduated from the CNCF in October 2023](https://www.cncf.io/announcements/2023/10/11/cloud-native-computing-foundation-announces-cilium-graduation/)**, becoming the first graduated project in the cloud native networking category. Graduation signals sustained community governance, security review, and adoption across vendors—not a guarantee that every feature fits your cluster without evaluation.
+- **WireGuard entered the mainline Linux kernel in version 5.6**, which is why Cilium can enable transparent encryption without out-of-tree modules on supported nodes. Kernel integration shifts operational burden from DKMS packaging to standard distribution kernels.
+- **The eBPF verifier enforces bounded program complexity**, including instruction limits analyzed statically before load. Cilium's compiler splits datapath logic to stay within those limits across kernel versions.
+- **Hubble was open-sourced in 2019 as an observability layer on Cilium's datapath**, capturing flow records from the same hooks that enforce policy. That shared origin is why drop verdicts in Hubble align with enforcement decisions applications experience.
+
+---
+
+## Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| **Skipping `cilium connectivity test` after install** | Silent misconfigurations surface only under real workloads | Run the test on every new cluster and after major upgrades |
+| **Installing Cilium atop another active CNI** | Duplicate routing and policy hooks break pod networking | Remove or disable the previous CNI per migration docs, or use a fresh cluster |
+| **Default-allow posture in regulated environments** | Compromised pods lateralize freely | Adopt documented default-deny baselines with explicit DNS and API exceptions |
+| **Forgetting DNS egress in locked-down namespaces** | External FQDN policies never resolve | Allow `toEntities: [dns]` or equivalent before tightening egress |
+| **Over-broad FQDN patterns** | `*.com`-style rules defeat egress control intent | Prefer `matchName` for known APIs; document exceptions |
+| **Disabling Hubble to save resources** | Policy drops become guesswork during incidents | Keep Hubble enabled in production; tune metrics cardinality instead |
+| **Removing kube-proxy without validating NodePort devices** | External traffic paths miss programmed interfaces | Align `devices` with every NIC that receives NodePort traffic |
+| **Enabling WireGuard without MTU planning** | Large transfers fail while small requests succeed | Lower pod MTU or tune tunnel MTU; verify with path MTU tests |
+
+---
+
+## Quiz
+
+<details>
+<summary><strong>Question 1</strong>: Why does an eBPF datapath replace iptables-based kube-proxy at scale, and what tradeoff appears after kube-proxy removal?</summary>
+
+eBPF maps replace linear iptables chain walks with constant-time Service and policy lookups, and they update incrementally when EndpointSlices change instead of rewriting huge rule sets. The tradeoff is explicit device configuration for NodePort and external traffic—Cilium must know which interfaces receive north-south flows, whereas iptables hooks often appeared global by default.
 
 </details>
 
-### Question 5
-You enabled `kubeProxyReplacement=true` and removed the kube-proxy DaemonSet. Cluster-internal Service traffic is faster than ever. But your team complains that a NodePort Service exposed on port 30080, which used to be reachable from a CI runner outside the cluster, now intermittently fails — sometimes it connects, sometimes it hangs. Pod-to-Pod is fine. What is most likely happening, and which Cilium config knob do you reach for?
-
 <details>
-<summary>Show Answer</summary>
+<summary><strong>Question 2</strong>: A pod cannot reach `api.stripe.com`. Which Hubble filters separate DNS failure from egress denial?</summary>
 
-The most common cause is that Cilium's kube-proxy replacement is configured in a mode that only handles NodePort traffic on a specific device (often the primary node interface), and the CI runner is hitting nodes via a path Cilium isn't programmed to load-balance — for example, a secondary NIC, an overlay address, or a Service that routes asymmetrically to a backend on another node when DSR is enabled but the return path isn't set up. Check `cilium status | grep KubeProxyReplacement` to see which device(s) Cilium is bound to, then look at the `devices` (or older `nodePort.directRoutingDevice`) Helm value. Either widen `devices` to include every interface that receives external NodePort traffic, or switch the load-balancer mode away from DSR back to SNAT for NodePort while you debug. The teaching point: kube-proxy in iptables mode worked on every interface by accident because iptables hooks the netfilter chain globally; Cilium's eBPF kube-proxy replacement is explicit about which devices it programs, so "intermittent NodePort hangs after kube-proxy removal" almost always means a missing device binding rather than a policy bug.
+Run `hubble observe --from-pod <pod> --protocol dns` to see whether queries reach CoreDNS and return answers. Then run `hubble observe --from-pod <pod> --verdict DROPPED` to see whether TCP/443 to resolved IPs is denied. DNS success with TCP drops indicates missing or overly narrow `toFQDNs` rules; DNS drops indicate missing DNS egress allowances.
 
 </details>
 
-### Question 6
-A security engineer turns on a `CiliumNetworkPolicy` with an L7 HTTP rule that only allows `GET /api/v1/products.*` on the `products-api` Service. Within minutes, the SRE on call sees `hubble_drop_total{reason="Policy denied"}` start climbing — but the application's own error rate stays flat and no users complain. What is the most likely explanation, and how would you confirm it before either rolling back or tightening further?
-
 <details>
-<summary>Show Answer</summary>
+<summary><strong>Question 3</strong>: Why does Cilium enforce identity-based network policies instead of pod IP lists?</summary>
 
-The most likely explanation is that the L7 policy is correctly blocking traffic the application was already silently tolerating — for example, periodic health-check probes that hit a non-allowlisted path, an internal admin sidecar polling `/metrics`, or a forgotten cron job calling `POST /api/v1/products/refresh`. Because Cilium denies these at L7, the application server never sees them, so application metrics stay green; only the network drop counter rises. Confirm by running `hubble observe --pod production/products-api --verdict DROPPED --protocol http -o json | jq '.l7.http | {method, url}'` and looking at which methods and paths are being denied. If the dropped requests are legitimate (health checks, metrics scrapes), expand the policy with explicit rules for those paths. If they are not (a stale debug sidecar, an attacker probing for `/admin`), the rising drop counter is exactly the signal you wanted — the policy is working as intended. The teaching point: an L7 policy moving traffic from "silently 200/404 at the app" to "explicitly dropped at the network" surfaces calls the application was masking, which is a feature, not a regression — but you have to read the dropped flows before deciding which side of that line each call belongs on.
+Pod IPs change on restart, scale events, and rescheduling. Identities are derived from label sets and remain stable for all pods sharing those labels cluster-wide. CiliumNetworkPolicy rules expressed as identity pairs survive churn without pushing IP list updates to every node on every EndpointSlice change.
 
 </details>
 
-### Question 7
-You enabled WireGuard transparent encryption with `encryption.type=wireguard`. Initial smoke tests pass. A day later, a batch job that ships several-hundred-megabyte payloads between pods on different nodes starts failing with "connection reset" partway through transfers, while small JSON API calls work fine. What is the prime suspect, and what would you measure to confirm?
+<details>
+<summary><strong>Question 4</strong>: A new Deployment cannot reach an API that older pods still reach. Identities differ. What is the likely root cause?</summary>
+
+The new Deployment's labels no longer match `fromEndpoints` selectors in the API's ingress policy, so Cilium assigned a new identity that is not allowlisted. Fix labels to match the intended identity or update the policy selectors. Hubble `--verdict DROPPED` output showing `policy-verdict:none` confirms a missing allow rule rather than a Service routing bug.
+
+</details>
 
 <details>
-<summary>Show Answer</summary>
+<summary><strong>Question 5</strong>: After kube-proxy replacement, in-cluster traffic is healthy but NodePort access is intermittent. What kube-proxy replacement mode settings should you check first?</summary>
 
-The prime suspect is MTU (maximum transmission unit). WireGuard prepends an encryption header to every encapsulated packet, which shrinks the usable payload by roughly 60 bytes for IPv4 (more for IPv6). If your pod MTU was not lowered to account for this overhead, large packets that previously fit now exceed the link MTU and either get fragmented, dropped silently by a router that has DF set, or trigger a TCP reset on path-MTU-discovery failure. Small requests fit under the MTU and look fine; large bulk transfers blow up. Confirm by running `ip link show cilium_wg0` on a node and comparing the WireGuard interface MTU to the pod interface MTU, then run `ping -M do -s 1400 <pod-ip>` from one pod to another to find the actual max packet size that gets through. The fix is to reduce the pod MTU (Cilium auto-configures this when the agent restarts, but pre-existing pods inherit the old MTU until they are recreated). The teaching point: encryption is not free even when the CPU overhead is negligible — every encapsulation tunnel eats header bytes, and the symptoms are always "small things work, big things break" rather than a clean total outage.
+Inspect which network devices Cilium programs for NodePort handling via `cilium status` and Helm `devices` values. Traffic arriving on an unbound interface is a common cause when external clients use a different path than in-cluster tests. Direct Server Return mode can add return-path requirements; validate symmetry if DSR is enabled, and confirm whether Maglev or XDP settings affect the external entry path you use.
+
+</details>
+
+<details>
+<summary><strong>Question 6</strong>: An L7 CiliumNetworkPolicy allows only `GET /api/v1/products.*` but `hubble_drop_total` rises while application error rates stay flat. What might be happening?</summary>
+
+Traffic that previously reached the app and returned 404 may now be dropped at L7 without hitting application metrics—health checks, metrics scrapes, or internal jobs calling unlisted paths. Use `hubble observe --verdict DROPPED --protocol http` to read denied methods and URLs, then either extend the policy for legitimate paths or confirm the drops are desirable security signal.
+
+</details>
+
+<details>
+<summary><strong>Question 7</strong>: During Cilium migration you enable WireGuard encryption. Large pod-to-pod transfers fail while small requests succeed. What is a prime suspect?</summary>
+
+MTU mismatch from tunnel overhead. WireGuard headers shrink usable payload per frame. Compare pod and tunnel interface MTUs and run path MTU discovery tests between nodes. Recreate pods after agent-side MTU adjustments so workloads inherit updated settings before you declare the migration complete.
+
+</details>
+
+<details>
+<summary><strong>Question 8</strong>: When does ClusterMesh adoption justify its complexity compared with single-cluster Gateway API ingress?</summary>
+
+When workloads in separate clusters must communicate with consistent identity-aware policy, global services, or active-active placement—and when you can allocate non-overlapping pod CIDRs and operate the clustermesh-apiserver control path securely. Gateway API solves north-south ingress per cluster; ClusterMesh extends identity and service semantics across clusters. It is not a default for every platform.
 
 </details>
 
 ---
 
-## Hands-On Exercise: Build a Secure Microservices Setup
+## Hands-On Exercise
 
-### Objective
-Deploy a three-tier application with Cilium, implement zero-trust networking, and observe traffic with Hubble.
+**Task:** Deploy a three-tier application on a kind cluster with Cilium, implement default-deny networking with explicit allows, and verify behavior with Hubble.
 
-### Scenario
-You're deploying a web application with:
-- **Frontend**: Nginx serving static content
-- **API**: Node.js backend
-- **Database**: PostgreSQL
-
-Security requirements:
-1. Default deny all traffic
-2. Frontend can only reach API on port 3000
-3. API can only reach database on port 5432
-4. All pods can reach DNS
-5. No direct frontend-to-database access
-
-### Part 1: Setup the Cluster
+### Setup
 
 ```bash
-# Create a kind cluster without default CNI
 cat > kind-config.yaml << 'EOF'
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -1367,32 +477,24 @@ networking:
 nodes:
 - role: control-plane
 - role: worker
-- role: worker
 EOF
 
 kind create cluster --config kind-config.yaml --name cilium-lab
 
-# Install Cilium
 cilium install \
   --set kubeProxyReplacement=true \
   --set hubble.enabled=true \
-  --set hubble.relay.enabled=true \
-  --set hubble.ui.enabled=true
+  --set hubble.relay.enabled=true
 
-# Wait for Cilium to be ready
 cilium status --wait
-
-# Verify installation
 cilium connectivity test
 ```
 
-### Part 2: Deploy the Application
+### Deploy workloads
 
 ```bash
-# Create namespace
 kubectl create namespace demo
 
-# Deploy database
 kubectl -n demo apply -f - << 'EOF'
 apiVersion: v1
 kind: Pod
@@ -1400,14 +502,13 @@ metadata:
   name: database
   labels:
     app: database
-    tier: data
 spec:
   containers:
   - name: postgres
     image: postgres:15
     env:
     - name: POSTGRES_PASSWORD
-      value: "secret"
+      value: secret
     ports:
     - containerPort: 5432
 ---
@@ -1420,23 +521,19 @@ spec:
     app: database
   ports:
   - port: 5432
-EOF
-
-# Deploy API
-kubectl -n demo apply -f - << 'EOF'
+---
 apiVersion: v1
 kind: Pod
 metadata:
   name: api
   labels:
     app: api
-    tier: backend
 spec:
   containers:
-  - name: api
-    image: nginx
+  - name: nginx
+    image: nginx:1.27
     ports:
-    - containerPort: 3000
+    - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -1446,53 +543,26 @@ spec:
   selector:
     app: api
   ports:
-  - port: 3000
-EOF
-
-# Deploy frontend
-kubectl -n demo apply -f - << 'EOF'
+  - port: 80
+---
 apiVersion: v1
 kind: Pod
 metadata:
   name: frontend
   labels:
     app: frontend
-    tier: web
 spec:
   containers:
   - name: nginx
-    image: nginx
+    image: nginx:1.27
     ports:
     - containerPort: 80
 EOF
 ```
 
-### Part 3: Test Without Policies (Everything Works)
+### Apply policies
 
 ```bash
-# Start Hubble port-forward in background
-cilium hubble port-forward &
-
-# Test frontend → api (should work)
-kubectl -n demo exec frontend -- curl -s --max-time 5 api:3000
-echo "Frontend → API: SUCCESS"
-
-# Test frontend → database (should also work - this is the problem!)
-kubectl -n demo exec frontend -- nc -zv database 5432
-echo "Frontend → Database: SUCCESS (but shouldn't be allowed!)"
-
-# Test api → database (should work)
-kubectl -n demo exec api -- nc -zv database 5432
-echo "API → Database: SUCCESS"
-
-# Watch traffic with Hubble
-hubble observe --namespace demo
-```
-
-### Part 4: Implement Zero-Trust Policies
-
-```bash
-# Step 1: Default deny everything
 kubectl -n demo apply -f - << 'EOF'
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -1502,19 +572,7 @@ spec:
   endpointSelector: {}
   ingress: []
   egress: []
-EOF
-
-# Test again - everything should fail now
-kubectl -n demo exec frontend -- curl -s --max-time 5 api:3000 || echo "Frontend → API: BLOCKED (expected)"
-kubectl -n demo exec api -- nc -zv -w 2 database 5432 || echo "API → Database: BLOCKED (expected)"
-
-# Watch the drops!
-hubble observe --namespace demo --verdict DROPPED
-```
-
-```bash
-# Step 2: Allow DNS (required for name resolution)
-kubectl -n demo apply -f - << 'EOF'
+---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -1524,10 +582,7 @@ spec:
   egress:
   - toEntities:
     - dns
-EOF
-
-# Step 3: Allow frontend → api
-kubectl -n demo apply -f - << 'EOF'
+---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -1542,12 +597,13 @@ spec:
         app: frontend
     toPorts:
     - ports:
-      - port: "3000"
+      - port: "80"
+        protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: frontend-egress
+  name: frontend-egress-api
 spec:
   endpointSelector:
     matchLabels:
@@ -1558,11 +614,9 @@ spec:
         app: api
     toPorts:
     - ports:
-      - port: "3000"
-EOF
-
-# Step 4: Allow api → database
-kubectl -n demo apply -f - << 'EOF'
+      - port: "80"
+        protocol: TCP
+---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -1578,11 +632,12 @@ spec:
     toPorts:
     - ports:
       - port: "5432"
+        protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: api-egress
+  name: api-egress-database
 spec:
   endpointSelector:
     matchLabels:
@@ -1594,119 +649,64 @@ spec:
     toPorts:
     - ports:
       - port: "5432"
+        protocol: TCP
 EOF
 ```
 
-### Part 5: Verify Security
+### Verification
 
 ```bash
-# Frontend → API: Should work
-kubectl -n demo exec frontend -- curl -s --max-time 5 api:3000
-echo "✓ Frontend → API: ALLOWED"
+cilium hubble port-forward &
+sleep 3
 
-# API → Database: Should work
-kubectl -n demo exec api -- nc -zv -w 2 database 5432
-echo "✓ API → Database: ALLOWED"
+kubectl -n demo exec frontend -- curl -s --max-time 5 http://api
+kubectl -n demo exec api -- bash -c 'apt-get update -qq && apt-get install -y -qq netcat-openbsd > /dev/null && nc -zv database 5432'
+kubectl -n demo exec frontend -- bash -c 'apt-get update -qq && apt-get install -y -qq netcat-openbsd > /dev/null && nc -zv -w 2 database 5432; test $? -ne 0'
 
-# Frontend → Database: Should be BLOCKED
-kubectl -n demo exec frontend -- nc -zv -w 2 database 5432 || echo "✓ Frontend → Database: BLOCKED (as intended!)"
-
-# Watch the flow in Hubble
-hubble observe --namespace demo
-
-# See what's being dropped
 hubble observe --namespace demo --verdict DROPPED
 ```
 
 ### Success Criteria
 
-- [ ] Cilium installed and connectivity test passes
-- [ ] Default deny policy blocks all traffic
-- [ ] Hubble shows DROPPED verdict for blocked traffic
-- [ ] Frontend can reach API on port 3000
-- [ ] API can reach Database on port 5432
-- [ ] Frontend CANNOT reach Database directly
-- [ ] Hubble shows FORWARDED for allowed traffic
+- [ ] Cilium installs and `cilium connectivity test` passes
+- [ ] Default-deny blocks traffic before explicit allows are applied
+- [ ] Frontend reaches API on port 80 after policies are applied
+- [ ] API reaches database on port 5432
+- [ ] Frontend cannot reach database directly
+- [ ] Hubble shows `DROPPED` for denied frontend-to-database attempts
+- [ ] Hubble shows `FORWARDED` for allowed paths
 
-### Bonus Challenge
-
-Add an L7 policy that only allows HTTP GET requests from frontend to api:
-
-```yaml
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: frontend-to-api-l7
-  namespace: demo
-spec:
-  endpointSelector:
-    matchLabels:
-      app: api
-  ingress:
-  - fromEndpoints:
-    - matchLabels:
-        app: frontend
-    toPorts:
-    - ports:
-      - port: "3000"
-      rules:
-        http:
-        - method: "GET"
-          path: "/.*"
-```
-
-Test that POST requests are blocked:
-```bash
-kubectl -n demo exec frontend -- curl -X POST api:3000 || echo "POST blocked by L7 policy"
-kubectl -n demo exec frontend -- curl -X GET api:3000 && echo "GET allowed"
-```
-
----
-
-## Cleanup
+### Cleanup
 
 ```bash
-# Delete the lab cluster
 kind delete cluster --name cilium-lab
 ```
 
 ---
 
-## Further Reading
+## Sources
 
-- [Cilium Documentation](https://docs.cilium.io/) - The official docs, well-written
-- [eBPF.io](https://ebpf.io/) - Deep dive into eBPF technology
-- [Cilium Network Policy Editor](https://editor.cilium.io/) - Visual policy builder (great for learning)
-- [Hubble Documentation](https://docs.cilium.io/en/stable/observability/hubble/)
-- [Isovalent Blog](https://isovalent.com/blog/) - Advanced Cilium use cases from the creators
+- [Cilium Documentation](https://docs.cilium.io/) — Official guides for install, policy, kube-proxy replacement, encryption, and Gateway API.
+- [Cilium GitHub Repository](https://github.com/cilium/cilium) — Source code, issue tracker, and component overview documentation.
+- [Cilium CLI Repository](https://github.com/cilium/cilium-cli) — Install and connectivity test tooling reference.
+- [Hubble Documentation](https://docs.cilium.io/en/stable/observability/hubble/) — Flow visibility, Relay, UI, and metrics setup.
+- [Hubble GitHub Repository](https://github.com/cilium/hubble) — Observability layer architecture and CLI releases.
+- [CNCF Cilium Graduation Announcement](https://www.cncf.io/announcements/2023/10/11/cloud-native-computing-foundation-announces-cilium-graduation/) — Graduation date and cloud-native networking context.
+- [Cilium Component Overview](https://github.com/cilium/cilium/blob/main/Documentation/overview/component-overview.rst) — Agent, operator, and datapath relationships.
+- [Cilium Terminology: Security Identity](https://github.com/cilium/cilium/blob/main/Documentation/gettingstarted/terminology.rst) — Identity allocation and label mapping rules.
+- [Kubernetes NetworkPolicy in Cilium](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/policy.rst) — Supported policy kinds and scope.
+- [Cilium L7 Policy](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer7.rst) — HTTP and protocol-aware enforcement.
+- [Cilium DNS-Based Egress Policy](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer3.rst) — FQDN rules and DNS proxy behavior.
+- [kube-proxy Replacement](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/kubeproxy-free.rst) — Service types, modes, and device configuration.
+- [WireGuard Transparent Encryption](https://github.com/cilium/cilium/blob/main/Documentation/security/network/encryption-wireguard.rst) — Enablement and operational notes.
+- [IPsec Transparent Encryption](https://github.com/cilium/cilium/blob/main/Documentation/security/network/encryption-ipsec.rst) — Alternative encryption mode.
+- [ClusterMesh Documentation](https://docs.cilium.io/en/stable/network/clustermesh/clustermesh/) — Multi-cluster identity and service synchronization.
+- [Gateway API in Cilium](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/) — L7 proxy and CRD requirements.
+- [Linux eBPF Verifier Documentation](https://www.kernel.org/doc/html/latest/bpf/verifier.html) — Kernel safety checks for loaded programs.
+- [Kubernetes Blog: nftables kube-proxy](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/) — kube-proxy scaling context and iptables limitations.
 
 ---
 
 ## Next Module
 
 Continue to [Module 5.2: Service Mesh](../module-5.2-service-mesh/) to learn about service mesh patterns with Istio, and when sidecar-free approaches make sense.
-
----
-
-*"The network that explains itself is the network you can actually secure."*
-
-## Sources
-
-- [Cilium Repository README](https://github.com/cilium/cilium) — Upstream overview of Cilium's eBPF dataplane, identity model, policy features, and observability integrations.
-- [Cilium CLI Repository README](https://github.com/cilium/cilium-cli) — Upstream reference for installing Cilium and running `cilium connectivity test` checks.
-- [Hubble Repository README](https://github.com/cilium/hubble) — Upstream overview of Hubble's flow visibility, troubleshooting workflow, and service-map style observability.
-- [Linux Kernel eBPF Verifier Documentation](https://github.com/torvalds/linux/blob/master/Documentation/bpf/verifier.rst) — Primary kernel documentation for how the eBPF verifier checks program safety and memory access.
-- [kubernetes.io: nftables kube proxy](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/) — The Kubernetes nftables blog explains iptables-mode kube-proxy rule scaling, O(n) lookup, and large-cluster programming latency.
-- [github.com: component overview.rst](https://github.com/cilium/cilium/blob/main/Documentation/overview/component-overview.rst) — Cilium's component overview describes eBPF's packet-filter origin, extensions, verifier, JIT compiler, and kernel hook points.
-- [github.com: bpf.h](https://github.com/torvalds/linux/blob/master/include/linux/bpf.h) — The Linux kernel header defines BPF_COMPLEXITY_LIMIT_INSNS as 1000000.
-- [github.com: terminology.rst](https://github.com/cilium/cilium/blob/main/Documentation/gettingstarted/terminology.rst) — Cilium terminology docs directly define identity derivation, cluster-wide numeric identifiers, shared identities, and policy use.
-- [github.com: numericidentity.go](https://github.com/cilium/cilium/blob/main/pkg/identity/numericidentity.go) — Cilium's numeric identity code defines MinimalNumericIdentity as 256 and enumerates the reserved host, world, and health identities.
-- [github.com: policy.rst](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/policy.rst) — The Cilium Kubernetes policy docs list all three policy formats and their scope.
-- [github.com: layer7.rst](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer7.rst) — The L7 policy docs define HTTP method/path/header matching and state that requests not matching rules are denied.
-- [github.com: layer3.rst](https://github.com/cilium/cilium/blob/main/Documentation/security/policy/layer3.rst) — The Layer 3 policy docs describe DNS-based rules, DNS proxy data collection, cached DNS responses, and TTL handling.
-- [github.com: setup.rst](https://github.com/cilium/cilium/blob/main/Documentation/observability/hubble/setup.rst) — The Hubble setup docs cover enabling Hubble and troubleshooting metrics configuration.
-- [github.com: kubeproxy free.rst](https://github.com/cilium/cilium/blob/main/Documentation/network/kubernetes/kubeproxy-free.rst) — The kube-proxy-free docs state that Cilium's eBPF kube-proxy replacement handles those Kubernetes Service types.
-- [github.com: encryption wireguard.rst](https://github.com/cilium/cilium/blob/main/Documentation/security/network/encryption-wireguard.rst) — The WireGuard transparent encryption docs show the same Cilium install options and explain node-to-node tunnel setup.
-- [cncf.io: cloud native computing foundation announces cilium graduation](https://www.cncf.io/announcements/2023/10/11/cloud-native-computing-foundation-announces-cilium-graduation/) — The CNCF announcement directly states the graduation date and describes the due diligence, audit, and maturity validation.
-- [github.com: v5.6](https://github.com/torvalds/linux/releases/tag/v5.6) — The Linux v5.6 GitHub release tag shows the Linux 5.6 release date.
-- [github.com: wireguard](https://github.com/torvalds/linux/tree/v5.6/drivers/net/wireguard) — The Linux v5.6 source tree contains the drivers/net/wireguard implementation.
