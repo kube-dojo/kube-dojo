@@ -1347,7 +1347,7 @@ Continue to [Module 5.6: ML Pipelines & Automation](../module-5.6-ml-pipelines/)
 
 - [learn.microsoft.com: concept model monitoring](https://learn.microsoft.com/en-us/azure/machine-learning/concept-model-monitoring?view=azureml-api-2) — Azure ML documentation on monitoring deployed models for data drift and performance degradation.
 - [Google Cloud: MLOps continuous delivery and automation pipelines in machine learning](https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Architecture guidance on monitoring, validation, and automated ML lifecycle controls in production.
-- [Sculley et al.: Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/5652-hidden-technical-debt-in-machine-learning-systems) — NeurIPS 2015 paper on why production ML systems need monitoring beyond conventional software observability.
+- [Sculley et al.: Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/5656-hidden-technical-debt-in-machine-learning-systems) — NeurIPS 2015 paper on why production ML systems need monitoring beyond conventional software observability.
 - [Evidently AI documentation](https://docs.evidentlyai.com/) — Open-source ML monitoring docs covering data drift, model performance reports, and test suites.
 - [Alibi Detect documentation](https://docs.seldon.io/projects/alibi/en/stable/) — Reference implementations for drift, outlier, and adversarial detection methods.
 - [NannyML documentation](https://nannyml.readthedocs.io/en/stable/) — Performance estimation and drift detection when ground-truth labels arrive with delay.
