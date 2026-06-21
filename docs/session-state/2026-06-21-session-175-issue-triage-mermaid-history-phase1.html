@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 175 — issue triage to 2 streams + mermaid #1823 fixed + AI-history #1876 Phase 1</title>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --border:#30363d; --fg:#e6edf3; --fg-dim:#8b949e; --blue:#58a6ff; --green:#3fb950; --amber:#d29922; --red:#f85149; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--fg); line-height:1.55; }
+  .wrap { max-width:1000px; margin:0 auto; padding:28px 24px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:30px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  h3 { font-size:14px; margin:18px 0 6px; color:var(--blue); }
+  .sub { color:var(--fg-dim); font-size:13px; margin-bottom:18px; }
+  code, .mono { font-family:var(--mono); font-size:12.5px; background:#1f2630; padding:1px 5px; border-radius:4px; }
+  .tldr { background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--green); border-radius:8px; padding:14px 16px; margin:14px 0 8px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
+  th, td { border:1px solid var(--border); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background:#1c2330; }
+  .ok { color:var(--green); font-weight:700; }
+  .warn { color:var(--amber); font-weight:700; }
+  .bad { color:var(--red); font-weight:700; }
+  ul { margin:6px 0 6px 0; padding-left:22px; }
+  li { margin:3px 0; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px; border:1px solid var(--border); color:var(--fg-dim); }
+  a { color:var(--blue); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Session 175 — issue triage to 2 live streams + mermaid #1823 fixed + AI-history #1876 Phase&nbsp;1</h1>
+  <div class="sub">2026-06-21 · standalone orchestrator · continues s174</div>
+
+  <div class="tldr">
+    <strong>TL;DR.</strong> User directive: <em>triage the issue board to only the 2 live curriculum streams (#1876, #1911) before starting the history review.</em>
+    Did it: <strong>9 non-stream issues triaged → board now exactly #1876 + #1911</strong>. 8 closed with evidence; <strong>#1823 (mermaid) was a real unfixed live-site defect → fixed + CI-gated + closed</strong> (PR #2071). Then <strong>started #1876 (AI-history book) Phase 1</strong>: the recommended 5-chapter sample reviewed through two independent web-verifying modalities (orchestrator + codex) plus two deterministic corpus-wide scans → <strong>ZERO fabrications</strong>; one real numeric slip fixed (ch-43, PR #2072). <strong>Decision: the book is carefully sourced, NOT fabrication-heavy → no full blind 73-chapter epic; targeted spot-checks only.</strong>
+  </div>
+
+  <h2>1 · Issue triage — board to 2 live streams</h2>
+  <p>Started with 11 open issues. Kept the 2 live curriculum streams; triaged the other 9 with evidence (all reversible — reopen if any bites):</p>
+  <table>
+    <tr><th>Issue</th><th>Disposition</th><th>Rationale</th></tr>
+    <tr><td><strong>#1876</strong></td><td class="ok">KEPT</td><td>AI-history book review (this session's Phase 1).</td></tr>
+    <tr><td><strong>#1911</strong></td><td class="ok">KEPT</td><td>UK translation currency (largest remaining stream, ~14%).</td></tr>
+    <tr><td>#1823</td><td class="ok">FIXED + closed</td><td>Real live-site defect — see §2. PR #2071.</td></tr>
+    <tr><td>#14</td><td>closed</td><td>"Curriculum Monitoring" (marked never-close) — superseded by <code>watchlist_staleness.py</code> + <code>changelog.md</code> (#1959). Source table preserved in issue history. <span class="warn">Flagged the never-close override explicitly.</span></td></tr>
+    <tr><td>#386</td><td>closed</td><td>Lab audit — scorer built + run (<code>score_labs.py</code>, 2 audit docs); rewriting subsumed by the #2020 per-module T0 review (~100% coverage, closed s174).</td></tr>
+    <tr><td>#1623</td><td>closed</td><td>gap-fill G2 engineering-craft — backlog; Stage-1 brief preserved on branch <code>gap-fill-g2-engineering-craft</code>.</td></tr>
+    <tr><td>#2015</td><td>closed</td><td>lockfile marker invisible to PR CI — <code>detect</code> is non-required; manual integrity-verify is the documented workaround.</td></tr>
+    <tr><td>#2024</td><td>closed</td><td>Headroom pickup port — deferred-by-design (waits on the memory-WRITE tool); state in STATUS blockers + <code>.claude/rules/headroom.md</code>.</td></tr>
+    <tr><td>#2030</td><td>closed</td><td>dispatch_smart read-only + <code>--worktree</code> crash — trivial workaround (omit <code>--worktree</code> for read-only).</td></tr>
+    <tr><td>#2036</td><td>closed</td><td>deploy.sh reverts live skill corrections — documented workaround (edit deployed copies, don't run deploy.sh).</td></tr>
+    <tr><td>#2065</td><td>closed</td><td>orphaned dispatch children / CPU burn — immediate orphans killed s174; launchd self-heals; recorded in memory. Reopen with a reaping fix if it recurs.</td></tr>
+  </table>
+  <p class="sub">The 6 infra/tooling closes (#2015/#2024/#2030/#2036/#2065 + #14's monitoring function) were already captured in STATUS blockers + memory, so closing the GitHub issues did not lose operational knowledge.</p>
+
+  <h2>2 · #1823 mermaid — real live-site defect, fixed + gated (PR #2071, merged <code>7c329ba90</code>)</h2>
+  <p>Triage found #1823 was <strong>not</strong> closeable cruft: the acute case was fixed in #1824, but the lint tool <code>scripts/ci/check_mermaid_labels.py</code> was never wired to CI and the corpus was never swept. Running it: <strong>40 flagged lines / 43 labels across 11 files</strong> still had unquoted <code>(</code> inside flowchart <code>[..]</code>/<code>{..}</code> node labels — which abort the whole diagram and render as <em>raw code in the browser</em>. No existing gate catches this (mermaid renders client-side).</p>
+  <ul>
+    <li>Added a deterministic <code>--fix</code> mode to the lint, driven by the <strong>same SQUARE/RHOMBUS regexes as the detector</strong> → a fixed line is, by construction, no longer a violation. Selftest extended to assert <code>--fix</code> resolves every <code>bad</code> case and leaves every <code>good</code> case byte-for-byte unchanged.</li>
+    <li><code>--fix</code> applied: <strong>43 labels quoted across 11 files</strong> (cloud, linux, kcna, on-premises, ai-infrastructure). HTML (<code>&lt;br&gt;/&lt;i&gt;/&lt;b&gt;/•</code>) preserved inside quotes (<code>securityLevel: loose</code> → htmlLabels render); round nodes <code>(...)</code> and bare nodes left untouched.</li>
+    <li>Wired the stdlib-only check into the always-on <code>link-check</code> job (no <code>paths:</code> filter → required-safe). Post-fix re-scan on main: <span class="ok">0 violations</span>. ruff + zizmor clean; astro build green.</li>
+  </ul>
+  <p><strong>Lesson:</strong> a deterministic detector can also be a deterministic fixer — share the regexes, and the re-scan-to-0 <em>is</em> the verification. Cheaper and safer than 43 manual edits.</p>
+
+  <h2>3 · #1876 AI-history book — Phase 1 sample review</h2>
+  <p>73 chapters / ~365K words, live in the sidebar, never cross-family reviewed. Reviewed the issue's recommended 5-chapter sample (ch-14 Perceptron, ch-26 Bayesian Networks, ch-43 ImageNet, ch-50 Transformers, ch-71 Chip War) on a <strong>factual-accuracy / no-fabrication</strong> lens.</p>
+
+  <h3>Two independent modalities + two deterministic corpus scans</h3>
+  <ul>
+    <li><strong>Orchestrator (opus)</strong> web-verified ~20 high-risk anchors across the sample.</li>
+    <li><strong>codex (cross-family)</strong> independently web-verified against PubMed, APS, ImageNet official pages, Russakovsky 2015, BIS/Federal Register, ASML, TSMC, NIST CHIPS, SEC, etc.</li>
+    <li><strong>arXiv ID check</strong> across all 73 chapters: 13 IDs, <span class="ok">0 mismatch, 0 unverifiable</span>.</li>
+    <li><strong>Lifespan/date anomaly scan</strong> across all 73: <span class="ok">0 anomalies</span> (every flagged token was a correctly-used concept-era range / citation page range / projection interval — e.g. ch-15 gradient-descent 1847–1970 with Cauchy's exact lifespan 1789–1857).</li>
+  </ul>
+
+  <h3>Result: ZERO fabrications</h3>
+  <p>Every verified anchor — including the categories fabrication usually botches (obscure journal vol/issue, exact death years, specific officials, precise percentages, dataset sizes) — was correct. Highlights: H.D. Block <em>Reviews of Modern Physics</em> <strong>34(1)</strong>, 1962 (exact); Charniak <strong>1946–2023</strong> (exact death year); AlexNet <strong>15.3% vs 26.2%</strong>; ILSVRC2012 <strong>1,431,167</strong> images; Pearl 1936 / Hinton 1947 / Sutskever 1986. The chapter even correctly distinguishes 15.3% (winning ensemble) from 16.4% (single-model retrospective figure) — the opposite of a fabrication pattern.</p>
+
+  <h3>What the review surfaced (precision, not fabrication)</h3>
+  <ul>
+    <li><strong>ch-43 — one real factual slip (fixed, PR #2072):</strong> used <strong>150,000</strong> (the AlexNet paper's <em>ILSVRC-2010</em> figure) as the 2012 test-set size and derived miss-counts (~39,000 / ~23,000) from it. Official ILSVRC2012 = <strong>100,000</strong> → ~26,000 / ~15,000. Error <em>rates</em> were all correct.</li>
+    <li><strong>ch-71 — reviewer false-positive caught:</strong> codex flagged "Jeffrey Kessler" as misspelled ("Jeffery"). Ground-check confirms <strong>"Jeffrey Kessler" is correct</strong> (Senate-confirmed Under Secretary/BIS, Mar 2025). No change. <em>Reviewers fabricate too → every flag ground-checked.</em></li>
+    <li><strong>Minor framing/currency (Phase 2, non-blocking):</strong> ch-26 "direct ancestor of modern PGMs" overstates; ch-50 "NeurIPS 2017" is the retroactive name (venue was "NIPS 2017"); ch-50 narrow "Bahdanau introduced attention"; ch-14 Tobermory attribution; ch-71 add the 2025 MOFCOM No. 72 update.</li>
+  </ul>
+
+  <h3>Decision</h3>
+  <p><strong>The book is carefully sourced and NOT fabrication-heavy.</strong> Per the #1876 gate: <span class="ok">no full blind 73-chapter epic</span> — targeted spot-checks + the specific corrections only. Keep it OFF the module quality board (book-format; <code>verify_module.py</code> N/A). The cheap deterministic layers (arXiv + lifespan/date) are already green corpus-wide and worth keeping as the standing guard. Full decision recorded on <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1876">#1876</a>.</p>
+
+  <h2>4 · NEXT</h2>
+  <ul>
+    <li><strong>#1876 Phase 2 (lightweight):</strong> (a) land ch-43 PR #2072; (b) one small reviewed fix-pass for the minor framing/currency refinements above; (c) spot-check the highest-churn chapters (ch-69 data-exhaustion, ch-70 energy-grid, ch-71 chip-war) on a refresh cadence per <code>.claude/rules/durable-vendor-content.md</code>. <em>Not a heavy epic.</em></li>
+    <li><strong>#1911 UK translation currency</strong> — largest remaining stream (~14% current); detector-driven calque review as bulk translation lands.</li>
+    <li>Standing hygiene (not on the board): ~355 review records exist on disk but untracked in git (bulk <code>git add -f</code>); STATUS.md is &gt;300KB (prune — it is an index, not a log).</li>
+  </ul>
+
+  <h2>5 · Gotchas / lessons</h2>
+  <ul>
+    <li><strong>Triage that finds a real bug should fix it, not close-and-forget</strong> — #1823 had 40 broken diagrams; closing it unfixed would have lost a live-site defect. Fixing it produced the clean 2-issue board <em>and</em> the quality win.</li>
+    <li><strong>A GitHub closing keyword in the PR body auto-closes the issue</strong> — "Closes … (#1823)" in PR #2071's body closed #1823 on merge before my <code>gh issue close -c</code> could add the evidence comment (posted separately).</li>
+    <li><strong>For history fact-checking, web-verification against primary sources &gt; a second model's opinion</strong> — but a cross-family reviewer is still valuable as a claim-surfacer; ground-check each of its flags (caught the Kessler false-positive).</li>
+    <li>codex's full per-chapter verdict landed at <code>logs/dispatch_responses/hist-codex.txt</code>, not the background-task stdout (the redirect-banner trap).</li>
+  </ul>
+</div>
+</body>
+</html>
