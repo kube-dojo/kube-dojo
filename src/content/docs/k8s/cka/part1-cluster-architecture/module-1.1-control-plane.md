@@ -631,7 +631,7 @@ When the API server is down, `kubectl logs` depends on the failed path, so it is
 
 ## Hands-On Exercise
 
-This exercise uses the protected command drills from the original module and places them in a safer diagnostic sequence. Run destructive steps only in a disposable practice cluster, such as the linked lab environment, because moving static manifests intentionally breaks control plane components. If you are on a shared cluster, perform only the read-only inspection steps and discuss the recovery tasks instead of executing them.
+This exercise places the control plane command drills in a safer diagnostic sequence. Run destructive steps only in a disposable practice cluster, such as the linked lab environment, because moving static manifests intentionally breaks control plane components. If you are on a shared cluster, perform only the read-only inspection steps and discuss the recovery tasks instead of executing them.
 
 **Task**: Explore your cluster's control plane components and practice mapping symptoms to owners.
 
