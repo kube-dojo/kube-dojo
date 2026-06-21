@@ -34,7 +34,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 02:18, a platform team at a large subscription commerce company sees checkout latency rise across three regions while Kubernetes still reports every Deployment as healthy. The application pods are running, readiness probes are green, and the load balancer is still accepting traffic, but customers are abandoning carts because confirmation pages take several seconds to load. The incident commander needs a way to compare request rate, error ratio, database latency, and pod restarts across thousands of time series without reading logs from every replica.
+**Hypothetical scenario:** at 02:18, a platform team at a large subscription commerce company sees checkout latency rise across three regions while Kubernetes still reports every Deployment as healthy. The application pods are running, readiness probes are green, and the load balancer is still accepting traffic, but customers are abandoning carts because confirmation pages take several seconds to load. The incident commander needs a way to compare request rate, error ratio, database latency, and pod restarts across thousands of time series without reading logs from every replica.
 
 Prometheus gives that team a working map of the system while the system is changing under pressure. It does not merely store numbers; it continuously asks every discovered target for current measurements, labels those measurements with operational context, and lets engineers ask focused questions such as "which service is producing most 5xx responses" or "which latency bucket crossed the SLO boundary." When those questions are designed well, the team can move from vague outage symptoms to a narrow hypothesis in minutes.
 
