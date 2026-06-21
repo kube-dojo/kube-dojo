@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 174 — #2020/#2031 closed + last module reviewed + security + What's-New</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;line-height:1.3;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:2rem;border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--accent);padding:1rem 1.2rem;border-radius:6px}
+  code{background:#0d1626;border:1px solid var(--bd);border-radius:4px;padding:.1rem .35rem;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.bad{color:var(--bad);font-weight:600}
+  ul,ol{padding-left:1.2rem}li{margin:.3rem 0}a{color:var(--accent)}
+</style>
+</head>
+<body>
+<h1>Session 174 — <span class="ok">#2020 + #2031 closed</span>, last un-reviewed module landed, security + What's-New</h1>
+
+<p class="tldr"><strong>2026-06-21 · standalone orchestrator · continues the #2020 quality-coverage stream from s173.</strong>
+Cold-start found the queue empty and the #2020 by-track scope deterministically complete, so <strong>closed #2020 (96-module quality coverage) and #2031 (deep-learning) with evidence</strong> — curriculum-module cross-family review coverage is now <strong>~100%</strong>. A global no-record scan + board cross-check then found the genuine residue: <strong>1 truly un-reviewed module</strong> (on-prem 9.6, reviewed + fixed + merged this session, PR #2063) and <strong>6 pipeline-<code>auto_approved</code> modules that never got a real review</strong> (filed #2066). User flagged a <strong>runaway CPU process</strong> → diagnosed + killed an orphaned dispatch child spinning 5.5h on a deleted worktree (memory + issue #2065). Then ran the user's chosen sequence: <strong>option 4 (security + hygiene)</strong> — cleared all 3 Dependabot alerts + an audit-only finding (PR #2064, <code>npm audit</code> 0 vulns), backfilled 85 provenance review records — then <strong>option 1 (What's-New)</strong> — PR #2067, snapshot health verified, AI/ML track-completion entry. 5 PRs merged, all required-CI-green.</p>
+
+<h2>Epics closed (deterministic evidence)</h2>
+<ul>
+<li><strong>#2031</strong> (deep-learning) — <code>.pipeline/reviews/</code> holds 27 records for the 27 deep-learning modules; the whole <code>ai/ai-ml-engineering</code> track has <strong>0 modules without a record</strong>. ACs met → closed.</li>
+<li><strong>#2020</strong> (96 un-reviewed modules) — verified every in-scope track has <strong>0 no-record modules</strong> (ai-ml-engineering, azure/aws/enterprise-hybrid essentials, on-prem multi-cluster, pf-mlops + data-engineering, advanced-networking, ebpf, cka-scoped-2). Ticked all 4 ACs + closed with a per-track evidence table. The 5 cka + 3 ckad record-less modules are board-done-without-record / out of the named 96.</li>
+</ul>
+
+<h2>Last genuinely un-reviewed module — on-prem 9.6 (PR #2063)</h2>
+<p>A global no-record scan (92 modules) cross-referenced against the quality board revealed <strong>91 already carry a board <code>approve</code> verdict</strong> (reviewed before the <code>.pipeline/reviews/</code> file convention) and only <strong>1 was genuinely un-reviewed</strong>: <code>on-premises/ai-ml-infrastructure/module-9.6-high-performance-storage-ai</code> (COMMITTED, score 5.0, but <code>auto_approved</code>-less and verdict <code>none</code>). Cross-family review (opus-inline): the module is strong (durable-spine, data-path-first, anti-fab clean, all density/structure gates pass) — only T3 on <code>sources_all_reachable</code>. Fixed 3 verifier-blind defects, all web-verified:</p>
+<ul>
+<li>NVIDIA GPU-Operator GDS source <strong>404</strong> (<code>gpu-operator-gds.html</code> removed) → <code>gpu-operator-rdma.html</code> (current; covers GPUDirect Storage + <code>nvidia-fs</code>).</li>
+<li>Alluxio K8s docs <strong>307→404</strong> → <code>documentation.alluxio.io/os-en/kubernetes/running-alluxio-on-kubernetes</code> (clean 200; the path the sibling 1.4-ai-storage already uses — found via sibling-grep).</li>
+<li>Comparison table cited <code>intel/lustre-csi-driver</code> which <strong>does not exist</strong> (404, fabricated) → <code>HewlettPackard/lustre-csi-driver</code> (real, 200); <code>beegfs/beegfs-csi-driver</code> → <code>ThinkParQ/beegfs-csi-driver</code> (correct org).</li>
+</ul>
+<p>→ T0, all gates pass, <code>sources_all_reachable</code> true. Merged <code>c72271cd8</code>; APPROVE record <code>b4681eb8a</code>.</p>
+
+<h2>Runaway CPU process (user-flagged) — diagnosed + killed</h2>
+<p>User: "did you leave some process using lots of CPU?" Found <strong>PID 87870</strong>: a <code>python@3.14</code> at ~98% CPU for <strong>5.5h</strong>, parent reparented to <code>launchd</code> (orphaned), CWD inside <code>.worktrees/pf-mlops-5.7</code> — a worktree from s173 that had already been removed (the process held the deleted dir's inode). A second idle orphan (PID 5160, <code>crossplane-expand</code> from s165, 0% CPU, 3.9 days) was the same class. <strong>Killed both</strong> → top CPU back to macOS system processes. Root cause: the dispatch wrapper doesn't reap its child tree on exit, and <code>git worktree remove</code> doesn't kill a process whose CWD is inside it. Captured memory <code>feedback_orphaned_worktree_dispatch_cpu_burn</code> + filed <strong>#2065</strong> (durable fix + cold-start orphan sweep).</p>
+
+<h2>Option 4 — security + hygiene</h2>
+<table>
+<tr><th>Item</th><th>Action</th><th>Result</th></tr>
+<tr><td>Dependabot #22 (HIGH) + #23 (med) vite</td><td><code>vite ^7.3.5</code> override (was 7.3.2; Windows fs.deny bypass + NTLM)</td><td class="ok">fixed</td></tr>
+<tr><td>Dependabot #30 (med) dompurify</td><td><code>dompurify ^3.4.11</code> override (supersedes Dependabot PR #2045)</td><td class="ok">fixed</td></tr>
+<tr><td>audit-only (med) brace-expansion</td><td><code>npm audit fix</code> 5.0.5→5.0.6 (numeric-range DoS)</td><td class="ok">fixed</td></tr>
+</table>
+<p>One consolidated lockfile PR <strong>#2064</strong> (merged <code>1f09205e2</code>). Pinned via <code>package.json</code> <code>overrides</code> (the repo's existing pattern) so the change touches package.json AND the lockfile — <strong>passing the supply-chain lockfile-integrity tripwire</strong> (which fails by design on lockfile-only diffs; per #2015 the <code>[lockfile-only]</code> marker can't suppress it in PR CI). <code>npm audit</code>: <strong>0 vulnerabilities</strong> (was 1 high + 3 moderate). Closed #2045. Local build green (2169 pages).</p>
+<ul>
+<li><strong>Backfilled 85 provenance review records</strong> (committed direct-main <code>174f0e6bb</code>) for board-approved (<code>auto_approved=false</code>) modules that predate the record-file convention, each honestly stating "verdict sourced from board state, NOT a fresh review". <strong>Excluded the 6 <code>auto_approved=true</code> modules</strong> (genuine gaps) — blanket-backfilling all 91 would have papered them over.</li>
+<li><strong>Finding:</strong> ~355 review-record <code>.md</code> files exist on disk but are <strong>untracked in git</strong> (<code>.pipeline/reviews/</code> is gitignored; past sessions skipped <code>git add -f</code>). A clone/CI wouldn't see them — worth a bulk <code>git add -f</code> audit.</li>
+</ul>
+
+<h2>The genuine review residue — #2066 (6 modules)</h2>
+<p>Of the 91 board-approved-no-record modules, <strong>6 are <code>auto_approved:true</code></strong> — pipeline auto-approvals, never a genuine cross-family review: <code>toolkits/.../module-4.7-kyverno</code>, <code>module-1.1-prometheus</code>, <code>module-5.1-cilium</code>, <code>module-14.6-managed-kubernetes</code>, <code>module-2.4-helm-kustomize</code>, <code>disciplines/.../devsecops/module-4.5-runtime-security</code>. All volatile-skin topics → durable-vendor rule applies hard. Filed <strong>#2066</strong>; do NOT backfill — they need a real review.</p>
+
+<h2>Option 1 — What's-New (PR #2067)</h2>
+<ul>
+<li><strong>Watchlist health checked:</strong> inventoried every dated <code>as of YYYY-MM</code> snapshot — <strong>264× 2026-06, 4× 2026-05</strong> (all current); the lone <code>2025-08</code> is a correct historical date (Broadcom Bitnami→bitnamilegacy move), not a stale snapshot. <strong>Nothing to refresh this cycle.</strong></li>
+<li><code>changelog.md</code>: June 2026 entry marking the <strong>AI/ML Engineering track complete + currency-reviewed end to end</strong> (links the sections not individually logged: generative-ai, vector-rag, frameworks-agents, advanced-genai, multimodal-ai, ai-infrastructure, RL).</li>
+<li><code>ai-ml-engineering/index.md</code>: stale header <code>60+ Modules</code> → <code>120+ Modules</code> (actual: 124).</li>
+</ul>
+<p>This satisfies the "post a What's-New update BEFORE #1876" gate from the continuous-improvement plan.</p>
+
+<h2>Lessons</h2>
+<ul>
+<li><strong>record-absence ≠ un-reviewed</strong> — disambiguate via the board's <code>auto_approved</code> flag: <code>false</code> = genuine verdict (backfill OK), <code>true</code> = pipeline auto-approve = real gap (needs review). Blindly backfilling all no-record modules would hide real gaps.</li>
+<li><strong>Orphaned dispatch processes</strong> hold deleted <code>.worktrees/</code> dirs and can spin at ~100% CPU — sweep for them at cold-start (<code>lsof -d cwd</code> per PID).</li>
+<li><strong>The lockfile-integrity tripwire fails by design</strong> on lockfile-only PRs — fix transitive security bumps via <code>package.json</code> <code>overrides</code> so package.json changes too.</li>
+<li>STATUS.md has drifted to 319KB (it is meant to be an index, not a log) — worth a prune.</li>
+</ul>
+
+<h2>Next</h2>
+<ul>
+<li><strong>#2066</strong> — review the 6 genuinely-un-reviewed (auto-approved) toolkit/devsecops modules (the real review residue).</li>
+<li><strong>#1876</strong> — AI-history book review (73 chapters / ~365K words) — now unblocked (What's-New gate met); the only remaining un-reviewed content corpus.</li>
+<li><strong>#1911</strong> — UK translation currency (~14%), the largest remaining curriculum stream.</li>
+<li>Hygiene: bulk <code>git add -f</code> the ~355 untracked review records; #2065 dispatch child-reaping; STATUS.md prune.</li>
+</ul>
+
+<p class="tldr">PRs this session: <strong>#2063</strong> (9.6 fix), <strong>#2064</strong> (security bumps), <strong>#2067</strong> (What's-New) — all merged. Direct-main commits: 9.6 record <code>b4681eb8a</code>, 85 backfill records, security <code>1f09205e2</code>. Issues: closed #2020, #2031, #2045; filed #2065 (orphan processes), #2066 (6-module review residue).</p>
+</body>
+</html>
