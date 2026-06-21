@@ -598,6 +598,10 @@ Preventive controls reduce the attacker's room to maneuver, but they cannot full
 | Kubernetes audit logs | API-level visibility into actions such as `exec`, secret reads, or role changes. | Detecting control-plane actions and user-driven Kubernetes operations. | Audit policy must capture the events you care about before the incident. |
 | CNI flow logs | Network behavior between workloads and destinations. | Proving or investigating lateral movement and unexpected egress. | Flow data explains connectivity, not process intent, unless correlated with other signals. |
 
+> **Landscape snapshot — as of 2026-06. Project maturity and runtime tooling churn fast; verify against the [CNCF landscape](https://landscape.cncf.io/) and each project's docs before relying on specifics.** Falco is a **CNCF Graduated** project (accepted 2018-10; Incubating 2020-01; **Graduated 2024-02-29**) and the de-facto open-source baseline for syscall- and eBPF-level runtime detection. Tetragon is developed as part of the **CNCF-graduated Cilium** project and uses eBPF for low-overhead process and network observability with policy-aware tracing. KubeArmor is a CNCF project focused on policy-driven runtime *enforcement* using Linux Security Modules and BPF. Treat the category — kernel-level (syscall/eBPF) runtime sensors feeding a detection-and-response loop — as the durable spine; which specific tool leads on rule ecosystem, performance, or in-line enforcement shifts from release to release, so choose on the operating model you can sustain rather than on a feature snapshot.
+
+Whichever sensor you deploy, the durable engineering work is the same, and it is not "install the agent." The first task is to define what *normal* looks like for a given workload: which executables it runs, which files it reads and writes, and which destinations it talks to. Detection becomes tractable only once that baseline exists, because a runtime alert is fundamentally a statement that observed behavior diverged from an expected envelope. The second task is signal triage. A raw rule that fires on "a shell started in a container" is noisy in a cluster where operators legitimately `exec` for debugging, so the rule needs namespace, workload, and identity context before it earns a page. The third task is the response path: an alert that nobody can act on within minutes is documentation, not defense. Mature teams wire high-confidence detections to a contained, reversible action — the quarantine label and default-deny NetworkPolicy from the lab above are a deliberately simple example — so the time from detection to containment is measured in seconds of automation rather than minutes of human coordination. The tool renders these three steps easier or harder, but it never removes them, which is why the detection-engineering skill outlasts any single sensor.
+
 Install Falco in a demo or lab cluster with Helm if your environment allows privileged node-level sensors. Managed clusters vary in what they permit, so treat installation failures as an environment constraint rather than a curriculum failure. The command below uses the eBPF driver, which is a common modern choice.
 
 ```bash
@@ -1205,11 +1209,11 @@ spec:
             - ALL
 EOF
 kubectl wait --for=condition=Ready pod/netcheck -n runtime-demo --timeout=90s
-kubectl exec -n runtime-demo netcheck -- nslookup kubernetes.default.svc.cluster.local
+kubectl exec -n runtime-demo netcheck -- curl -sS -m 5 -o /dev/null -w "in-cluster reachable\n" -k https://kubernetes.default.svc.cluster.local
 kubectl exec -n runtime-demo netcheck -- curl -sS -m 5 https://example.com
 ```
 
-The DNS lookup should succeed if your DNS selector matches the cluster. The external `curl` should fail or time out after default-deny egress, unless your CNI does not enforce NetworkPolicy. If external egress succeeds, verify CNI support before assuming the policy is wrong.
+The in-cluster check should succeed — DNS resolves `kubernetes.default.svc.cluster.local` and the API service answers on 443 — if your DNS egress selector matches the cluster. The external `curl` should fail or time out after default-deny egress, unless your CNI does not enforce NetworkPolicy. If external egress succeeds, verify CNI support before assuming the policy is wrong.
 
 ### Part 4: Add A Quarantine Response Policy
 
@@ -1232,15 +1236,15 @@ spec:
 EOF
 ```
 
-Apply the quarantine label to the diagnostic Pod and verify that DNS now fails for that Pod. Then remove the label so the Pod returns to the namespace's normal policy state.
+Apply the quarantine label to the diagnostic Pod and verify that in-cluster connectivity now fails for that Pod — the quarantine NetworkPolicy denies all egress, so even DNS resolution to the API service breaks and `curl` reports it cannot resolve or connect. Then remove the label so the Pod returns to the namespace's normal policy state.
 
 ```bash
 kubectl label pod netcheck -n runtime-demo \
   runtime.kubedojo.io/quarantine=true \
   --overwrite
-kubectl exec -n runtime-demo netcheck -- nslookup kubernetes.default.svc.cluster.local
+kubectl exec -n runtime-demo netcheck -- curl -sS -m 5 -o /dev/null -w "in-cluster reachable\n" -k https://kubernetes.default.svc.cluster.local
 kubectl label pod netcheck -n runtime-demo runtime.kubedojo.io/quarantine-
-kubectl exec -n runtime-demo netcheck -- nslookup kubernetes.default.svc.cluster.local
+kubectl exec -n runtime-demo netcheck -- curl -sS -m 5 -o /dev/null -w "in-cluster reachable\n" -k https://kubernetes.default.svc.cluster.local
 ```
 
 ### Part 5: Optional Falco Detection
