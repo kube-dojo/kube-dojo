@@ -62,7 +62,7 @@ graph TD
         K[Keys<br/>- data-encrypt<br/>- signing-key<br/>- wrapping-key]
         C[Certificates<br/>- api-tls<br/>- mtls-cert<br/>- code-sign]
     end
-    F[Features:<br/>• HSM-backed FIPS 140-2 L2 / 140-3 L3 (HSM Platform 2, current default)<br/>• Versioned updates<br/>• Audit logged access<br/>• Soft delete & purge protection<br/>• Private endpoint support]
+    F["Features:<br/>• HSM-backed FIPS 140-2 L2 / 140-3 L3 (HSM Platform 2, current default)<br/>• Versioned updates<br/>• Audit logged access<br/>• Soft delete & purge protection<br/>• Private endpoint support"]
     Azure Key Vault --- F
     style F text-align:left
 ```

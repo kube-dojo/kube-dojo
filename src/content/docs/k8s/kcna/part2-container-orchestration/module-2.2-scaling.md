@@ -118,8 +118,8 @@ flowchart TD
             Current_Replicas[Current replicas: 2]
 
             subgraph Calculation
-                Desired_Replicas[Desired = Current Replicas × (Current Metric / Target Metric)]
-                Example_Calc{Example: 2 × (80 / 50) ≈ 4}
+                Desired_Replicas["Desired = Current Replicas × (Current Metric / Target Metric)"]
+                Example_Calc{"Example: 2 × (80 / 50) ≈ 4"}
             end
 
             Target_Metric & Current_Metric & Current_Replicas --> Calculation
@@ -239,7 +239,7 @@ flowchart TD
         VPA_Modes(Modes)
         VPA_Modes --> Mode_Off[Off: Just recommendations]
         VPA_Modes --> Mode_Initial[Initial: Set on Pod creation]
-        VPA_Modes --> Mode_Auto[Auto: Update running Pods (recreates)]
+        VPA_Modes --> Mode_Auto["Auto: Update running Pods (recreates)"]
         VPA_Modes -- Note --> Addon[VPA is NOT built into Kubernetes core - It's an add-on]
     end
 ```
@@ -268,7 +268,7 @@ Scale-down is cautious because removing a node can disrupt workloads. Cluster Au
 flowchart TD
     subgraph Cluster Autoscaler
         subgraph Scale Up
-            A[Pods pending (unschedulable)] --> B(Cluster Autoscaler detects pending Pods)
+            A["Pods pending (unschedulable)"] --> B(Cluster Autoscaler detects pending Pods)
             B --> C(Requests new node from cloud provider)
             C --> D(New node joins cluster)
             D --> E(Pending Pods get scheduled)

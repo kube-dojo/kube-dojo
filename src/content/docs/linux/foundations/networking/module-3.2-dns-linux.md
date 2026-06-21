@@ -48,7 +48,7 @@ graph TD
     A[Application: "Connect to api.example.com"] --> B{1. Check /etc/hosts};
     B -- Not found --> C{2. Check /etc/resolv.conf for DNS server};
     B -- Found --> E[Application connects to 192.168.1.10];
-    C --> D[3. Query DNS server (10.96.0.10)];
+    C --> D["3. Query DNS server (10.96.0.10)"];
     D --> F[4. DNS server returns: 93.184.216.34];
     F --> E[5. Application connects to 93.184.216.34];
 
@@ -295,7 +295,7 @@ graph TD
     P[Pod Query: "my-service.default.svc.cluster.local"] --> C(CoreDNS);
     C -- Cluster queries: *.cluster.local --> K[Answer from Kubernetes API];
     C -- External queries: *.* --> U[Forward to upstream DNS];
-    K --> R[Returns: 10.96.45.123 (Service ClusterIP)];
+    K --> R["Returns: 10.96.45.123 (Service ClusterIP)"];
     U --> R;
 
     subgraph CoreDNS_Server [CoreDNS (10.96.0.10)]
@@ -307,7 +307,7 @@ CoreDNS has two major responsibilities in this path. For cluster names under the
 
 ```mermaid
 graph TD
-    A[Service Fully Qualified Domain Name (FQDN)] --> B("my-service.namespace.svc.cluster.local")
+    A["Service Fully Qualified Domain Name (FQDN)"] --> B("my-service.namespace.svc.cluster.local")
     B --> C{Components of the FQDN}
     C --> D[Service Name: my-service]
     C --> E[Namespace: namespace]

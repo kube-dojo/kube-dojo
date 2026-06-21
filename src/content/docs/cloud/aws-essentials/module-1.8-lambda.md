@@ -46,11 +46,11 @@ When an event triggers a Lambda function, AWS must allocate an execution environ
 
 ```mermaid
 graph TD
-    A["Request 1 (Cold Start)"] --> B[INIT Phase<br><i>(billed as part of invocation duration)</i><br>Download code -> Start runtime -> Run init code<br>Extension init -> Runtime init -> Function init<br>~100ms-10s depending on language, package size, VPC]
-    B --> C[INVOKE Phase<br><i>(billed per invocation)</i><br>Run handler function -> Return response<br>This is your actual code executing]
+    A["Request 1 (Cold Start)"] --> B["INIT Phase<br><i>(billed as part of invocation duration)</i><br>Download code -> Start runtime -> Run init code<br>Extension init -> Runtime init -> Function init<br>~100ms-10s depending on language, package size, VPC"]
+    B --> C["INVOKE Phase<br><i>(billed per invocation)</i><br>Run handler function -> Return response<br>This is your actual code executing"]
 
     C --> D["Request 2 (Warm Start - same environment reused)"]
-    D --> E[INVOKE Phase only<br><i>(no INIT)</i><br>Run handler function -> Return response<br>Init code NOT re-executed, connections reused]
+    D --> E["INVOKE Phase only<br><i>(no INIT)</i><br>Run handler function -> Return response<br>Init code NOT re-executed, connections reused"]
 
     E --> F["Request 3 (Warm Start - reused again)"]
     F --> G[INVOKE Phase only<br>Run handler function -> Return response]
@@ -509,8 +509,8 @@ Early in the serverless movement, engineering teams frequently constructed "orch
 
 ```mermaid
 graph TD
-    A[Lambda A (15 min timeout)] --> B[Lambda B (15 min timeout)]
-    B --> C[Lambda C (15 min timeout)]
+    A["Lambda A (15 min timeout)"] --> B["Lambda B (15 min timeout)"]
+    B --> C["Lambda C (15 min timeout)"]
     C --> D[Lambda D]
 ```
 
@@ -533,7 +533,7 @@ graph TD
     S1 -- Failure --> EH1[Error Handler]
 
     S2 -- Success --> S3{State 3: Choice}
-    S2 -- Failure --> R1[Retry (3x)]
+    S2 -- Failure --> R1["Retry (3x)"]
     R1 --> EH2[Error Handler]
 
     S3 -- Condition A --> LC[Invoke Lambda C]

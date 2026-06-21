@@ -43,16 +43,16 @@ Storage begins with a layered mental model. The kernel discovers a block device,
 
 ```mermaid
 graph TD
-    A[Physical Disk (/dev/sda)] --> B{Partition 1 (/dev/sda1)}
-    B --> C[/boot (ext4)]
-    A --> D{Partition 2 (/dev/sda2)}
+    A["Physical Disk (/dev/sda)"] --> B{"Partition 1 (/dev/sda1)"}
+    B --> C["/boot (ext4)"]
+    A --> D{"Partition 2 (/dev/sda2)"}
     D --> E[LVM Physical Volume]
-    E --> F[Volume Group (vg_data)]
-    F --> G[Logical Volume (lv_root)]
-    G --> H[/ (ext4)]
-    F --> I[Logical Volume (lv_home)]
-    I --> J[/home (xfs)]
-    A --> K{Partition 3 (/dev/sda3)}
+    E --> F["Volume Group (vg_data)"]
+    F --> G["Logical Volume (lv_root)"]
+    G --> H["/ (ext4)"]
+    F --> I["Logical Volume (lv_home)"]
+    I --> J["/home (xfs)"]
+    A --> K{"Partition 3 (/dev/sda3)"}
     K --> L[swap]
 ```
 
@@ -137,12 +137,12 @@ LVM is the single most important storage abstraction for Linux operations becaus
 
 ```mermaid
 graph TD
-    PV1[Physical Volume (/dev/sdb1)] --> VG[Volume Group (vg_storage)]
-    PV2[Physical Volume (/dev/sdc1)] --> VG
-    VG -- "Total: 50G, Free: 30G" --> LV1[Logical Volume (lv_data)]
-    LV1 --> DataMount[/data (ext4)]
-    VG -- "Total: 50G, Free: 30G" --> LV2[Logical Volume (lv_logs)]
-    LV2 --> LogsMount[/var/log (xfs)]
+    PV1["Physical Volume (/dev/sdb1)"] --> VG["Volume Group (vg_storage)"]
+    PV2["Physical Volume (/dev/sdc1)"] --> VG
+    VG -- "Total: 50G, Free: 30G" --> LV1["Logical Volume (lv_data)"]
+    LV1 --> DataMount["/data (ext4)"]
+    VG -- "Total: 50G, Free: 30G" --> LV2["Logical Volume (lv_logs)"]
+    LV2 --> LogsMount["/var/log (xfs)"]
 ```
 
 The key insight is that the filesystem does not need to know which physical disk provided the extents. That separation is powerful, but it also creates a responsibility to inspect every layer before changing anything. On a busy server, verify the physical volume, volume group, logical volume, filesystem type, mount point, and backup posture before resizing, because a correct command against the wrong LV is still an outage.

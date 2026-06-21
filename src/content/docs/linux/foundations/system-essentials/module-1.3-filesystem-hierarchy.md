@@ -277,15 +277,15 @@ Filenames are convenient for humans, but the filesystem tracks file identity thr
 
 ```mermaid
 graph TD
-    inode_box[INODE] --> file_type[File type (regular, directory, etc.)]
-    inode_box --> permissions[Permissions (rwx)]
-    inode_box --> owner[Owner (UID)]
-    inode_box --> group[Group (GID)]
+    inode_box[INODE] --> file_type["File type (regular, directory, etc.)"]
+    inode_box --> permissions["Permissions (rwx)"]
+    inode_box --> owner["Owner (UID)"]
+    inode_box --> group["Group (GID)"]
     inode_box --> size[Size]
-    inode_box --> timestamps[Timestamps (atime, mtime, ctime)]
+    inode_box --> timestamps["Timestamps (atime, mtime, ctime)"]
     inode_box --> hard_links[Number of hard links]
     inode_box --> data_pointers[Pointers to data blocks]
-    inode_box -- "(NOT the filename!)" --> data_blocks[DATA BLOCKS<br>(actual file content)]
+    inode_box -- "(NOT the filename!)" --> data_blocks["DATA BLOCKS<br>(actual file content)"]
 ```
 
 Inode pressure produces a distinctive failure mode. A filesystem can show gigabytes free in `df -h` while `touch newfile` fails because there are no free inodes left to describe new files. That usually happens in directories full of tiny files: session stores, package cache fragments, mail spools, extracted dependency trees, or application-generated scratch files. Pause and predict: if inode usage is exhausted but space remains, would deleting one huge file solve the problem? Usually not, because the problem is the count of file records, not the amount of stored data.
