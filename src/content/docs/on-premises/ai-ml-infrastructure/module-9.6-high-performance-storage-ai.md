@@ -127,7 +127,7 @@ Topology matters because PCIe and NUMA placement shape the real path. If a NIC, 
 | **Complexity** | Extremely High | Moderate | Low (Turnkey, but closed source) |
 | **POSIX Support** | Strict | Strict | Strict |
 | **Small File Perf** | Poor to Moderate | Good | Excellent |
-| **Kubernetes CSI** | `intel/lustre-csi-driver` | `beegfs/beegfs-csi-driver` | `weka/csi-wekafs` |
+| **Kubernetes CSI** | `HewlettPackard/lustre-csi-driver` | `ThinkParQ/beegfs-csi-driver` | `weka/csi-wekafs` |
 
 The table is a starting point, not a universal ranking. Lustre can deliver enormous throughput in environments with storage engineering expertise, but it rewards careful tuning and operational maturity. BeeGFS is often easier for on-premises AI teams to adopt because metadata and storage services are simpler to reason about, though it still needs hardware isolation and monitoring. Commercial systems can reduce operational burden, but they introduce procurement, licensing, and vendor dependency that must be weighed against internal expertise.
 
@@ -552,10 +552,10 @@ If a pod fails to mount the PVC, ensure the `csi-nodeplugin-fluid` DaemonSet is 
 - [Kubernetes generic ephemeral volumes](https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/)
 - [Kubernetes dynamic volume provisioning](https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/)
 - [NVIDIA GPUDirect Storage overview](https://docs.nvidia.com/gpudirect-storage/overview-guide/)
-- [NVIDIA GPU Operator GPUDirect Storage](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-operator-gds.html)
+- [NVIDIA GPU Operator GPUDirect Storage](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-operator-rdma.html)
 - [Fluid project repository](https://github.com/fluid-cloudnative/fluid)
 - [Fluid Helm chart repository](https://fluid-cloudnative.github.io/charts)
-- [Alluxio on Kubernetes documentation](https://documentation.alluxio.io/os/user/stable/en/kubernetes/Running-Alluxio-On-Kubernetes.html)
+- [Alluxio on Kubernetes documentation](https://documentation.alluxio.io/os-en/kubernetes/running-alluxio-on-kubernetes)
 - [BeeGFS CSI driver](https://github.com/ThinkParQ/beegfs-csi-driver)
 - [Apache archive source used in the lab](https://archive.apache.org/dist/spark/)
 - [kubernetes.io: volumes](https://kubernetes.io/docs/concepts/storage/volumes/#flexvolume) — The Kubernetes volumes documentation directly marks FlexVolume deprecated in v1.23 and recommends CSI instead.
