@@ -488,7 +488,7 @@ how to constrain a powerful model class into an architecture that could exploit
 the structure of images.
 
 :::note[Why this still matters today]
-Bayesian networks are the direct ancestor of modern probabilistic graphical models used in robotics, medical diagnosis, and sensor fusion. The conditional-independence assumptions that made 1980s networks tractable reappear in today's variational autoencoders and diffusion models. Pearl's insistence that probability must be executable — not merely philosophically correct — prefigured the probabilistic programming movement (Stan, Pyro, NumPyro). And his later causal-inference work, which extends directly from these 1986–1988 foundations, now shapes how AI researchers think about intervention and counterfactual reasoning in everything from clinical trials to policy evaluation.
+Bayesian networks are a foundational family — the directed branch — of the modern probabilistic graphical models used in robotics, medical diagnosis, and sensor fusion. The conditional-independence assumptions that made 1980s networks tractable reappear in today's variational autoencoders and diffusion models. Pearl's insistence that probability must be executable — not merely philosophically correct — prefigured the probabilistic programming movement (Stan, Pyro, NumPyro). And his later causal-inference work, which extends directly from these 1986–1988 foundations, now shapes how AI researchers think about intervention and counterfactual reasoning in everything from clinical trials to policy evaluation.
 :::
 
 ## Sources
