@@ -8,13 +8,27 @@ Execute **#1911 (UK translation currency)** with a **Claude-subagent swarm ONLY*
 ## WHY Claude subagents, not the usual dispatch (the load-bearing insight)
 The `sources` MCP — VESUM morphology, СУМ-11/20, **Antonenko-Davydovych** style guide, **UA-GEC** calque corpus, **r2u** Russian→Ukrainian, GRAC frequency, `check_russian_shadow`, `query_pravopys` — is **subagent-accessible but NOT reachable by the external dispatch lane** ("MCP tools are orchestrator-only" per `feedback_uk_calque_review_sentence_reframe_not_grep`). So a **Claude subagent swarm can produce self-validating, calque-checked translations that the agy/gemini lane cannot.** This is the right tool for the job.
 
-## Currency data — the real scope (computed s175, deterministic)
-- EN pages: **1080**. UK pages: **447**.
-- **633 MISSING** — EN exists, no UK file at all.
-- Of the 447 existing pairs (word-ratio UK/EN): **133 current** (≥85%), **35 stale** (40–85%), **279 SEVERE STUBS** (<40% — nearly useless, obsoleted by the s100–175 EN expansion).
-- **True current coverage: 133/1080 = 12.3%. Debt ≈ 947 pages.**
-- Measure currency by **word-ratio + git-recency, NOT file existence** ([[feedback_translation_coverage_measure_staleness_not_existence]]).
-- Recompute with the inline python from the s175 transcript (or re-run: walk `src/content/docs/**/*.md` excl `/uk/`, pair with `uk/<rel>`, ratio = UK_words/EN_words).
+## Currency data — use the AUTHORITATIVE API, not an ad-hoc script
+**`GET http://127.0.0.1:8768/api/uk/board`** (backed by `translation_v2.build_translation_board`; threshold ratio<0.60 OR metadata-stale → "stale"). It returns `totals`, per-`track` rollups, AND a per-track **`pages[]` work-list** — each page has `rel`, `status` (current/stale/missing), `ratio`, `en_words`, `uk_words`, `calque_review`. **This IS the ranked work-list — do not recompute with a python script.** (My s175 ad-hoc script used different thresholds; the API is canonical.)
+
+Authoritative totals (s175): **total 1083 · current 152 (14%) · stale 297 · missing 634 · calque-reviewed 51 (5%).** Debt = 297 stale + 634 missing = **931 pages.**
+
+Per-track to-do (stale+missing):
+
+| track | current | stale | missing | to-do |
+|---|---|---|---|---|
+| prerequisites | 51 | 0 | 0 | **DONE ✓** (all 51 calque-reviewed) |
+| **k8s** (CKA/CKAD/CKS/KCNA — cert flagship) | 49 | **160** | 52 | **212** |
+| cloud | 12 | 78 | 14 | 92 |
+| linux | 4 | 37 | 8 | 45 |
+| platform | 25 | 20 | **241** | 261 |
+| ai-ml-engineering | 0 | 0 | 142 | 142 |
+| ai-history | 0 | 0 | 74 | 74 |
+| on-premises | 7 | 2 | 58 | 60 |
+| ai | 0 | 0 | 44 | 44 |
+| root | 4 | 0 | 1 | 1 |
+
+Measure by word-ratio + metadata-staleness, NOT file existence ([[feedback_translation_coverage_measure_staleness_not_existence]]).
 
 ## Per-page pipeline (each Claude subagent does)
 1. Read the EN page **and** `src/content/docs/glossary.md` (5.4 KB — MUST follow its term mappings).
@@ -36,14 +50,19 @@ Claude's base **Ukrainian quality + calque-cleanliness is UNPROVEN for this proj
 - A reference **current** UK page (e.g. a `prerequisites/` one, ≥85%) is a good few-shot quality anchor for the subagent prompt.
 
 ## Prioritization (proposed — confirm or adjust)
-Biggest value first: the **279 severe stubs + 633 missing**. Suggest by track: finish **CKA/CKAD** (cert flagship, partially translated) → prerequisites gaps → cloud/k8s/kcna → platform. Extend the currency script to emit a **ranked page list** before launching.
+The work-list IS `/api/uk/board` `pages[]` (filter `status != "current"`). Suggested order:
+1. **k8s stale (160)** — refresh the cert flagship (CKA/CKAD/CKS/KCNA); highest learner value, existing structure to refresh (cheaper than net-new).
+2. **k8s missing (52)** — complete the cert tracks.
+3. **cloud stale (78) + linux stale (37)** — more refreshes.
+4. Then the big **missing** blocks: platform (241), ai-ml-engineering (142), ai-history (74), on-premises (58), ai (44).
+Rationale: stale-refresh > net-new for early wins; cert tracks > others for learner value. prerequisites is DONE — skip.
 
 ## Services / environment
 Healthy — `dev` (:4333) + `api` (:8768) running; `sources` MCP live; `feedback` service stopped (irrelevant). **No restart needed** beyond the session refresh the user is doing.
 
 ## NEXT STEPS (fresh session)
 1. Cold-start (orchestrator skill + this handoff).
-2. Extend the currency scan to emit a **ranked page work-list** (priority order).
+2. Pull the **work-list from `/api/uk/board`** (`pages[]`, `status != "current"`) — already ranked by track + status; no script needed.
 3. Build the per-page subagent prompt (pipeline above) + run a **2–3 page PILOT Workflow**; orchestrator reviews Ukrainian quality + calque-cleanliness.
 4. Pilot good → **scale to the overnight swarm** (Workflow over the prioritized batch, worktree → per-track PRs, build-gated).
 
