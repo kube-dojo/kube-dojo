@@ -312,10 +312,10 @@ If `kubectl get nodes` returns a connection error, split the problem into layers
 
 Kubernetes defines a networking model but does not ship one mandatory implementation. Every pod should get an IP address, pods should reach other pods without node-level NAT, and services should have stable virtual addresses, but a CNI plugin provides the host-level mechanics. This separation lets different environments choose Calico, Cilium, Flannel, cloud-native plugins, or other implementations without changing the Kubernetes API.
 
-For this lab, use Calico because it is widely documented, works well in kubeadm labs, and exposes the relationship between a cluster manifest and node-level CNI configuration. The command below is the protected setup command from the original module, and it applies a versioned Calico manifest directly from the upstream project. In a production change process, you would usually pin, review, and store manifests instead of applying remote YAML blindly.
+For this lab, use Calico because it is widely documented, works well in kubeadm labs, and exposes the relationship between a cluster manifest and node-level CNI configuration. The command below applies a versioned Calico manifest directly from the upstream project, pinned to a release that supports the Kubernetes version you installed. In a production change process, you would usually pin, review, and store manifests instead of applying remote YAML blindly.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
 ```
 
 Watch the `kube-system` namespace after applying the CNI. This is not just waiting for green output; it is learning which system pods belong to the base cluster and which ones come from the network plugin. Calico runs as a DaemonSet on nodes because networking must be configured locally on each machine that will run pods.
@@ -781,7 +781,7 @@ Prepare a new VM with the same base setup, join it as `worker-03`, verify it bec
 - [Kubernetes: Network plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/)
 - [Kubernetes: Debugging nodes with crictl](https://kubernetes.io/docs/tasks/debug/debug-cluster/crictl/)
 - [Kubernetes Linux package repositories for v1.35](https://pkgs.k8s.io/core:/stable:/v1.35/deb/)
-- [Project Calico installation manifest used in this lab](https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml)
+- [Project Calico installation manifest used in this lab](https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml)
 - [containerd documentation](https://containerd.io/docs/)
 - [Killercoda KubeDojo lab scenario](https://killercoda.com/kubedojo/scenario/cka-0.1-cluster-setup)
 
