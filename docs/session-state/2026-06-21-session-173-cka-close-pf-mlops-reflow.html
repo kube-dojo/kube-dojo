@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 173 — cka #2020 close + pf-mlops reflow wave Batch 1</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;line-height:1.3;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:2rem;border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--accent);padding:1rem 1.2rem;border-radius:6px}
+  code{background:#0d1626;border:1px solid var(--bd);border-radius:4px;padding:.1rem .35rem;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.bad{color:var(--bad);font-weight:600}
+  ul,ol{padding-left:1.2rem}li{margin:.3rem 0}a{color:var(--accent)}
+</style>
+</head>
+<body>
+<h1>Session 173 — cka #2020 close + pf-mlops <span class="ok">reflow wave Batch 1</span></h1>
+
+<p class="tldr"><strong>2026-06-21 · standalone orchestrator · continues the #2020 quality-coverage stream from s172b.</strong>
+Closed the <strong>k8s-cka</strong> slice of #2020 and opened the <strong>pf-mlops</strong> heavy-remediation wave with a corrected diagnosis. Two threads:
+(1) <strong>cka</strong> — disambiguated 7 record-less modules → 2 genuinely-unreviewed (<code>0.1</code>, <code>1.1</code>), reviewed + currency-fixed + finalized; 5 were already board-done (out of scope).
+(2) <strong>pf-mlops</strong> — ground-truthed the 9 T3 modules: the defect is <strong>one-sentence-per-paragraph formatting</strong>, not thin content → fix is a cheap <strong>prose reflow</strong>, not a rewrite. Piloted + scaled to 2 modules (<code>5.1</code>, <code>5.5</code>). Cross-family review caught a verifier-blind <strong>wrong-NeurIPS-URL</strong> defect in both. 5 PRs total (#2053–#2055 + 2 merged), all CI-green.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Item</th><th>Outcome</th><th>Refs</th></tr>
+<tr><td><strong>cka 0.1-cluster-setup</strong></td><td>Cross-family review (opus-inline). Real fix: Calico <code>v3.27.0→v3.32.0</code> (v3.27 predates k8s 1.35, unsupported; URL resolved HTTP 200 so verifier/link-check blind). Removed authoring-leak phrasing. → COMMITTED+approve</td><td>PR #2053, record <code>a0103aa5d</code></td></tr>
+<tr><td><strong>cka 1.1-control-plane</strong></td><td>Cross-family review — clean (diagnostic-chain pedagogy, etcd v3.6 docs, all scenarios labeled). One leak-phrase removed. → COMMITTED+approve</td><td>PR #2053</td></tr>
+<tr><td><strong>pf-mlops 5.1-mlops-fundamentals</strong></td><td>Prose reflow (cursor). median_wpp 7→45, short_para 98%→10%, sources 4→11. T0. body_words 6202→6435 (preserved). → COMMITTED+approve</td><td>PR #2054, record <code>577c93d20</code></td></tr>
+<tr><td><strong>pf-mlops 5.5-model-monitoring</strong></td><td>Prose reflow (cursor). median_wpp 9→40, sources 5→12. T0. body_words 5059→5447. → COMMITTED+approve</td><td>PR #2055</td></tr>
+<tr><td><strong>NeurIPS URL fix (5.1+5.5)</strong></td><td>Sculley "Hidden Technical Debt" cited as <code>paper/5659</code> & <code>paper/5652</code> — both HTTP-200 to <em>unrelated</em> NIPS-2015 papers → corrected to web-verified <code>paper/5656</code></td><td>PR #2055</td></tr>
+</table>
+
+<h2>Key finding — pf-mlops is a REFLOW wave, not a rewrite wave</h2>
+<p>The s172b handoff framed the remaining pf-mlops 9 as "systematic short-paragraph density failures… budget as its own multi-session wave" implying heavy rewrites. <strong>Ground-truthing corrected this:</strong> all 9 fail the density cluster because the teaching prose is written <strong>one sentence per paragraph</strong> (every sentence on its own line, blank line between → median words-per-paragraph ~7–9 vs the 28 floor). Verified against <code>extract_body_paragraphs</code> in <code>verify_module.py</code> — it <em>excludes</em> code/tables/lists/<code>&lt;details&gt;</code>, so this is genuine prose fragmentation, not a metric artifact. The content is largely <em>decent</em>; the fix is a faithful <strong>reflow</strong> (join sentences into 4–6 sentence paragraphs), which is far cheaper than a rewrite. One author wrote the whole sub-track this way (consistent med_wpp).</p>
+
+<h2>Proven reflow cadence + ground-check protocol</h2>
+<ol>
+<li><strong>Dispatch</strong> cursor <code>--model auto</code> (<code>edit</code> class, worktree) with an inlined brief: reflow one-sentence-per-line prose → 4–6 sentence paragraphs; PRESERVE every sentence/claim; do NOT invent facts; don't touch code/tables/lists/diagrams; label the opener anecdote <code>**Hypothetical scenario:**</code>; add real upstream sources to ≥10.</li>
+<li><strong>opus-inline cross-family review</strong> (cursor=Kimi base → opus is cross-family; pure-prose change = no code-exec review needed). Ground-check: <code>verify_module.py</code> T0 + (a) <strong>headings-identical diff</strong> (no section dropped), (b) <strong>body_words preserved/up</strong> (a gutting drops it — both went UP), (c) opener labeled, (d) <strong>named-entity fab-grep</strong> on added lines, (e) sources reachable AND <strong>academic titles confirmed</strong>.</li>
+<li>PR → required CI (Astro build gate) → rebase-merge → <code>finalize_module.sh</code> (guard APPROVE record → reset-stage COMMITTED → record-build) → commit records direct-main (<code>git add -f</code>).</li>
+</ol>
+
+<h2>Cross-family caught a verifier-blind defect</h2>
+<p>The <strong>wrong-NeurIPS-URL</strong> hit is the headline review win: <code>papers.nips.cc/paper/NNNN-slug</code> serves whatever paper the <em>number</em> maps to and ignores the slug, so a guessed number resolves HTTP 200 to an unrelated paper — <code>sources_all_reachable</code> is blind, exactly like the arXiv-ID class (<code>feedback_wrong_arxiv_id_valid_but_wrong</code>, now extended to cover nips.cc). The arXiv CI guard does <em>not</em> cover nips.cc/PMLR/ACM slug URLs → still needs manual title-confirmation at R1. Corpus grep confirmed only 5.1+5.5 were affected (contained).</p>
+
+<h2>Remaining pf-mlops (7) — same template + per-module addenda</h2>
+<table>
+<tr><th>Module</th><th>Beyond reflow</th></tr>
+<tr><td><code>5.4-model-serving</code></td><td>+ <code>k</code> kubectl-alias in runnable blocks → full <code>kubectl</code>; + outcomes_aligned</td></tr>
+<tr><td><code>5.6-ml-pipelines</code></td><td>sub-floor (3890w) → reflow + genuine <strong>EXPAND</strong> to ≥5000</td></tr>
+<tr><td><code>5.7 / 5.8 / 5.10</code></td><td>reflow + missing/misordered <strong>structure sections</strong> (did-you-know 4, common-mistakes 6–8, quiz 6–8, section reorder)</td></tr>
+<tr><td><code>5.9-ml-repository-hygiene</code></td><td>reflow + structure + <code>anti_leak</code> (replace the "batch score placeholder" line in the lab with real example output)</td></tr>
+<tr><td><code>5.2-feature-stores</code></td><td><strong>403-word STUB → full authoring</strong> (then reflow + sources + quiz)</td></tr>
+</table>
+<p>Cadence: ≤3 concurrent authors. The clean-reflow template (5.1/5.5 brief at <code>/tmp/pf-mlops-5.*-brief.txt</code> shape) applies directly to 5.4; the structure-breakage trio + stub need the addenda above. Source annotations: keep them learner-facing (cursor emitted one "for an illustrative rewrite" meta-note in 5.1 — harmless, left in; tell future authors to avoid).</p>
+
+<h2>Notes / carry-forward</h2>
+<ul>
+<li><strong>cka — 5 board-done-without-physical-record</strong> (<code>0.3-vim-yaml</code>, <code>0.5-exam-strategy</code>, <code>1.4-kustomize</code>, <code>2.7-configmaps-secrets</code>, <code>3.8-cluster-networking-data-path</code>): COMMITTED+approve+5.0 on the board, out of #2020 scope per "record-absence ≠ un-reviewed". Optional <code>.pipeline/reviews/</code> backfill only.</li>
+<li><strong>k8s 1.35 left as-is</strong> in cka modules — recent/supported; not chasing the absolute-latest minor (durable-vendor rule). Calico bump was a real <em>skew</em> fix (v3.27 unsupported on 1.35), not version-chasing.</li>
+<li><strong>Headroom for handoffs:</strong> still git-SSOT (this file). Headroom is for in-session big-output compression only; handoff→Headroom migration is #2024 (deferred until the memory-write tool lands). User asked about this directly s173 — confirmed handoffs are plain git by design, not a gap.</li>
+<li>Worktrees clean (g2-craft #1623 retained, not mine). No stale locks. Build gate is a required check — every content PR went through it.</li>
+</ul>
+
+</body>
+</html>
