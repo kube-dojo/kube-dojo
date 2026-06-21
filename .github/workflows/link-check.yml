@@ -41,3 +41,11 @@ jobs:
 
       - name: Check lab URL convention
         run: python scripts/ci/check_lab_urls.py
+
+      - name: Check Mermaid flowchart labels
+        # Mermaid renders client-side, so neither the astro build nor the
+        # site-health check ever parses diagram syntax. An unquoted '(' in a
+        # flowchart [..]/{..} node label aborts the whole diagram (it renders
+        # as raw code in the browser). This stdlib-only lint closes that gap
+        # deterministically. Author fix: `python scripts/ci/check_mermaid_labels.py --fix`.
+        run: python scripts/ci/check_mermaid_labels.py

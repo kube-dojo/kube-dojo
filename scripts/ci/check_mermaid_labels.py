@@ -52,12 +52,14 @@ DOC_SUFFIXES = {".md", ".mdx"}
 # (``[(``), NOT a subroutine (``[[``), and contains a paren before its ``]``.
 # The label body excludes ``"`` so a *quoted* label anywhere in the construct
 # (e.g. the parallelogram ``[/"...(...)..."/]``) does not match — only a truly
-# unquoted paren is a parse breaker.
-SQUARE = re.compile(r"[A-Za-z0-9_)\]]\[(?![\"(\[])[^\]\"]*[()][^\]\"]*\]")
+# unquoted paren is a parse breaker. Group 1 = the char before ``[`` (a
+# left-context guard, kept verbatim); group 2 = the label body, so ``--fix``
+# can rewrite the match as ``<g1>["<g2>"]``.
+SQUARE = re.compile(r"([A-Za-z0-9_)\]])\[(?![\"(\[])([^\]\"]*[()][^\]\"]*)\]")
 
 # Rhombus/decision node ``id{label}`` whose label is NOT quoted (``{"``), NOT a
-# hexagon (``{{``), and contains a paren before its ``}``.
-RHOMBUS = re.compile(r"[A-Za-z0-9_)\]]\{(?![\"{])[^}\"]*[()][^}\"]*\}")
+# hexagon (``{{``), and contains a paren before its ``}``. Same two groups.
+RHOMBUS = re.compile(r"([A-Za-z0-9_)\]])\{(?![\"{])([^}\"]*[()][^}\"]*)\}")
 
 FLOWCHART_PREFIXES = ("flowchart", "graph")
 
@@ -108,6 +110,85 @@ def scan(root: Path) -> list[tuple[Path, int, str]]:
     return findings
 
 
+def _quote_line(line: str) -> tuple[str, int]:
+    """Wrap every unquoted-paren square/rhombus label on ``line`` in quotes.
+
+    Uses the SAME ``SQUARE``/``RHOMBUS`` patterns as the detector, so a fixed
+    line is, by construction, no longer a violation. Returns (new_line, count).
+    """
+    count = 0
+
+    def sq(m: re.Match) -> str:
+        nonlocal count
+        count += 1
+        return f'{m.group(1)}["{m.group(2)}"]'
+
+    def rh(m: re.Match) -> str:
+        nonlocal count
+        count += 1
+        return f'{m.group(1)}{{"{m.group(2)}"}}'
+
+    line = SQUARE.sub(sq, line)
+    line = RHOMBUS.sub(rh, line)
+    return line, count
+
+
+def fix_text(text: str) -> tuple[str, int]:
+    """Return (new_text, num_fixes) with unquoted-paren labels quoted.
+
+    Mirrors ``scan_text``'s fence/type scoping exactly — only lines inside a
+    ```mermaid flowchart/graph fence are rewritten; everything else (prose,
+    code, non-flowchart diagrams) is passed through byte-for-byte.
+    """
+    out: list[str] = []
+    in_mermaid = False
+    type_decided = False
+    is_flowchart = False
+    fixes = 0
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            in_mermaid = not in_mermaid and stripped.startswith("```mermaid")
+            type_decided = False
+            is_flowchart = False
+            out.append(raw)
+            continue
+        if not in_mermaid or not stripped:
+            out.append(raw)
+            continue
+        if not type_decided:
+            type_decided = True
+            is_flowchart = stripped.lower().startswith(FLOWCHART_PREFIXES)
+            out.append(raw)
+            continue
+        if is_flowchart:
+            new, n = _quote_line(raw)
+            fixes += n
+            out.append(new)
+        else:
+            out.append(raw)
+    new_text = "\n".join(out)
+    if text.endswith("\n"):
+        new_text += "\n"
+    return new_text, fixes
+
+
+def fix(root: Path) -> list[tuple[Path, int]]:
+    """Quote unquoted-paren labels in-place. Returns (path, count) per file."""
+    changed: list[tuple[Path, int]] = []
+    for path in sorted(root.rglob("*")):
+        if path.suffix not in DOC_SUFFIXES or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "```mermaid" not in text:
+            continue
+        new_text, n = fix_text(text)
+        if n:
+            path.write_text(new_text, encoding="utf-8")
+            changed.append((path, n))
+    return changed
+
+
 def selftest() -> int:
     # Each snippet is the BODY of a ```mermaid fence; ``fence`` wraps it so the
     # scanner sees a real fenced block (it only inspects ```mermaid regions).
@@ -137,9 +218,19 @@ def selftest() -> int:
         if scan_text(fence(src)):
             print(f"selftest FAIL: false positive on:\n    {src!r}")
             fails += 1
+        # --fix must leave a clean line byte-for-byte unchanged.
+        fixed, n = fix_text(fence(src))
+        if n or fixed != fence(src):
+            print(f"selftest FAIL: --fix altered a clean line:\n    {src!r}")
+            fails += 1
     for src in bad:
         if not scan_text(fence(src)):
             print(f"selftest FAIL: missed violation in:\n    {src!r}")
+            fails += 1
+        # --fix must make the violation disappear (scan finds nothing after).
+        fixed, n = fix_text(fence(src))
+        if n < 1 or scan_text(fixed):
+            print(f"selftest FAIL: --fix did not resolve:\n    {src!r}\n    -> {fixed!r}")
             fails += 1
     if fails:
         print(f"selftest: {fails} failure(s)")
@@ -152,6 +243,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default="src/content/docs", type=Path)
     parser.add_argument("--selftest", action="store_true")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Quote unquoted-paren labels in place instead of just reporting.",
+    )
     args = parser.parse_args()
 
     if args.selftest:
@@ -160,6 +256,18 @@ def main() -> int:
     if not args.root.exists():
         print(f"error: root not found: {args.root}", file=sys.stderr)
         return 1
+
+    if args.fix:
+        changed = fix(args.root)
+        total = sum(n for _, n in changed)
+        if not changed:
+            print(f"mermaid label fix: nothing to fix (root={args.root})")
+            return 0
+        print(f"mermaid label fix: quoted {total} label(s) in {len(changed)} file(s)\n")
+        for path, n in changed:
+            print(f"  {path}: {n}")
+        # Re-scan so the command's exit code reflects the post-fix state.
+        return 1 if scan(args.root) else 0
 
     findings = scan(args.root)
     if not findings:

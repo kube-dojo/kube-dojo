@@ -47,7 +47,7 @@ Here is a visual representation of how the Kubernetes-native architecture (speci
 
 ```mermaid
 graph TD
-    A[Git Webhook] --> B[Tekton Triggers (EventListener)]
+    A[Git Webhook] --> B["Tekton Triggers (EventListener)"]
     B --> C[TriggerBinding / TriggerTemplate]
     C --> D[PipelineRun CRD Created]
     D --> E[Tekton Controller]

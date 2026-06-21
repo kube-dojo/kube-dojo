@@ -901,7 +901,7 @@ flowchart TD
     Q1{Does your build need to access\\nprivate VPC resources?}
     Q1 -- No --> Q2{Do you have regulatory\\ndedicated-tenancy requirement?}
     Q1 -- Yes --> Private
-    Q2 -- No --> Q3{Is build duration predictability\\ncritical (no cold starts)?}
+    Q2 -- No --> Q3{"Is build duration predictability\\ncritical (no cold starts)?"}
     Q2 -- Yes --> Private
     Q3 -- No --> Default
     Q3 -- Yes --> Private

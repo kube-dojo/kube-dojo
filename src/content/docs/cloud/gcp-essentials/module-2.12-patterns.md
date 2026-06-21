@@ -781,7 +781,7 @@ Use the flowchart below when choosing region, compute tier, and managed-versus-s
 ```mermaid
 flowchart TD
     Start[New workload design] --> Region{Data residency<br/>or latency constraint?}
-    Region -- Yes --> PickRegion[Choose allowed region(s)<br/>via org policy + user proximity]
+    Region -- Yes --> PickRegion["Choose allowed region(s)<br/>via org policy + user proximity"]
     Region -- No --> DefaultRegion[Default to single region<br/>with multi-region DR if RTO requires]
     PickRegion --> Compute{Needs full Kubernetes API,<br/>GPU nodes, or StatefulSets?}
     DefaultRegion --> Compute
