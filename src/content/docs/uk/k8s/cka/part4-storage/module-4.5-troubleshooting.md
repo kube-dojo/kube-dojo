@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "3f0088b6a14d96816d12e56f7bc541385b98cef556e4cba539cf01cfff9bb994"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — діагностика та виправлення проблем зі сховищем.
 >

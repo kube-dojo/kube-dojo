@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "df224030b92d328fbb97895f93bd7c7f7a956df91a6d37c0379b15a005d77753"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — необхідна екзаменаційна навичка для Kubernetes 1.35+
 >

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2741315011c360ac4a63a8abe4d4d1bd7200e7d5"
 en_file: "src/content/docs/k8s/kcna/part2-container-orchestration/module-2.3-storage.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "5db7c48d4710811cb9c3253dedd320ff58cd8d13d8fd9cd7dd795d4d870c091c"
 ---
 
 **Складність**: `[СЕРЕДНЯ]` — концепції сховища. **Час на проходження**: 45-60 хвилин. **Передумови**: Модуль 2.2 (Масштабування). Усі команди в цьому модулі передбачають Kubernetes 1.35 або новіший і використовують стандартне скорочення оболонки `alias k=kubectl`, тому `k get pods` означає той самий запит до API, що й довша команда, але зберігає приклади читабельними.

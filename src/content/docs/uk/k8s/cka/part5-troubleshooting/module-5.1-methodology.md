@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "7accae62a939aa38e509bb406d28245ff527f993"
 en_file: "src/content/docs/k8s/cka/part5-troubleshooting/module-5.1-methodology.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "738e4cecf01f2730ea486d0e5480bf3a245d16412935539040bd507d364f671a"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основа для кожного завдання з усунення несправностей на CKA та для реальної роботи з реагування на інциденти у продакшені

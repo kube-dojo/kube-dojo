@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "e6004d10ca2d7710d5a7517a3a505c9e05214e2b"
 en_file: "src/content/docs/k8s/cka/part1-cluster-architecture/module-1.2-extension-interfaces.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "5ad54e827da1cab0401403531101aac3a914450c47d31706712c16a48b3399ee"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концептуальний матеріал із практичною діагностикою.

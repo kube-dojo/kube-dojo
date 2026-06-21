@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b164f9ecad29d6cd0af7157304aa7b64d400411"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.3-control-plane.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "dd0531c6a95a29b044a07c00f9c949d16b234eec995b47e9a65716d7c7c030eb"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основні концепції архітектури

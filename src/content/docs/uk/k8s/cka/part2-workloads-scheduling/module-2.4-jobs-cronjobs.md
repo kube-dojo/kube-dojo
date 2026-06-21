@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "cd9c52e565826741d038e584aba07df4b5333bc5"
 en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "41c0c23cb228d434be3fb465f488047e770a298021227b63a9ca7e0fb8549eb1"
 ---
 > **Складність**: `[ШВИДКИЙ]` — прості пакетні робочі навантаження
 >

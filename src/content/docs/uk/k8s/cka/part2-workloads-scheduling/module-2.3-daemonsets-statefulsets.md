@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3d001ccf0397e3e01d87ab5f69d297e35ce3148e"
 en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 9
+  content_sha: "acec703183e01f3813ad59e0de85fe24dc0a9548c37c95de268daabb3f2b3927"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — спеціалізовані патерни робочих навантажень

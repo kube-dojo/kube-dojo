@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "48f7796dff5737fe2d7259396fe006d269f0841c264deb80010317520892d213"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — захист даних та клонування
 >

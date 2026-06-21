@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "09718973b9cdd7ab1bc6cb7a7df8f045ccd93df7"
 en_file: "src/content/docs/k8s/cka/part5-troubleshooting/cumulative-quiz.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "6036b845942dcefdb9db685da7e6d3241efeb39f841a656e207ef97c61de613a"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]`

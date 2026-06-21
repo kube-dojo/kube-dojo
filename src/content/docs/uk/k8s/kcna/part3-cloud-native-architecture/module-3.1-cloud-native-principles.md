@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.1-cloud-native-principles.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "9232a8751500e5eb0f5d986978d985d41f71fee38ca38f35ad5041dadb6d1e6f"
 ---
 
 **Складність**: `[СЕРЕДНЯ]` архітектурні концепції. **Час на проходження**: 45–55 хвилин. **Передумови**: Частина 2, Оркестрація контейнерів, включно з базовим розумінням Pod'ів, Деплойментів, Сервісів і різниці між бажаним та фактичним станом.

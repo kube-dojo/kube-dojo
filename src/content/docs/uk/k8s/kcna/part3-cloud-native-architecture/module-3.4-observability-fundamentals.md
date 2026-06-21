@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.4-observability-fundamentals.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "343678a3cb1b09503a689c81dc5b3e5d91ecbddc084b83597bd14f32cb82f0a2"
 ---
 
 Складність: `[СЕРЕДНЯ]` — концепції спостережуваності для Kubernetes 1.35 і новіших версій. Час на проходження: 45–55 хвилин. Передумови: Модуль 3.3, хмарні патерни, а також базова впевненість у читанні Pod'ів, Сервісів і логів застосунків у кластері Kubernetes.

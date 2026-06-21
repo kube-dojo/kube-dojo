@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.7-community-collaboration.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "5951d7245e60172037a31b60682f038fcdc3e26b5ac53a6424abe35716a90170"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` | **Час**: 45-60 хвилин | **Передумови**: Модулі 3.1-3.6, базові операції Kubernetes і достатня впевненість у роботі з командним рядком, щоб переглядати публічні репозиторії та виконувати команди Kubernetes 1.35+ після введення `alias k=kubectl` для аліаса `k`.

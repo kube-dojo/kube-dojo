@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1d67c3a5d0d0bdaad5d73294e02554c6f9c5ca5b"
 en_file: "src/content/docs/k8s/cka/part3-services-networking/module-3.4-ingress.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 11
+  content_sha: "df0bc3b720dc05c6077fa5be93510c514cf448f08050ef348f97e4afbf158a42"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — маршрутизація HTTP/HTTPS
 >

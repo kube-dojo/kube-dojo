@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: ubuntu
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 8
+  content_sha: "0cedf55db5e7bb06dff9b9e23c80f560749a47258670aebf25b6ce965c613f6d"
 ---
 
 > **Складність**: `[ШВИДКО]` — налаштуйте один раз, отримуйте користь щоразу, коли працюєте з кластером

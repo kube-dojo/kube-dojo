@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1545086449848c7b35be1ee0e7b5df8747ceda53"
 en_file: "src/content/docs/k8s/kcna/part4-application-delivery/module-4.2-application-packaging.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "8d83927aebe244de289a4d6e57151c0949cd752e350ab32a1be097a60e4639b8"
 ---
 
 > **Складність**: `[MEDIUM]` — концепції інструментів

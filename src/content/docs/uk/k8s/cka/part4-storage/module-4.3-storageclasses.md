@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f7cc35789c1bdc2cdc494ed4b252dabbbfd9dbce"
 en_file: "src/content/docs/k8s/cka/part4-storage/module-4.3-storageclasses.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "3d25f5669e02b26db40f38b1f078cbb271fc400bb8637d55dd0ff87fcc71a63c"
 ---
 > **Складність**: `[MEDIUM]` — автоматизація виділення сховища
 >

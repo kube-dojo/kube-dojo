@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "e6004d10ca2d7710d5a7517a3a505c9e05214e2b"
 en_file: "src/content/docs/k8s/cka/part0-environment/module-0.4-k8s-docs.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "a1da767b93df80be548b4284525c10794925c0b4359dfb9afe94c5d5e157334d"
 ---
 
 > **Складність**: `[ШВИДКИЙ]` — знай, де що лежить, і знаходь швидко.

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2f43c789919d92606d5aef008dd09899542bf7bd"
 en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.6-scheduling.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "a66ad413fbdcd26661c1f2d71fd75bcd19e46a9f42787cb3fcb107c418202371"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критично важлива тема для іспиту
 >

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1545086449848c7b35be1ee0e7b5df8747ceda53"
 en_file: "src/content/docs/k8s/kcna/part4-application-delivery/module-4.1-ci-cd.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "ea72ea8ba84f105d9f08e24d9de7231010cbe9005bfd585bb2768b2c8185bb37"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концепції доставки

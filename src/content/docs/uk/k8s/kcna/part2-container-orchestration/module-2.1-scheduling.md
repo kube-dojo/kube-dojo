@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2741315011c360ac4a63a8abe4d4d1bd7200e7d5"
 en_file: "src/content/docs/k8s/kcna/part2-container-orchestration/module-2.1-scheduling.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 11
+  content_sha: "4456e134ae60cb184c316b5d6db6cecbf943795c279d8aff82c1f0e51735f5f2"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концепції оркестрації

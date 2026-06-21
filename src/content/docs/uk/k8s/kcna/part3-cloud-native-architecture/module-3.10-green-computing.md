@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.10-green-computing.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "693be2f126480ce8d6031967b5b4cb962c65d7e5fec10768235a2f110aa858d9"
 ---
 
 > **Складність**: `[QUICK]` — рівень обізнаності та прикладного аналізу

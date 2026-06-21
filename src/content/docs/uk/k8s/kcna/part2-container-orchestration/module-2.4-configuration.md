@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2741315011c360ac4a63a8abe4d4d1bd7200e7d5"
 en_file: "src/content/docs/k8s/kcna/part2-container-orchestration/module-2.4-configuration.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "756c620635a7356c67cdaec99942c779a402f16af67f747c6345dc898917fea7"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концепції конфігурації

@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "140621c57e7d7a376ac3f837cb9af1888bf6c1edb2032fc7b86aa7a4d65ad8d1"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критичний компонент інфраструктури
 >

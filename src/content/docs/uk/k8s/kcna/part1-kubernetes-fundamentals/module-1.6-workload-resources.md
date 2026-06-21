@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b164f9ecad29d6cd0af7157304aa7b64d400411"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.6-workload-resources.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "bad3d07611d8c667f1a30a121587f0ebacaeb4c2cbbb30655b41736ed5199c85"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові концепції ресурсів.

@@ -12,6 +12,12 @@ lab:
   duration: "35 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 11
+  content_sha: "ad314c267d9ad2df79765948240b81f3097908fcb4c01bf3207fd9e71d66cb35"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — базові навички спостережуваності.
 >

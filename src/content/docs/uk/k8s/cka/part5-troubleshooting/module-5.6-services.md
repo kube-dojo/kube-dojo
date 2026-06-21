@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "d13eaee05dac4cca5587c983ecd25abcf77b553047e8c1133291c1eb7c34da46"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критично важлива для доступу до застосунків.
 >

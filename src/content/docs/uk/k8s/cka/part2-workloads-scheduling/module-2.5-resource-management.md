@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "bc8c1ae02cca658600ab7f731f4b39a03eba6f05"
 en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.5-resource-management.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "e0f63436bba5d7b1e06c5c5c72b3c4875143e8a885d070fa7828ae8859f97cd0"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критично для робочих навантажень у продакшені
 >

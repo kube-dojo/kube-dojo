@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8747063bc58e16d2a5e9d7033806e5cfe9a49ef4"
 en_file: "src/content/docs/k8s/cka/part0-environment/module-0.1-cluster-setup.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "6ebd4a2ab25c2614f5f66144668a8a52eccf6b820924d273cdd6958ccbda4a51"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — потребує часу, але є прямолінійною, якщо дотримуватися кроків
 >

@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "8f199d48d133f575ca96a0d3d1c10238106a6ac266410f75e6792810aaf693a7"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основна концепція мережі.

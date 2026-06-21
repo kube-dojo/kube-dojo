@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "1d67c3a5d0d0bdaad5d73294e02554c6f9c5ca5b"
 en_file: "src/content/docs/k8s/cka/part3-services-networking/module-3.5-gateway-api.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "55888446cbd552c0976850b20578ad34401de8e1256f20f0ab681b880c243ffd"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — тема іспиту CKA
 >

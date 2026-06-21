@@ -12,6 +12,12 @@ lab:
   duration: "45-55 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "65e80033ed0eb77e6c7e721f91dd14219307ec9cb4e4227a146677cacac99a49"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критично важливо для роботи кластера
 >

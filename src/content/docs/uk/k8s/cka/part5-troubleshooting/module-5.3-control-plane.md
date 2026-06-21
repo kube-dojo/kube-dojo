@@ -12,6 +12,12 @@ lab:
   duration: "50-60 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "8914bb8f65101a1221352a646669717a756f01d7b5426359a825b65527518448"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — усунення несправностей критичної інфраструктури

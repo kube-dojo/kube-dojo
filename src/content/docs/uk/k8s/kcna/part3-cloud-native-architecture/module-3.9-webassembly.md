@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.9-webassembly.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "f43a6ec7291a772371b6724c4887ceceb6460822e9e2ef9501d1f0e55a60f522"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — архітектура середовища виконання та розміщення робочих навантажень

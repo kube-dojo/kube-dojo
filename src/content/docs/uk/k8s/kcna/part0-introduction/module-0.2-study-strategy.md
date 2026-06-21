@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "a9a7711a029a31a25db59ad0e3781b5aed0cf6d0"
 en_file: "src/content/docs/k8s/kcna/part0-introduction/module-0.2-study-strategy.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "9e61d85fd51a8aa90da16dcfaefe0a3c92991799fcf616624d0d96f46b5d6393"
 ---
 
 | Метадані | Значення |
