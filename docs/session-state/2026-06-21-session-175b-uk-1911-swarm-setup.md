@@ -5,6 +5,9 @@
 ## Decision (user, s175)
 Execute **#1911 (UK translation currency)** with a **Claude-subagent swarm ONLY** — do **NOT** dispatch external agents (agy / gemini / codex / cursor / deepseek). Parallel, MCP-validated, large overnight token budget ("lots of context until tomorrow — do as much as possible with swarm").
 
+## ⏱ Operating window (user, s175)
+**High-throughput swarm runs NOW → tomorrow (2026-06-22) afternoon.** Push volume during this window. **The user will explicitly signal when to STOP and switch to "slower mode"** — until that signal, keep the swarm going (respect the pilot gate first). After the signal: wind down to normal one-at-a-time cadence. Do not self-throttle before the user's signal, but don't sacrifice the pilot-first quality gate for speed.
+
 ## WHY Claude subagents, not the usual dispatch (the load-bearing insight)
 The `sources` MCP — VESUM morphology, СУМ-11/20, **Antonenko-Davydovych** style guide, **UA-GEC** calque corpus, **r2u** Russian→Ukrainian, GRAC frequency, `check_russian_shadow`, `query_pravopys` — is **subagent-accessible but NOT reachable by the external dispatch lane** ("MCP tools are orchestrator-only" per `feedback_uk_calque_review_sentence_reframe_not_grep`). So a **Claude subagent swarm can produce self-validating, calque-checked translations that the agy/gemini lane cannot.** This is the right tool for the job.
 
