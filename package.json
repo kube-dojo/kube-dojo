@@ -23,7 +23,9 @@
   },
   "overrides": {
     "uuid": "^14.0.0",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "vite": "^7.3.5",
+    "dompurify": "^3.4.11"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.61.0",
