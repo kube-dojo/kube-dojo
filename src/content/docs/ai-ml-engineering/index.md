@@ -5,7 +5,7 @@ sidebar:
   order: 0
   label: "AI/ML Engineering"
 ---
-> **AI/ML Engineering Track** | 60+ Modules | 14 Phases | ~230-310 hours
+> **AI/ML Engineering Track** | 120+ Modules | 14 Phases | ~230-310 hours
 
 ## Overview
 
