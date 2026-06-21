@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In June 2017, Vaswani and seven Google co-authors proposed the Transformer: an encoder-decoder architecture that replaced recurrent sequence steps with attention-centered layers. Attention was not new — Bahdanau et al. had introduced it in 2014 — but the Transformer made it the main way sequence positions exchanged information, freeing sequence models to scale on matrix-friendly hardware.
+In June 2017, Vaswani and seven Google co-authors proposed the Transformer: an encoder-decoder architecture that replaced recurrent sequence steps with attention-centered layers. Attention was not new — Bahdanau et al. had introduced learned soft-alignment attention for neural machine translation in 2014 — but the Transformer made it the main way sequence positions exchanged information, freeing sequence models to scale on matrix-friendly hardware.
 :::
 
 <details>
@@ -32,7 +32,7 @@ timeline
     2014 : Sutskever, Vinyals, Le publish seq2seq LSTM — multilayer LSTM encodes input into a fixed-dimensional vector; second LSTM decodes the target
     2014 : Bahdanau, Cho, Bengio introduce neural machine translation with learned soft alignment — recurrent encoder-decoder with attention
     June 2017 : Vaswani et al. submit "Attention Is All You Need" to arXiv (1706.03762) — proposes the Transformer architecture
-    December 2017 : Paper appears at NeurIPS 2017 — attention-only sequence transduction enters the main conference record
+    December 2017 : Paper appears at NIPS 2017 (renamed NeurIPS in 2018) — attention-only sequence transduction enters the main conference record
 ```
 
 </details>
