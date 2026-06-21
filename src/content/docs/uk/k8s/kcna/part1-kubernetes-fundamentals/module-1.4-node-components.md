@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b164f9ecad29d6cd0af7157304aa7b64d400411"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.4-node-components.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "deda6e9c9c7d8c8db240069f4f86014ee9c1126a28f915c5dd7176430b12d9ba"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` - Базові концепції архітектури

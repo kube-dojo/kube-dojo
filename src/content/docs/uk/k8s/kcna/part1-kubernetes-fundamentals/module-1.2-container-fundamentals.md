@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "a9a7711a029a31a25db59ad0e3781b5aed0cf6d0"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.2-container-fundamentals.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "c54da7a36d515eca38dc0afb5afe1831c613132afbd5f42f48d49fa897b48f41"
 ---
 
 Складність: `[ШВИДКИЙ]` — основоположні концепції. Час на проходження: 35-45 хвилин. Передумови: Модуль 1.1 та базова впевненість у роботі з командним рядком Linux. У прикладах припускається Kubernetes 1.35 або новіша версія, а коли далі з'являтимуться команди Kubernetes, налаштуйте `alias k=kubectl`, щоб коротка форма `k` була зрозумілою.

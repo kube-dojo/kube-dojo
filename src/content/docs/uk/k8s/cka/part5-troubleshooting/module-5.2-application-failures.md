@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "de23712e735af70da7ebdd09b16c63c63e67ef676b7c89d45cc651538fb4cff0"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — найпоширеніші сценарії діагностики.
 >

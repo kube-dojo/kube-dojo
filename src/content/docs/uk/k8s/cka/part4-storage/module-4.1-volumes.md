@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b2a5de72132c5800356b88d23b629d10c8a4411"
 en_file: "src/content/docs/k8s/cka/part4-storage/module-4.1-volumes.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "132782feac2f6a4188227facd2a64626137a7a44d46f7fef228ec6675210ca57"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основа для всіх концепцій зберігання даних.

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b164f9ecad29d6cd0af7157304aa7b64d400411"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.7-services.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "333207ef633eec26a0043aefea06cc8bb71899b474aa7347c3be3540b3defebb"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базова концепція мережі

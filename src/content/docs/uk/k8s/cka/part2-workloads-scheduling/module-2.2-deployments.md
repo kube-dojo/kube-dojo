@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "f2058d0ddbd779a8f5823a24f2578a8ed8ff53c418ba1c6067af4d5744683d81"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — основна тема іспиту
 >

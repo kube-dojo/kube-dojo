@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b1ab6756017c7de3683d6563e8291b8f538da155"
 en_file: "src/content/docs/k8s/cka/part0-environment/module-0.3-vim-yaml.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "288b1495e71064ce8a99a38c0b63005465fbd8adc37d8d5a7398ae29a945b071"
 ---
 
 > **Складність**: `[ШВИДКИЙ]` — невеликий набір команд, висока віддача на іспиті

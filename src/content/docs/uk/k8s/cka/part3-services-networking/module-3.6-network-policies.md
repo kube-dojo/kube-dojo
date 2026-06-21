@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "39296b97ddc4c33735e16432813298628019dc66f986430fc5460e711dcef357"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — фаєрвол на рівні Подів.
 >

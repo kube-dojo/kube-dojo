@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2f23896aa7b29d7c4e3982551f3928d4419848a6"
 en_file: "src/content/docs/k8s/cka/part4-storage/module-4.2-pv-pvc.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "020668ed3817a1c14aee79cfa1586ec37c32d8b0da97caf51838e8618b9f271b"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основна абстракція зберігання

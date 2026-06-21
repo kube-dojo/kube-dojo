@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.5-observability-tools.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "a5bf5d7d59d70501dfdc5ea66c27ace3308829dc852144241922c6f2992dfbe9"
 ---
 
 - **Складність**: `[QUICK]` — вибір інструментів і перша практика запуску

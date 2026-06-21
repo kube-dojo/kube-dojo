@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "8b164f9ecad29d6cd0af7157304aa7b64d400411"
 en_file: "src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.8-namespaces-labels.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "e296e5e4dc2d3bfee322839d7a523183179d9ec41a774ebcffce6211b308cc68"
 ---
 
 **Складність**: `[ШВИДКИЙ]` — концепції організації. **Час на проходження**: 35-40 хвилин. **Передумови**: Модулі 1.5-1.7. Це базовий модуль, але він свідомо розглядає простори імен та мітки як інструменти надійності у виробничому середовищі, а не як картки для зазубрювання термінів.

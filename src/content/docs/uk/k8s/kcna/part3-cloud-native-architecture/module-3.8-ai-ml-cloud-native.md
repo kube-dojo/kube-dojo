@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.8-ai-ml-cloud-native.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "5dfb2ab1c63cc3124d800454c11246c3093d883a6887b09fc3f4ab2d25705f82"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — хмарно-нативна архітектура та проєктування робочих навантажень

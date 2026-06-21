@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "79a11043fac5f0b91354f0ec41edf8a3d09d40526f60f040468d822d20f17b49"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — фундамент для всіх робочих навантажень
 >

@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "79dc54d208f506eb2774ac6a703411defe1067120051d46fa46d6286b0318195"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — просунуті внутрішні механізми планування, висока віддача на іспиті.

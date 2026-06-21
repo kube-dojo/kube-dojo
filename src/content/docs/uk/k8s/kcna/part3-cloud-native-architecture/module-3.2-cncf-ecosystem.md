@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.2-cncf-ecosystem.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "03e3435d3dde167a03550a206884e03310a40712d6e30d2bac8388e92efb59c5"
 ---
 
 > **Складність**: `[ШВИДКИЙ]` — заснований на знаннях.

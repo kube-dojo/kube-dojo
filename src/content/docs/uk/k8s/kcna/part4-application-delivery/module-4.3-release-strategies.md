@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1545086449848c7b35be1ee0e7b5df8747ceda53"
 en_file: "src/content/docs/k8s/kcna/part4-application-delivery/module-4.3-release-strategies.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "6c5c20534debe91efa09abae08a40d28434fb27849db3a34a3dbf9f56591af3d"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — стратегія доставки та операційні компроміси

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "eaf6bed08b1c55bde0b7a547e8ebbda413f8e1fc"
 en_file: "src/content/docs/k8s/cka/part1-cluster-architecture/module-1.7-kubeadm.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "0b4a5a0ba0afa6dbc770b66c26e59e8ebc47617e753578bb1fddaab23713c02a"
 ---
 > **Складність**: `[MEDIUM]` — основи управління кластером
 >

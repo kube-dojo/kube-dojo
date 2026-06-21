@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "c74528bc5597430a5e9d9e99d85f42663e1eb477c9d89cf839a2d66241968105"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — розуміння внутрішньої механіки сервісів

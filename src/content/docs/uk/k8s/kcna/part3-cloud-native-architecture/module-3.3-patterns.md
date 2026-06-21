@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "55a1935b4d6a89f15754f4add6133fb1907a7a43"
 en_file: "src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.3-patterns.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "f626f2871961bbdaacd79d7a2f287ed47556289ed723f4f5dea9b8bea07ad342"
 ---
 
 **Складність**: `[MEDIUM]` — архітектурні концепції. **Час на проходження**: 60–75 хвилин. **Передумови**: Модуль 3.2, впевнене володіння словником Kubernetes та кластер Kubernetes 1.35+ для необов'язкової практики. У прикладах ми використовуємо аліас `k` для kubectl; налаштуйте його командою `alias k=kubectl` перед запуском команд.

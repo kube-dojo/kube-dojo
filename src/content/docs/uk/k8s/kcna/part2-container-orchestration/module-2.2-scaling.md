@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "7c329ba90eb0e02ed5ad73cf6e074f9d3fc86135"
 en_file: "src/content/docs/k8s/kcna/part2-container-orchestration/module-2.2-scaling.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "26b882cf862cc4ed56371c755626e05df177609baeb668d9ec4eec8423118c78"
 ---
 
 **Складність**: `[ВИСОКА]` — просунуті концепції оркестрації з прямим впливом на надійність, вартість і дизайн застосунків. **Час на проходження**: 45–60 хвилин. **Передумови**: Модуль 2.1, Планування. Цей модуль передбачає поведінку Kubernetes 1.35 для API автомасштабування та прикладів. Повна команда Kubernetes — це `kubectl`; у командах для запуску після рядка з налаштуванням цей модуль використовує коротший зручний для іспиту псевдонім `k`, визначений як `alias k=kubectl`.

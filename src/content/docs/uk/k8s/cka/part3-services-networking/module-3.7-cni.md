@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f3298d2da20fffd9a5dddcc44e918fd619ce60ca"
 en_file: "src/content/docs/k8s/cka/part3-services-networking/module-3.7-cni.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "1b08298c8b78092d5cbd7327b4511253b098dd2ddd1dfe090dcb592c62d6d84b"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — розуміння мережевої інфраструктури
 >
