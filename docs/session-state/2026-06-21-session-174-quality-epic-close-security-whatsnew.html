@@ -66,6 +66,19 @@ Cold-start found the queue empty and the #2020 by-track scope deterministically 
 </ul>
 <p>This satisfies the "post a What's-New update BEFORE #1876" gate from the continuous-improvement plan.</p>
 
+<h2>Continuation — #2066 closed (6/6), curriculum review coverage ~100%</h2>
+<p>After the above, drove <strong>#2066</strong> (the 6 genuinely-un-reviewed <code>auto_approved</code> modules) to completion with genuine opus cross-family reviews — independently re-verified + ground-checked, not rubber-stamped.</p>
+<table>
+<tr><th>Module</th><th>PR</th><th>Outcome</th></tr>
+<tr><td>prometheus</td><td>#2068</td><td>T0; accurate; labeled the hypothetical opener</td></tr>
+<tr><td>helm-kustomize</td><td>#2068</td><td>T3→T0; de-fabbed 2 unsourced anecdotes</td></tr>
+<tr><td>managed-kubernetes</td><td>#2068</td><td>T3→T0; aligned "Debug" outcome to quiz Q5</td></tr>
+<tr><td>kyverno</td><td>#2069</td><td>T2→T0; <strong>real currency fix</strong> — Graduated 2026-03, ClusterPolicy deprecated→CEL (was teaching a deprecated API)</td></tr>
+<tr><td>runtime-security</td><td>#2069</td><td>T2→T0; <strong>verifier-blind lab bug</strong> (`nslookup` in curl image, 3→0) + Falco-Graduated snapshot</td></tr>
+<tr><td>cilium</td><td>#2070</td><td>the one genuine <strong>stub</strong> (1,589→5,301 words); cursor-authored, opus cross-family reviewed</td></tr>
+</table>
+<p>Currency web-verified both ways (Kyverno Graduated 2026-03 / Cilium 2023-10 / Falco 2024-02), quarantined into dated <code>as of 2026-06</code> snapshots. cilium dispatch verified <strong>no orphan</strong> (the watcher mis-fired once on the task-id pattern — corrected to match the dispatch_smart argv). Records <code>23cee34b4</code> / <code>def5c5987</code> / <code>5cec3a74e</code>. Combined with #2020/#2031, <strong>every curriculum module now carries a genuine cross-family review or board verdict</strong> — only the AI-history book (#1876) remains un-reviewed.</p>
+
 <h2>Lessons</h2>
 <ul>
 <li><strong>record-absence ≠ un-reviewed</strong> — disambiguate via the board's <code>auto_approved</code> flag: <code>false</code> = genuine verdict (backfill OK), <code>true</code> = pipeline auto-approve = real gap (needs review). Blindly backfilling all no-record modules would hide real gaps.</li>
@@ -76,8 +89,8 @@ Cold-start found the queue empty and the #2020 by-track scope deterministically 
 
 <h2>Next</h2>
 <ul>
-<li><strong>#2066</strong> — review the 6 genuinely-un-reviewed (auto-approved) toolkit/devsecops modules (the real review residue).</li>
-<li><strong>#1876</strong> — AI-history book review (73 chapters / ~365K words) — now unblocked (What's-New gate met); the only remaining un-reviewed content corpus.</li>
+<li><strong>#2066</strong> — ✅ DONE this session (6/6, closed).</li>
+<li><strong>#1876</strong> — AI-history book review (73 chapters / ~365K words) — now unblocked (What's-New gate met); the only remaining un-reviewed content corpus. <strong>Top next priority.</strong></li>
 <li><strong>#1911</strong> — UK translation currency (~14%), the largest remaining curriculum stream.</li>
 <li>Hygiene: bulk <code>git add -f</code> the ~355 untracked review records; #2065 dispatch child-reaping; STATUS.md prune.</li>
 </ul>
