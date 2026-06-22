@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 178 — UK ai-history book translation, batch 1</title>
+<style>
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #1e3a8a; }
+  code { background: #f1f5f9; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: .8rem; border-radius: 6px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; }
+  th, td { border: 1px solid #e2e8f0; padding: .4rem .6rem; text-align: left; font-size: .92em; }
+  th { background: #f1f5f9; }
+  .ok { color: #15803d; font-weight: 600; }
+  .warn { color: #b45309; font-weight: 600; }
+  blockquote { border-left: 4px solid #2563eb; margin: .8rem 0; padding: .3rem 1rem; background: #f8fafc; color: #334155; }
+  .meta { color: #64748b; font-size: .9em; }
+</style>
+</head>
+<body>
+<h1>Session 178 — Ukrainian translation of the AI-history book (batch 1)</h1>
+<p class="meta">2026-06-23 · standalone orchestrator · continues s177 · epic #1911 · PR #2083 (merged)</p>
+
+<h2>TL;DR</h2>
+<p>Started the next workstream the user clarified in s177: <strong>translate the AI-history book to Ukrainian</strong> (the <code>ai-history</code> 74-page net-new block of #1911, was <strong>0% UK</strong>). Shipped <strong>batch 1 — <code>index.md</code> + <code>ch-01-the-laws-of-thought.md</code></strong> via <strong>PR #2083 (squash-merged)</strong>, all CI green incl. the required Astro build/schema gate. Sequential, no fan-out, conserve-usage per the s177 constraints.</p>
+
+<h2>Constraints honored (user, s177)</h2>
+<ul>
+  <li><strong>Go slow / conserve usage / NO fan-out</strong> — swarm stays HALTED. One small batch this session.</li>
+  <li><strong>De-russification review REQUIRED before merge</strong> (the load-bearing s177 lesson: the swarm does NOT review).</li>
+</ul>
+
+<h2>Key orchestration decision — translate mechanism</h2>
+<p>The s177 handoff pre-endorsed "sequential single-translator dispatch <em>(or inline)</em>." Resolved the flagged tension toward <strong>inline opus translation + inline tool-grounded de-russification review</strong>, because:</p>
+<ul>
+  <li><strong>Conserve-usage</strong> is the user's most-emphatic recent priority (cap hit ×2 in s177); subagent context-reload (~2–3M/dispatch) is the single biggest token sink. Inline = zero reload.</li>
+  <li>The de-russification review is <strong>tool-grounded</strong> (VESUM / СУМ-11 / Antonenko / the two CI gates), i.e. objective external authority, not self-opinion — which substitutes for cross-family independence on the calque axis specifically.</li>
+  <li>s177 itself established opus-inline review as the accepted UK de-russification mechanism.</li>
+</ul>
+<p class="warn">Caveat (transparent): this batch is opus-authored AND opus-reviewed. The objective gates are independent, but a model-independent <em>fluency</em> review is not. A single sequential cross-family <strong>agy (gemini-3.1-pro)</strong> quality pass per batch is available if the user wants it — one cheap dispatch, not the swarm. Flagged as a decision, not blocking.</p>
+
+<h2>What shipped (PR #2083)</h2>
+<table>
+  <tr><th>File</th><th>EN words</th><th>UK words</th><th>Ratio</th><th>Type</th></tr>
+  <tr><td><code>uk/ai-history/index.md</code></td><td>975</td><td>881</td><td>90%</td><td>TOC (9 parts, 73 chapter links)</td></tr>
+  <tr><td><code>uk/ai-history/ch-01-the-laws-of-thought.md</code></td><td>4780</td><td>4140</td><td>87%</td><td>dense narrative + callouts/details/mermaid/LaTeX</td></tr>
+</table>
+
+<h2>De-russification review (tool-grounded) — results</h2>
+<ul>
+  <li><span class="ok">uk_calque_v2 gate: clean (exit 0)</span> — zero active-participle adjectives (<code>-уч/-юч</code>), zero mojibake, zero duplicate headings.</li>
+  <li><span class="ok">Russicism gate (ukrainian.py / CI): pass</span> after one fix (below).</li>
+  <li>Zero <code>знаходиться</code>, <code>в якості</code>, <code>являється</code>, Russian letters (ы/ё/ъ/э).</li>
+  <li><strong>12 coined/technical forms VESUM-verified</strong>: <code>диз'юнкція</code>, <code>диз'юнктний</code>, <code>перекривний</code>, <code>обвідна</code>, <code>виокремлювати</code>, <code>двоїстість</code>, <code>комутативний</code>, <code>небога</code>, <code>розглядуваний</code>, <code>промоклий</code>, <code>обхідний</code>, <code>переозначити</code>.</li>
+  <li><strong>Structural parity exact vs EN</strong>: headings 10/10 &amp; 3/3, table rows 91/91 &amp; 8/8, callouts 8/8, <code>&lt;details&gt;</code> 4/4, mermaid 1/1, <strong>LaTeX math spans 79/79 identical</strong> (math untranslated).</li>
+  <li>Completeness 90% / 87% = natural EN→UK compression (articles dropped, prepositions encoded morphologically), not omission — confirmed by the structural diff.</li>
+  <li>Leftover-English all legitimate: MDX tags, English work titles (<em>An Investigation of the Laws of Thought</em>, etc.), Roman numerals, logic gates <code>AND</code>/<code>NOT</code>, LaTeX.</li>
+  <li><code>calque_review</code> frontmatter stamp on both (status=clean, detector v2).</li>
+</ul>
+
+<h2>One CI catch (fixed)</h2>
+<blockquote>Russicism gate flagged <code>самий</code> (1×) — but it was <code>на самий зміст перетину</code>, where <code>самий</code> is the intensifier "the very" (legit per СУМ-11, just outside the <code>той/цей/такий + самий</code> whitelist). Per the s177 "gate-FP vs real-defect first" rule, did NOT mangle correct content; instead reworded to <code>на зміст самого перетину</code> ("the meaning of the intersection itself") — <em>more faithful</em> to the EN and gate-clean (<code>самого</code> ≠ <code>самий</code> token). Re-pushed, gate green.</blockquote>
+<p>Possible future tooling tweak (not done — low priority): extend the gate's <code>самий</code> whitelist to allow the intensifier-before-noun construction. Noted on #1911.</p>
+
+<h2>Pipeline / cadence for future sessions</h2>
+<ol>
+  <li><code>git worktree add -b uk-ai-history-batchN .worktrees/uk-ai-history-batchN origin/main</code> (never branch in primary).</li>
+  <li>Read EN from <strong>primary</strong> path (cheap); <strong>Write</strong> UK into the worktree (Write doesn't re-inject CLAUDE.md; <em>don't</em> Read worktree files — ~15–20K token re-injection each).</li>
+  <li>De-russification: <code>python3 scripts/checks/uk_calque_v2.py &lt;files&gt;</code> + <code>python3 scripts/quality/check_uk_changed.py &lt;files&gt;</code> + VESUM <code>verify_words</code> on coined forms + structural element-count diff + LaTeX-set diff.</li>
+  <li>Stamp: <code>python3 scripts/quality/calque_review_stamp.py stamp &lt;file&gt; --flags 0 --status clean --detector-version v2</code>.</li>
+  <li>Commit (<code>feat(uk):</code>, body <code>Refs #1911</code> — NOT <code>fix:</code>/<code>Closes</code>, or the bugfix-merge hook blocks), push, PR, let PR CI build-gate, squash-merge on green.</li>
+  <li>~2–3 chapters/session inline to conserve usage. 72 chapters remain (ch-02 … ch-73).</li>
+</ol>
+
+<h2>State after session</h2>
+<ul>
+  <li>ai-history UK: <strong>2/74</strong> pages (index + ch-01). UK overall ~33% current.</li>
+  <li>main: clean, synced, build-green; worktree removed; STATUS.md carries the user's task-direction edit + this session's update.</li>
+  <li>#1911 progress comment posted.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+  <li>Continue ai-history: ch-02 onward, ~2–3 chapters/session, same inline pipeline. (EN source: <code>src/content/docs/ai-history/ch-NN-*.md</code>.)</li>
+  <li>Decide (user): keep opus-inline translate+review, or add a per-batch cross-family agy fluency pass.</li>
+  <li>After ai-history (74): remaining #1911 net-new/stale blocks (platform 241 / ai-ml 142 / on-prem 58 / ai 44 / cloud+linux stale) — swarm still HALTED pending a deliberate go.</li>
+</ul>
+</body>
+</html>
