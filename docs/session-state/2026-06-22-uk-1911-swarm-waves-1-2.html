@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#1911 UK Translation Swarm — Waves 1–2 (scale-down handoff)</title>
+<style>
+ body{font:15px/1.55 system-ui,sans-serif;max-width:62rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #333;padding-bottom:.3rem}
+ h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ccc}
+ code{background:#f3f3f3;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0}
+ th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em}
+ th{background:#f0f0f0}
+ .ok{color:#1a7f37;font-weight:600}.warn{color:#b35900;font-weight:600}.bad{color:#b30000;font-weight:600}
+ ul{margin:.3rem 0}
+</style>
+</head>
+<body>
+<h1>#1911 UK Translation Swarm — Waves 1–2 (scale-down handoff)</h1>
+<p><strong>Date:</strong> 2026-06-22 (Europe/Budapest). <strong>Mode:</strong> SCALED DOWN per user
+(usage limit hit twice; user: "scale down now, scale up again at end of week if extra budget").</p>
+
+<h2>What was built &amp; proven</h2>
+<p>A <strong>Claude-subagent + <code>sources</code> MCP</strong> translation pipeline — the differentiator is that
+subagents (Agent tool <em>and</em> Workflow tool, both confirmed) can call <code>mcp__sources__*</code>
+(VESUM word-existence, Antonenko-Davydovych, UA-GEC, r2u, check_russian_shadow, Pravopys), which the
+external dispatch lane cannot. Per-page pipeline: EN→UK at 95–100% length, natural reframing of Russian
+patterns, MCP self-validation + sentence-level calque reframing, glossary-compliant, structure mirrored 1:1,
+<code>en_commit</code> currency-tracked, <code>calque_review</code> stamped (detector v2).</p>
+<p><strong>Key fix:</strong> single-shot full-module writes hit a stream idle timeout and die with ZERO output.
+Solution = <strong>incremental write</strong> (frontmatter + chunks via Write→Edit on a <code>&lt;!-- CONT --&gt;</code>
+sentinel, ≤900 words/call). This is baked into the workflow script and is mandatory.</p>
+
+<h2>Delivered this session (3 open PRs — NOT merged; build-gated, awaiting review)</h2>
+<table>
+<tr><th>PR</th><th>Scope</th><th>Pages</th><th>Build</th></tr>
+<tr><td>#2074</td><td>Canary pilot (kcna/1.9-debugging, cka/mock-exams index)</td><td>2</td><td class="ok">green</td></tr>
+<tr><td>#2075</td><td>Wave 1 — KCNA + CKA stale</td><td>71</td><td class="ok">green (2169 pages)</td></tr>
+<tr><td>#2076</td><td>Wave 2 — CKAD + CKS + KCSA stale</td><td>78 of 82 (74 validated+stamped, 4 complete-unvalidated)</td><td>see build log</td></tr>
+</table>
+<p><strong>Total: 151 k8s cert pages translated + MCP-validated.</strong> Currency #1911: ~152→~303 / 1083
+(≈14%→≈28%) <em>once the 3 PRs merge</em>. This refreshes essentially the entire k8s cert flagship
+(CKA/CKAD/CKS/KCNA/KCSA), the highest learner-value slice.</p>
+
+<h2 class="warn">8 wave-2 stragglers — deferred to scale-up (limit hit mid-batch)</h2>
+<p>Limit hit at the tail of wave 2 ("resets 11:30am Europe/Budapest"). These 8 are NOT in PR #2076 as validated:</p>
+<p><strong>4 complete-but-unvalidated</strong> (sentinel-free ~8K words, in #2076 but UNSTAMPED — need a validation/calque pass, not a full redo):</p>
+<ul>
+<li><code>k8s/ckad/part0-environment/module-0.1-ckad-overview.md</code></li>
+<li><code>k8s/kcsa/part4-threat-model/module-4.2-vulnerabilities.md</code></li>
+<li><code>k8s/ckad/part1-design-build/module-1.3-multi-container-pods.md</code></li>
+<li><code>k8s/kcsa/part4-threat-model/module-4.3-container-escape.md</code></li>
+</ul>
+<p><strong>4 incomplete</strong> (sentinel present or truncated; NOT committed — full redo):</p>
+<ul>
+<li><code>k8s/cks/part5-supply-chain-security/module-5.3-static-analysis.md</code></li>
+<li><code>k8s/ckad/part1-design-build/module-1.4-volumes.md</code></li>
+<li><code>k8s/ckad/part2-deployment/module-2.4-deployment-strategies.md</code></li>
+<li><code>k8s/kcsa/part4-threat-model/module-4.5-threat-modeling-supply-chain-theory.md</code></li>
+</ul>
+
+<h2>Remaining #1911 debt (for scale-up)</h2>
+<table>
+<tr><th>Block</th><th>Pages</th></tr>
+<tr><td>Wave-2 stragglers (above)</td><td>8</td></tr>
+<tr><td>k8s straggler stale (cba×2, 3 index pages)</td><td>5</td></tr>
+<tr><td>k8s missing</td><td>52</td></tr>
+<tr><td>cloud stale / linux stale</td><td>78 / 37</td></tr>
+<tr><td>big net-new blocks: platform / ai-ml-engineering / ai-history / on-premises / ai</td><td>241 / 142 / 74 / 58 / 44</td></tr>
+</table>
+
+<h2 class="ok">Scale-up procedure (end of week)</h2>
+<ol>
+<li>Confirm usage limit has reset (was capped; probe 1 small batch first — a session-limit failure returns instantly).</li>
+<li><code>cd</code> repo, <code>git fetch origin main</code>; merge the 3 open PRs first if approved.</li>
+<li><strong>Regenerate the work-list from <code>GET http://127.0.0.1:8768/api/uk/board</code></strong> (authoritative <code>pages[]</code>, <code>status!="current"</code>). The <code>/tmp/uk_*.json</code> lists from this session are EPHEMERAL — do not rely on them.</li>
+<li>New worktree off origin/main (<code>git worktree add -b uk-1911-w3 .worktrees/uk-1911-w3 origin/main</code>; <code>ln -sfn ../../node_modules .worktrees/uk-1911-w3/node_modules</code>).</li>
+<li>Edit the <code>WT</code> constant in <code>logs/uk-swarm/uk-translate.workflow.js</code> to the new worktree (durable script; same proven prompt).</li>
+<li>Launch <code>Workflow({scriptPath: "logs/uk-swarm/uk-translate.workflow.js", args: [&lt;rel paths&gt;]})</code>. Start with the 8 stragglers + k8s missing (52).</li>
+<li>Arm a milestone monitor (commit waves), then at completion: stamp via <code>scripts/quality/calque_review_stamp.py stamp &lt;file&gt; --flags N --status reviewed|clean --detector-version v2</code> using each page's report <code>flags_resolved</code>; build worktree; PR.</li>
+</ol>
+<p><strong>Throughput note:</strong> concurrency cap = 8 on this machine (10 cores − 2); ~13 min/large page;
+~70–80 pages per ~2.5h window before the usage cap bites. Each full wave ≈ 13–16M subagent tokens. Plan waves
+to fit the budget window; the work is durable (committed waves on the remote, in-progress persists on disk).</p>
+
+<h2>Durable artifacts</h2>
+<ul>
+<li><code>logs/uk-swarm/uk-translate.workflow.js</code> — the proven workflow script (incremental write + MCP gate).</li>
+<li>Worktrees: <code>.worktrees/uk-1911-pilot</code> (#2074), <code>uk-1911-w1</code> (#2075), <code>uk-1911-w2</code> (#2076).</li>
+<li>Reference quality anchor for subagent prompts: <code>uk/prerequisites/modern-devops/module-1.6-devsecops.md</code>.</li>
+<li>Known false-positives to LEAVE (not calques): являється(=з'являється), в якості, діючи, задача, даний(=data), один в один, вірний(substring).</li>
+</ul>
+</body>
+</html>
