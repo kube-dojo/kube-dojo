@@ -156,3 +156,55 @@ def test_standalone_yavlyayetsya_still_flagged(tmp_path: Path) -> None:
     result = _run([path])
     assert result.returncode == 1
     assert "являється" in result.stdout
+
+
+def test_rahuvaty_counting_not_flagged(tmp_path: Path) -> None:
+    # «рахувати» = "to count" (СУМ-11), standard Ukrainian. Only the "consider"
+    # calque (conjugated «рахую, що…») is a russicism; the bare infinitive must
+    # not hard-fail (#2080).
+    path = tmp_path / "module.md"
+    path.write_text(
+        "# Переклад\n\nПравило змушує планувальник рахувати репліки на домен.\n",
+        encoding="utf-8",
+    )
+    result = _run([path])
+    assert result.returncode == 0, result.stdout
+    assert "рахувати" not in result.stdout
+
+
+def test_v_tsilomu_as_a_whole_not_flagged(tmp_path: Path) -> None:
+    # «систему в цілому» = "the system as a whole"; r2u lists «у цілому» as an
+    # accepted rendering of «в целом». Advisory, not a hard fail (#2080).
+    path = tmp_path / "module.md"
+    path.write_text(
+        "# Переклад\n\nЗрілий дизайн розглядає систему в цілому, а не одну метрику.\n",
+        encoding="utf-8",
+    )
+    result = _run([path])
+    assert result.returncode == 0, result.stdout
+    assert "в цілому" not in result.stdout
+
+
+def test_tsej_samyj_this_same_not_flagged(tmp_path: Path) -> None:
+    # «цей/ця/ці самий» = "this/these same" — correct Ukrainian, like «той самий».
+    path = tmp_path / "module.md"
+    path.write_text(
+        "# Переклад\n\nЦей самий привілей слід переглядати та обмежувати.\n",
+        encoding="utf-8",
+    )
+    result = _run([path])
+    assert result.returncode == 0, result.stdout
+    assert "самий" not in result.stdout
+
+
+def test_bare_superlative_samyj_still_flagged(tmp_path: Path) -> None:
+    # The genuine russicism: «самий» + adjective as a superlative intensifier
+    # (= "the most …", calque of самый) must still fail — use най-.
+    path = tmp_path / "module.md"
+    path.write_text(
+        "# Переклад\n\nЦе самий кращий варіант для команди.\n",
+        encoding="utf-8",
+    )
+    result = _run([path])
+    assert result.returncode == 1
+    assert "самий" in result.stdout
