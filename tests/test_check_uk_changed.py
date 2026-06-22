@@ -208,3 +208,17 @@ def test_bare_superlative_samyj_still_flagged(tmp_path: Path) -> None:
     result = _run([path])
     assert result.returncode == 1
     assert "самий" in result.stdout
+
+
+def test_samyj_fp_guard_does_not_over_subtract(tmp_path: Path) -> None:
+    # Regression for codex R1 P1 (#2081): the «самий» false-positive guard must
+    # match only the literal token «самий», not сама/саме/самі — otherwise a legit
+    # «ця сама …» over-subtracts and hides a genuine «самий кращий» russicism.
+    path = tmp_path / "module.md"
+    path.write_text(
+        "# Переклад\n\nЦя сама політика безпечна. Це самий кращий варіант.\n",
+        encoding="utf-8",
+    )
+    result = _run([path])
+    assert result.returncode == 1, result.stdout
+    assert "самий" in result.stdout
