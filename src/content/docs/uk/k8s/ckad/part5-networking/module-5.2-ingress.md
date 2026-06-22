@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "0ad9c6f8d2efb877a351c7a6787da8636d9298dc"
 en_file: "src/content/docs/k8s/ckad/part5-networking/module-5.2-ingress.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "f3b7283179cd4929dd35fd7e4946a26c8ae004f532332d49e8305a7d4d18456a"
 ---
 > **Складність**: `[MEDIUM]` — важливо для зовнішнього доступу, кілька концепцій
 >

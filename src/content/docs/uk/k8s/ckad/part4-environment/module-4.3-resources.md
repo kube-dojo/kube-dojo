@@ -12,6 +12,12 @@ lab:
   environment: kubernetes
 en_commit: "1767cb3ec76587800ab91b6e14e3350dca086a92"
 en_file: "src/content/docs/k8s/ckad/part4-environment/module-4.3-resources.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "98e61aca7fcaeffbb6162a263fa9449d32c49265322dd4cad530a3eb6c9b274a"
 ---
 > **Складність**: `[MEDIUM]` — критично для продакшену, впливає на планування
 >

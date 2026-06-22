@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2b90cc5189fd7bead7fd7410c731dba90c94869a"
 en_file: "src/content/docs/k8s/kcsa/part0-introduction/module-0.1-kcsa-overview.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "63e98c406dadffd3a9747cb7baa6dfc372ed9953d751aeda1ec86e5997571bdd"
 ---
 
 | Метадані | Значення |

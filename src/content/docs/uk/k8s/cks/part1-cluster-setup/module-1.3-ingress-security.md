@@ -12,6 +12,12 @@ lab:
   duration: "35 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "a72981a77c6f9cc66d03b0fe4fa65732afd3c68bcf2c2c618803575a9e554788"
 ---
 
 > **Складність**: Просунута

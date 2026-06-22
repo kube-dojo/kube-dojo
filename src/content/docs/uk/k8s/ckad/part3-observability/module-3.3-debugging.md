@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "35a45040d98ade91b06b097e819613c81c8b56a8"
 en_file: "src/content/docs/k8s/ckad/part3-observability/module-3.3-debugging.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "96428bf4d2d86516dffe11f6edf61ebf816356ef67daa7ad78e004f9b1fa5e4c"
 ---
 > **Складність**: `[MEDIUM]` — критично важлива екзаменаційна навичка, що потребує системного підходу
 >

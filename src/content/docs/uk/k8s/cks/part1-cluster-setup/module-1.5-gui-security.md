@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "6ed6893ca1e12db42146df7e32ce8b0c4b61d00ee393e07f5c2833b05cc3d183"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — поширена поверхня атаки.
 >

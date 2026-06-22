@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "af86033384182aa0a70fe80d66091ab6d20f87df"
 en_file: "src/content/docs/k8s/kcsa/part6-compliance/module-6.3-security-assessments.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "ca65994f364f7d682876494dd73117eda9b42ba5c2d74d624d913469c44d7612"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концептуальні знання з практичним сортуванням ризиків.

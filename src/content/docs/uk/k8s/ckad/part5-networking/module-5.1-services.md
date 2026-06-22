@@ -12,6 +12,12 @@ lab:
   duration: "45-55 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "325ba87532925361e459bb5c95e2c626ed168425e93d31c82b33f84b5bfa2a83"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — базова концепція мережі, кілька типів, які потрібно зрозуміти
 >

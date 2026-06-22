@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "c3c723806a74ec2312b6f4bdf8ef6900b206476f"
 en_file: "src/content/docs/k8s/cks/part1-cluster-setup/module-1.2-cis-benchmarks.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "d05226d236cfbd778ee02152ded10ab5a8768bd35776744e704e99a48d1ac7b7"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базова навичка аудиту безпеки.

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "445873cd94fa3cf037442c8f80874be8b8740b9d"
 en_file: "src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.1-pod-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "f3bcab67e1b3379a54c161956ae87de0da7663fd6735409d82e41bf5d8d048e1"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові знання для інженерів, яким потрібно оцінювати ризики під час виконання Подів та поведінку допуску

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3b4be037d0e821cd9dff44c8211ba7f15322ffb3"
 en_file: "src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.5-network-policies.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "c165c1ee3b080f4bb4e38d77a587269e888836a792b682dfd7d1fda3c498d241"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові знання

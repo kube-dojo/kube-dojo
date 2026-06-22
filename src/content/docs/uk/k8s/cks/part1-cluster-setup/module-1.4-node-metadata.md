@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "ee5067b7d9781cf71e19e349e45e890369922292"
 en_file: "src/content/docs/k8s/cks/part1-cluster-setup/module-1.4-node-metadata.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "c81931a9f60252d5c3d9b5a93cfa5ea2cd8e4573a0765999402ceb87904a2194"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критична навичка безпеки, специфічна для хмари.
 >

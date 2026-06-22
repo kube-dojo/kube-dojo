@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3b4be037d0e821cd9dff44c8211ba7f15322ffb3"
 en_file: "src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.3-secrets.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "c2135a7f46fd35efd7e5d8297d61d29668578eb6857ec68b28433a379be98dc8"
 ---
 
 **Складність**: `[СЕРЕДНЯ]` - Базові знання. **Час на проходження**: 25-30 хвилин. **Передумови**: [Модуль 3.2: Основи RBAC](../module-3.2-rbac/). Цей модуль передбачає Kubernetes 1.35 або новіший і використовує `k` як псевдонім для `kubectl` після того, як ви визначите його командою `alias k=kubectl` у вашій оболонці.

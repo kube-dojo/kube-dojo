@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "2d67156f7721450924d6c213316d931bd913c818"
 en_file: "src/content/docs/k8s/ckad/part4-environment/module-4.5-serviceaccounts.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "f5811094e67a06fba0f993e9d362329778d2b0e38cc8f72d2a9045df03520044"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — важлива тема для доступу до API та ідентифікації робочих навантажень

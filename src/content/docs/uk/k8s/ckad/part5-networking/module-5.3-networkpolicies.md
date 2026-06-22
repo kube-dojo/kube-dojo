@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "33e0700e5e8109231332455c2463fac6a872ffa9"
 en_file: "src/content/docs/k8s/ckad/part5-networking/module-5.3-networkpolicies.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "6465702e966a5c64ed588e961d8bc4df8651d8256dd8c90b016810b489049921"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — критично важлива для безпеки кластера; вимагає точних міркувань про селектори міток та уважного відступу в YAML.

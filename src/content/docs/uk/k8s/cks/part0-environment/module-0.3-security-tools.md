@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "fd57d2f09c914eabc16d3b102d16555198baafbd"
 en_file: "src/content/docs/k8s/cks/part0-environment/module-0.3-security-tools.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "7e7a5b21730d1d60e606866edca115907c3f1eabf5a5cff0bfbc93247b705609"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — основні екзаменаційні інструменти.
 >

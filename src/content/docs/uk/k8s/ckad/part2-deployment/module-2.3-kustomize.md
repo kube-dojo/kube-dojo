@@ -12,6 +12,12 @@ lab:
   duration: "40-50 minutes"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "4c4240e24fe6eb55dfa14d0e6371d707ceb7eba9ca347d49a0f082c3ab921300"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — налаштування Kubernetes без шаблонів
 >

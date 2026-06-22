@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "7329e71d7a9d1cc1eab4e508c0184ca6d89b1525"
 en_file: "src/content/docs/k8s/cks/part6-runtime-security/module-6.3-container-investigation.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "7739ef741efe21a3e1b05d83142ee086138479638da26ccfcd55aa99574cd736"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — навичка розслідування інцидентів для CKS.
 >

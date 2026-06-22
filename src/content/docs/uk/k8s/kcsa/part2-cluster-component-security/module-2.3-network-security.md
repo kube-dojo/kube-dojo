@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "fecc6109d822d6556ea7c91e30320554299bc47f"
 en_file: "src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.3-network-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "2cfa9bd5a0a4a95343b1556c63c30d3d76f7795e46fae6a51b8173efd38249f9"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основні знання

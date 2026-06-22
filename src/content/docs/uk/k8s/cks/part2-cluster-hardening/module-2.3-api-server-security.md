@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "0c6934f74c8e5ed987d3048adb2284ae1617d615eeea248eea533a24d18f4cc9"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — критичний компонент інфраструктури.

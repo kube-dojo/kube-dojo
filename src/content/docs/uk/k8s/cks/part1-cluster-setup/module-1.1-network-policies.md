@@ -12,6 +12,12 @@ lab:
   duration: "35 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "bbc8839fedf2b5bf3fcdf10afa09aa8fec74b68d3dd895fd19f404e9093b390c"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — основна навичка CKS
 >

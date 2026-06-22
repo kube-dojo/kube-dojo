@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "7574695e65a8aa742386cb499af83273410a8dff74ccb99fd0284ada5c2e610b"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — повторення матеріалу CKA з акцентом на безпеці
 >

@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "4943c2527dadcdd1998f0c85c1a0d1709001e21eb922831ed18f93d52440ca9e"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — основа безпеки Linux
 >

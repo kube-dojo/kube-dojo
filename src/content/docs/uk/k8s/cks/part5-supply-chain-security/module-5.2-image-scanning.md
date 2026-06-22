@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "6c7fa5cfb29a4e9c1be897cb803dd541742fa40b"
 en_file: "src/content/docs/k8s/cks/part5-supply-chain-security/module-5.2-image-scanning.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "a04d0297884af90a72f55cec3bd1a40e11e885560a5ebbdf9cc0cad1af008492"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критично важлива навичка для CKS
 >

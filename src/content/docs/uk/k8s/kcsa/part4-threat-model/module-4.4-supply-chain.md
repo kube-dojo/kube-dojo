@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "37ef3faffecf8659a63e62fadc52f20703f229bc"
 en_file: "src/content/docs/k8s/kcsa/part4-threat-model/module-4.4-supply-chain.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 9
+  content_sha: "3d424d6c27312764be1da42af142a43397b36128bc51f9b4f7b5e2433c381258"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — моделювання загроз, проєктування доказів та забезпечення дотримання політик у Kubernetes.

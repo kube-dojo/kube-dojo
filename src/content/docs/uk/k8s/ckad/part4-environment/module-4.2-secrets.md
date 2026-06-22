@@ -12,6 +12,12 @@ lab:
   duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "6701f8c301172da5b65d0a95d8dbaea7466655c6a368e3e60399a88685a03551"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — схоже на ConfigMaps, але з міркуваннями безпеки
 >

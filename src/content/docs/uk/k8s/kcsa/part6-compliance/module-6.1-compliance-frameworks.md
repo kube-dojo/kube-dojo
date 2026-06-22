@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "af86033384182aa0a70fe80d66091ab6d20f87df"
 en_file: "src/content/docs/k8s/kcsa/part6-compliance/module-6.1-compliance-frameworks.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "9c564e87275a8d5f50dad80da9d227068dcccc9ef8db7d94bdf87422eaa189ec"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — концептуальні знання з практичним зіставленням контролів Kubernetes

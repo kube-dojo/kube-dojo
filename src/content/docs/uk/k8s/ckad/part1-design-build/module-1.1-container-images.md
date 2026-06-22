@@ -12,6 +12,12 @@ lab:
   duration: "75 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "25085e546e435f1bc7d1e2445e339c0f5c1c6693a67a5be0422ba00010602e39"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — потребує розуміння поведінки Dockerfile, посилань на образи, доступу до реєстру та діагностики запуску Pod'ів у Kubernetes.

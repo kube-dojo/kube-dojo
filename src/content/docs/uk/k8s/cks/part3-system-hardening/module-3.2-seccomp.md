@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3bbb12461c4441b04a11ab58e74756749909f594"
 en_file: "src/content/docs/k8s/cks/part3-system-hardening/module-3.2-seccomp.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "b618b16dcbc95dd23a8219a8dae365f798a1035b5aa83906e31cafeedd96f7d6"
 ---
 
 > **Складність**: Висока

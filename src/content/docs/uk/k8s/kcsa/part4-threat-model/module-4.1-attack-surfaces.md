@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "37ef3faffecf8659a63e62fadc52f20703f229bc"
 en_file: "src/content/docs/k8s/kcsa/part4-threat-model/module-4.1-attack-surfaces.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "4e7fdfa11a8fd86752673357fc27be84930399a30855378849361e5fbccaed73"
 ---
 
 | Складність | Час на проходження | Передумови |
