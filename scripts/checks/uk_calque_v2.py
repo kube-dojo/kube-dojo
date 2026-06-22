@@ -36,8 +36,21 @@ THE_FOLLOWING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# A run of characters wedged between two Cyrillic letters is treated as encoding
+# corruption (CJK, soft hyphen, zero-width, box-drawing, replacement char ...). The
+# allowed set must whitelist everything that legitimately appears inside or between
+# Cyrillic words, or the gate false-positives on valid Ukrainian:
+#   - whitespace, Cyrillic, Latin, digits, apostrophes, hyphen/dashes
+#   - sentence punctuation, brackets, guillemets, quote
+#   - technical punctuation / _ = + * | & % @ # ~ ^ < > $  (e.g. "klient/server",
+#     snake_case identifiers, "metrics+traces", "key=value")
+#   - middle dot U+00B7 ("MVt\u00b7god"), degree sign U+00B0
+#   - Unicode combining diacritics U+0300-U+036F (stress marks)
 MOJIBAKE_RE = re.compile(
-    r"[\u0400-\u04FF][^\s\u0400-\u04FFa-zA-Z0-9'’ʼ\-—–—.,;:!?()[\]{}«»\"]+[\u0400-\u04FF]"
+    r"[\u0400-\u04FF]"
+    r"[^\s\u0400-\u04FFa-zA-Z0-9'’ʼ\-—–—.,;:!?()[\]{}«»\""
+    r"/_=+*|&%@#~^<>$\u00b7\u00b0\u0300-\u036f]+"
+    r"[\u0400-\u04FF]"
 )
 
 FALSE_POSITIVE_SUBSTRS = ["являється", "в якості", "вірний"]

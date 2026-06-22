@@ -131,3 +131,56 @@ def test_mixed_findings_exit_code(tmp_path: Path) -> None:
     assert "THE_FOLLOWING/WARN" in out
     assert "ZNAKHODYTSYA/WARN" in out
     assert code == 1
+
+
+def test_technical_punctuation_not_flagged_as_mojibake(tmp_path: Path) -> None:
+    """Legitimate inline punctuation between Cyrillic letters must not FAIL (#2078).
+
+    main already contains 395 such slash-pairs across 167 merged files; the gate
+    previously false-positived on every one.
+    """
+    uk_dir = tmp_path / "src" / "content" / "docs" / "uk" / "punct"
+    uk_dir.mkdir(parents=True, exist_ok=True)
+    p = uk_dir / "test.md"
+    p.write_text(
+        "Режим читання/запис у моделі клієнт/сервер.\n"
+        "Змінна простір_імен та пара ключ=значення.\n"
+        "Збираємо метрик+трейсів і споживання МВт\u00b7год.\n",
+        encoding="utf-8",
+    )
+    code, out = _run_main_on_files([p])
+    assert "MOJIBAKE" not in out
+    assert code == 0
+
+
+def test_combining_diacritic_not_flagged_as_mojibake(tmp_path: Path) -> None:
+    """Unicode combining stress marks (U+0300-U+036F) are valid, not corruption."""
+    uk_dir = tmp_path / "src" / "content" / "docs" / "uk" / "stress"
+    uk_dir.mkdir(parents=True, exist_ok=True)
+    p = uk_dir / "test.md"
+    p.write_text("Ставте найва\u0301жчу роботу на початок.\n", encoding="utf-8")
+    code, out = _run_main_on_files([p])
+    assert "MOJIBAKE" not in out
+    assert code == 0
+
+
+def test_soft_hyphen_still_flagged(tmp_path: Path) -> None:
+    """Invisible soft hyphen (U+00AD) wedged in a word is genuine corruption."""
+    uk_dir = tmp_path / "src" / "content" / "docs" / "uk" / "sh"
+    uk_dir.mkdir(parents=True, exist_ok=True)
+    p = uk_dir / "test.md"
+    p.write_text("Складіть одно\u00adсторінкову нотатку.\n", encoding="utf-8")
+    code, out = _run_main_on_files([p])
+    assert "MOJIBAKE/FAIL" in out
+    assert code == 1
+
+
+def test_zero_width_and_box_drawing_still_flagged(tmp_path: Path) -> None:
+    """Zero-width chars and box-drawing wedged in Cyrillic are genuine corruption."""
+    uk_dir = tmp_path / "src" / "content" / "docs" / "uk" / "zw"
+    uk_dir.mkdir(parents=True, exist_ok=True)
+    p = uk_dir / "test.md"
+    p.write_text("сло\u200bво та ц\u2502К.\n", encoding="utf-8")
+    code, out = _run_main_on_files([p])
+    assert "MOJIBAKE/FAIL" in out
+    assert code == 1
