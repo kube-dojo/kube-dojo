@@ -33,8 +33,6 @@ RUSSICISMS = {
     "тіпа": "типу / наче (like/sort of)",
     "пока": "поки / бувай (bye/while)",
     "відноситися": "стосуватися (to relate to)",
-    "в цілому": "загалом (in general)",
-    "рахувати": "вважати (to consider) — рахувати is only for counting numbers",
     "приймати участь": "брати участь (to participate)",
     "слідуючий": "наступний (next/following)",
     "любий": "будь-який (any) — любий means 'dear'",
@@ -51,6 +49,20 @@ CONTEXTUAL_RUSSICISMS = {
     "нормально": (
         "standard for 'normally/properly' and «це нормально» (that's fine); "
         "prefer гаразд / добре only as a colloquial 'OK' filler"
+    ),
+    # СУМ-11 defines рахувати as "to count" (standard). The russicism is the
+    # *consider* sense (рахую/рахує, що… = считать), which uses conjugated forms
+    # this gate does not match — the bare infinitive is almost always counting.
+    # Advisory only, so legit "рахувати репліки/Поди" no longer hard-fails.
+    "рахувати": (
+        "standard for 'to count' (СУМ-11); only the 'consider that…' sense "
+        "(calque of считать, usually conjugated) is a russicism — review in context"
+    ),
+    # r2u lists «у цілості (у цілому)» as an accepted rendering of «в целом»
+    # (the "as a whole" sense). загалом is a stylistic alternative, not a fix.
+    "в цілому": (
+        "accepted for 'as a whole' (e.g. «систему в цілому»); prefer загалом "
+        "only for the 'in general' sense — stylistic, not a correctness failure"
     ),
 }
 
@@ -97,8 +109,12 @@ def check_russicisms(content: str) -> list[CheckResult]:
     # Context patterns that make a word NOT a Russicism.
     # "самий" after той/та/те/ті etc. means "the same" — correct Ukrainian.
     FALSE_POSITIVE_PATTERNS: dict[str, re.Pattern[str]] = {
+        # "той/цей/такий + самий" all mean "the/this/such same" — correct Ukrainian.
         "самий": re.compile(
-            r"(?:той|та|те|ті|тій|того|тому|тих|тими|тією|тої)\s+сам(?:ий|а|е|і|ого|ому|их|ими|ій|ою|ої)",
+            r"(?:той|та|те|ті|тій|того|тому|тих|тими|тією|тої"
+            r"|цей|ця|ці|цього|цьому|цих|цими|цією|цієї"
+            r"|такий|така|такі|такого|такому|таких|такими|такою|такої)"
+            r"\s+сам(?:ий|а|е|і|ого|ому|их|ими|ій|ою|ої)",
             re.IGNORECASE,
         ),
     }
