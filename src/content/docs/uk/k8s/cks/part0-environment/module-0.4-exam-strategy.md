@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2953ef79f2998527acf59f94412bcefb69075c88"
 en_file: "src/content/docs/k8s/cks/part0-environment/module-0.4-exam-strategy.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "a496f4573e58d024e8671b7894a8ef109009d1638c4709d74a1758103b29e7dc"
 ---
 > **Складність**: `[QUICK]` — критично для успіху на іспиті
 >

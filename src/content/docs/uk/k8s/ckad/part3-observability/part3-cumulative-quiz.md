@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "56cf65045816809891e20f3923c3383b72f9eb3a"
 en_file: "src/content/docs/k8s/ckad/part3-observability/part3-cumulative-quiz.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "b4c3b0866976cc724157e242b3c6428bef16c05c7770ba2f5c3e2c8bf15d2273"
 ---
 
 > **Складність**: огляд спостережуваності рівня CKAD — від середнього до просунутого.

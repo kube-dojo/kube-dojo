@@ -12,6 +12,12 @@ lab:
   duration: "25 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "b44a524e0d1ae31c081585f2173f12a90bd7ebfb7fcd404be4eebd561e30a2a3"
 ---
 > **Складність**: `[ШВИДКИЙ]` — Базова орієнтація
 >

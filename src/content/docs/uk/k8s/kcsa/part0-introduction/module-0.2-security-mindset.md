@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "2b90cc5189fd7bead7fd7410c731dba90c94869a"
 en_file: "src/content/docs/k8s/kcsa/part0-introduction/module-0.2-security-mindset.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 10
+  content_sha: "5f0a076d678d1b36fd208bb711f304b4062afbbf5979db43a1950b7f36866ba1"
 ---
 
 Це базовий модуль рівня `[QUICK]` для напрямку Kubernetes and Cloud Native Security Associate. Заплануйте 20–25 хвилин і спершу пройдіть [Модуль 0.1: Огляд KCSA](../module-0.1-kcsa-overview/), щоб домени іспиту й мета сертифікації вже були вам знайомі, перш ніж ви почнете зважувати компроміси безпеки.

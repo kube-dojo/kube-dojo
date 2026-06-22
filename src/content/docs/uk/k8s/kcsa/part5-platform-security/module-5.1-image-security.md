@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "11b93de3c41a78c469a93e85e7bf84162444fc5a"
 en_file: "src/content/docs/k8s/kcsa/part5-platform-security/module-5.1-image-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "4643ecd9c95a0c74fcd972aa67ca4f0a35745532f9dfbc2f1e6d83c11a71c346"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — основні знання для інженерів, які вміють читати YAML Подів і тепер мають оцінювати ризики образів на межах збірки, реєстру, допуску та середовища виконання.

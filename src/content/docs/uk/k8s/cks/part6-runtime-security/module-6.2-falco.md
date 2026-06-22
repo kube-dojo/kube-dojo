@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "0940b9b0716443205ab651ba89f397aa5120a837"
 en_file: "src/content/docs/k8s/cks/part6-runtime-security/module-6.2-falco.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "0080637fc0aee03958f137a96962e515517201468fe33ed2850f804cfd51af9b"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — критична навичка виявлення під час виконання для CKS.

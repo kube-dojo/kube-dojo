@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1b35c2e4172dbec4bf69cd1db950e43abfcad802"
 en_file: "src/content/docs/k8s/cks/part2-cluster-hardening/module-2.2-serviceaccount-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "00ee2f7b6eafd93288c61a5a7df851ceca5339a6862501095e0f77ed699b4d7c"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — критично важлива для безпеки робочих навантажень

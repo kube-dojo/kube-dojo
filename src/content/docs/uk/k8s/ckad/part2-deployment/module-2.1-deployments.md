@@ -12,6 +12,12 @@ lab:
 revision_pending: false
 en_commit: "3f70650589cc2682bef9b7b4518e088b53492eba"
 en_file: "src/content/docs/k8s/ckad/part2-deployment/module-2.1-deployments.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "05e5cf9cd34e47bc7b5d09b9fa4d799ec4d79387cfda8d766fd695a69fba5978"
 ---
 > **Складність**: `[MEDIUM]` — основна навичка CKAD з кількома операціями
 >

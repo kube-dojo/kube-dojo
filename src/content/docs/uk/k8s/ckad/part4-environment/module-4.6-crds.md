@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "56b432910a5768d79e49934b03ec2e70416d4572"
 en_file: "src/content/docs/k8s/ckad/part4-environment/module-4.6-crds.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 8
+  content_sha: "e3a4aef0e61b80fbf0861bd99ee76d371d226fefd04c9d755a4005cd20e48ecb"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — нове в CKAD 2025, важливе концептуальне розуміння.
 >

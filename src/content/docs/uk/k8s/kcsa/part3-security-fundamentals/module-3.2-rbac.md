@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3b4be037d0e821cd9dff44c8211ba7f15322ffb3"
 en_file: "src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.2-rbac.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 12
+  content_sha: "cc0fae8549baeffbc16aca44f59c094fa207ed2bdb4b817f47f65ccaa8cfbccc"
 ---
 
 **Складність**: `[СЕРЕДНЯ]` — основні знання. **Час на проходження**: 40–50 хвилин. **Передумови**: [Модуль 3.1: Безпека Pod'ів](../module-3.1-pod-security/). Цей урок передбачає, що ви вже знаєте Pod Security Standards із попереднього модуля і готові пов'язати посилення захисту робочих навантажень із рішеннями про авторизацію в API.

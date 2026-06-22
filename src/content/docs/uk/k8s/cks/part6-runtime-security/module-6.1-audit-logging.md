@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "85d0036270bfa357cc162edfebbd8d267ade4797"
 en_file: "src/content/docs/k8s/cks/part6-runtime-security/module-6.1-audit-logging.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "d14b418f81abe09ccea250a38f568722921c5d49c9cdaf5a2d0625c28b3ccd84"
 ---
 > **Складність**: `[MEDIUM]` — критична для CKS форензика площини управління
 >

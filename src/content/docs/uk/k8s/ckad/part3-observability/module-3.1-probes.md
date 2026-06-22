@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "4f6a49db8ecec90a0c7767b7dd1f0b3b0febeff57f27dac3644a6c829a0fb50d"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — критична екзаменаційна тема з виробничими наслідками та кількома компромісами щодо налаштувань.

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "11b93de3c41a78c469a93e85e7bf84162444fc5a"
 en_file: "src/content/docs/k8s/kcsa/part5-platform-security/module-5.4-security-tooling.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "88e9d869e5371c8d7bed872d308568b4f5d911072f330199683ad63a43964a0a"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — обізнаність про інструменти, операційне порівняння та практичне проєктування стеку

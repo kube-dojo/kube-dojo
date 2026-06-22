@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "a3adaf63079ca0f338b508a8078ddf3968c3fababe6a9116425101fd82c0ba50"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — основний інструмент розгортання для CKAD
 >

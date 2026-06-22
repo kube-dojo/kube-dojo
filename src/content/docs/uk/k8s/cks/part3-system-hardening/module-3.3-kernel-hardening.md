@@ -12,6 +12,12 @@ lab:
   duration: "35 min"
   difficulty: advanced
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "b74bd72ccd8561b3e2b9409def7dbe26f0eea2a154a206d0300eec30537199c0"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — системне адміністрування з акцентом на безпеку.
 >

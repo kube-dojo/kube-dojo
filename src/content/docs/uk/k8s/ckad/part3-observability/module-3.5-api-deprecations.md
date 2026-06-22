@@ -12,6 +12,12 @@ lab:
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "8a24cb00ecb26ff5cafdce7c2955db267a93e99713f196847a831e0b6799818e"
 ---
 > **Складність**: `[ШВИДКИЙ]` — концептуальне розуміння з практичними командами.
 >

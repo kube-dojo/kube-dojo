@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "eec3f0f28c40fe5599b8cd3499ccb970ba72b689"
 en_file: "src/content/docs/k8s/ckad/part4-environment/module-4.1-configmaps.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "87993c64c20c2241d6914a8a647c8f8e9007b1ee1d378ccfa9954218463f5084"
 ---
 > **Складність**: `[MEDIUM]` — кілька способів створення та споживання
 >

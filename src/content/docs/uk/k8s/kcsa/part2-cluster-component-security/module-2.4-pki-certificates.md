@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "fecc6109d822d6556ea7c91e30320554299bc47f"
 en_file: "src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.4-pki-certificates.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "8a2df8ce82a2dd3d2285b18bb087d88123691c475c508ab83a5b54a8b7571ed4"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові знання | **Час на проходження**: 45-60 хвилин | **Передумови**: [Модуль 2.3: Мережева безпека](../module-2.3-network-security/)

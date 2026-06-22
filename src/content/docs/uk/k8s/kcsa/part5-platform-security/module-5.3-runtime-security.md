@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "11b93de3c41a78c469a93e85e7bf84162444fc5a"
 en_file: "src/content/docs/k8s/kcsa/part5-platform-security/module-5.3-runtime-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "051db82b5c75335295a09afd1ba31469e6f119d18903c4831cacefdf3de53acf"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові знання

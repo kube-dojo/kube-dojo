@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "ff774ccdd6fd142b85bc89bac1f17985ccbec8af"
 en_file: "src/content/docs/k8s/kcsa/part1-cloud-native-security/module-1.1-four-cs.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "4ebf7610efa68be4604cd2ee5ede6b08fc41c06901ec335d02d6166b145fe6be"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базовий фреймворк безпеки для тих, хто готується до KCSA і має навчитися класифікувати неоднозначні знахідки в хмарних середовищах через межі інфраструктури, Kubernetes, середовища виконання та застосунку.

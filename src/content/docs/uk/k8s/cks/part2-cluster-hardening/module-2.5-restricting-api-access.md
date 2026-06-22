@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "c97c64563dd7c43126d74453d77a67a414ce9ed8"
 en_file: "src/content/docs/k8s/cks/part2-cluster-hardening/module-2.5-restricting-api-access.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "281de8dd743b0b3d568ee82d0ce9c837fc7298289aa192e9338b612087ed174a"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — невіддільна частина безпеки кластера
 >

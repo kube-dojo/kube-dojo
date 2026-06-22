@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "fecc6109d822d6556ea7c91e30320554299bc47f"
 en_file: "src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.2-node-security.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "0eb928e219b4568c2b03a4251e2579c8c3c9b1a25177660a0b7cbd2977e2b194"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — базові знання.

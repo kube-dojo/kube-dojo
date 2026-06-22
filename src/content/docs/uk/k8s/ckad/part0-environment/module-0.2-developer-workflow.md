@@ -12,6 +12,12 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "8788b68062bdb99509084934015a05221850cdef80a2deb036ae69c51b35fdb2"
 ---
 
 > **Складність**: `[ШВИДКИЙ]` — основні патерни kubectl для швидкості та точності на CKAD

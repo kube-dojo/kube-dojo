@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "17a9d64d1b0b894e87a739660f6008660ae60861"
 en_file: "src/content/docs/k8s/cks/part4-microservice-vulnerabilities/module-4.3-secrets-management.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "4dc89921bfe247f7e66be5604d2a37620b27c6e9ba719eabd93c6a7194b78228"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — критична навичка для CKS
 >

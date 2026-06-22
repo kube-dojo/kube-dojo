@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "af86033384182aa0a70fe80d66091ab6d20f87df"
 en_file: "src/content/docs/k8s/kcsa/part6-compliance/module-6.2-cis-benchmarks.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "c4751e917976e6bc23ebe993a7780984a405ef3f9d6b7ae1a8ebf02883fc81f3"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — технічні знання
