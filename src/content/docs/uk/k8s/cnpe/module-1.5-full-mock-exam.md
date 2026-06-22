@@ -6,6 +6,12 @@ sidebar:
   order: 105
 en_commit: "1fb19793cd74345606fcace255a8421eb8501795"
 en_file: "src/content/docs/k8s/cnpe/module-1.5-full-mock-exam.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "a6e29999d469bad83df3f078c35a741b74a23fef524b71c08c08ed98c6b7650c"
 ---
 
 - **Напрямок CNPE**: Складність `[СКЛАДНИЙ]`

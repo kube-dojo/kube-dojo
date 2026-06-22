@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f5818b32b6fe612e822ee4ff03ddeac95606e7ff"
 en_file: "src/content/docs/k8s/cnpa/index.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "0bf30c9bd21522d7231858b98b9734627eee9935b5b294bcc1afeea76b402d76"
 ---
 > **Іспит із варіантами відповідей** | 120 хвилин | Прохідний бал: 75% | $250 USD
 

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "adf9e378a471b249b2157ea56e485984936f4969"
 en_file: "src/content/docs/k8s/lfcs/module-1.4-storage-services-and-users-practice.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "57a9e3d4166aa7f2eaa6351a773ded63152281d99de431f38aeee8feaf85b667"
 ---
 
 > **Напрямок LFCS** | Складність: `[СКЛАДНО]` | Час: 50-70 хв на інтегрований модуль практики з адміністрування Linux, що охоплює ідентифікацію, сховище, служби, обмеження та перевірку.

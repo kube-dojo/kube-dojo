@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/cnpa/module-1.1-exam-strategy-and-blueprint-review.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "30c0e605bc93b5c752835cdf11938b99742a57a530d2a61ce9f57bc205b22c8e"
 ---
 
 > **Напрямок CNPA** | Підготовка до іспиту з вибором відповіді | **120 хвилин** | **Без передумов** | **Від початківця до старшого інженера**

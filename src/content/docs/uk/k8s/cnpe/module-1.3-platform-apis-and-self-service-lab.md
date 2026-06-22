@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1fb19793cd74345606fcace255a8421eb8501795"
 en_file: "src/content/docs/k8s/cnpe/module-1.3-platform-apis-and-self-service-lab.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "9c393b7bbd680fbfba7fd20d08a8d1e51c57268f7bd6a484ae33d8b4b678abfb"
 ---
 
 > **Напрямок CNPE** | Складність: `[СКЛАДНИЙ]` | Час на проходження: 75–90 хв

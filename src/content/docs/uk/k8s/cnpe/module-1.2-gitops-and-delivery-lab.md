@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1fb19793cd74345606fcace255a8421eb8501795"
 en_file: "src/content/docs/k8s/cnpe/module-1.2-gitops-and-delivery-lab.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "43631c915e6273db111b5fb89a7dbee5c759b3c48eb09161c010d8ee6e061c97"
 ---
 
 > **Напрямок CNPE** | Складність: `[СКЛАДНИЙ]` | Час на проходження: 90-120 хв

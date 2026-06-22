@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "43ab1229039cda3ce89e4ba4817aa10823e2f360"
 en_file: "src/content/docs/k8s/cba/module-1.2-backstage-plugin-development.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "98815211235cb1fd8e6a41daf480d92fc1a26d32b95a4f6d872c7580aef8d6ed"
 ---
 > **Складність**: `[СКЛАДНИЙ]` — найважчий домен іспиту (32%)
 >

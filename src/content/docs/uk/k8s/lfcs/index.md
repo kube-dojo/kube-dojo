@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "0ca3dfcf76cfb787438f6b33ccda3b67b425f9df"
 en_file: "src/content/docs/k8s/lfcs/index.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "c867f8827905fe260b8dcad658e405ff54464ae5ca50b1cb3350e65e758711d1"
 ---
 > **Linux Foundation Certified System Administrator** — сертифікація системного адміністратора Linux, що ґрунтується на практичних завданнях
 

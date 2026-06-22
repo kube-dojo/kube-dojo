@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/ica/module-1.3-istio-security-troubleshooting.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "e49c1fedf12690f2bb97c5ed214c56cfe4b3d04e694c7a477fb2609f0cddb625"
 ---
 > **Складність:** `[СКЛАДНИЙ]`
 > **Час на проходження:** `70-90 хвилин`

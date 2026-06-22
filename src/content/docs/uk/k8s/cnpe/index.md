@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f5818b32b6fe612e822ee4ff03ddeac95606e7ff"
 en_file: "src/content/docs/k8s/cnpe/index.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "4acc382b8a80a784db8b2a4b385b79ebd514710ec7821e5d5591a93ac88a835a"
 ---
 > **Іспит на основі практичних завдань** | 120 хвилин | Прохідний бал: уточнюється | $445 USD | **Запущено в листопаді 2025 року**
 

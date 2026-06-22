@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f6dc2c2b384120b99106ee54aa04496c3930d081"
 en_file: "src/content/docs/k8s/finops/module-1.1-finops-fundamentals.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "816a0dda4a2a89aff16f0ee3ffbbd4205e86883d9895aa36e93e735fba89adc1"
 ---
 > **Сертифікаційний напрямок** | Складність: `[СЕРЕДНЯ]` | Час: 60 хвилин
 

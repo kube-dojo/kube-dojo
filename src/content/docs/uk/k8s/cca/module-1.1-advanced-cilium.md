@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "4c4ed997a31e7dbcbd92a07c80d78c8bc44cd917"
 en_file: "src/content/docs/k8s/cca/module-1.1-advanced-cilium.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "a691d0fba0e48d6a56f0742d0b3affe2f4142f73f7f7f2b5d905f28494590010"
 ---
 
 > **Напрямок CCA** | Складність: `[СКЛАДНО]` | Час: 75-90 хвилин

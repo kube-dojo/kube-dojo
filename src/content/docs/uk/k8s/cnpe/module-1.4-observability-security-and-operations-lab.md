@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1fb19793cd74345606fcace255a8421eb8501795"
 en_file: "src/content/docs/k8s/cnpe/module-1.4-observability-security-and-operations-lab.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "5b8e522dfe97c5bef7f187635d6c429b305b86f1794d6beee265ed4291ec06ec"
 ---
 
 > **Напрямок CNPE** | Складність: `[СКЛАДНА]` | Час на проходження: 75-90 хв

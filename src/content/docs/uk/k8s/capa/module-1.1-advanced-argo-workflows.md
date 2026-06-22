@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "935de4732cac0a1f94506a5eb3419b4198917537"
 en_file: "src/content/docs/k8s/capa/module-1.1-advanced-argo-workflows.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "c09805baf1ad0d6d2d12a9241c33efcbf2351e83ffdf421fb7912f0ae2481284"
 ---
 > **Напрямок CAPA -- Домен 1 (36%)** | Складність: `[СКЛАДНО]` | Час: 50-60 хв
 

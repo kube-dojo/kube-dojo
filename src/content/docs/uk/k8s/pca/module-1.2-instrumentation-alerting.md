@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/pca/module-1.2-instrumentation-alerting.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "4153271c1e72e0ca3c885fd41743f6939336dd854d8237538bc41b3d5c6367d4"
 ---
 
 > **Напрямок PCA** | Складність: `[СКЛАДНО]` | Час: 45-55 хв

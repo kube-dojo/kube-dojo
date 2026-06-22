@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "26342c0ca358c92129aa43ee22f0519a67887176"
 en_file: "src/content/docs/k8s/extending/module-1.1-api-deep-dive.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "2a6e69d13386e3ae0da1d3d4df777ecb5a6f5632977a5f43e9e39b8e6a292035"
 ---
 > **Складність**: `[СЕРЕДНЯ]` — розуміння механіки API
 >

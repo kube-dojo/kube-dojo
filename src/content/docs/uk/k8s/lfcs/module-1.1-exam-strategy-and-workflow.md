@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "adf9e378a471b249b2157ea56e485984936f4969"
 en_file: "src/content/docs/k8s/lfcs/module-1.1-exam-strategy-and-workflow.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "59bd8fc70a193a8532b3160dd07f619f02b8dec5f5ba4efba5db5f8ee7234cc8"
 ---
 
 Складність: `[СЕРЕДНЯ]` | Час: 1–2 години | Передумови: знайомство з хабом LFCS, основи роботи в командному рядку Linux і достатня впевненість у роботі з оболонкою, щоб створювати файли, перевіряти служби та читати сторінки довідки без графічного помічника. Матеріали сертифікації Kubernetes від KubeDojo орієнтовані на Kubernetes 1.35+, але цей модуль LFCS зосереджено на звичках адміністрування Linux, які переносяться в кожен наступний напрямок із інтенсивною роботою в терміналі.

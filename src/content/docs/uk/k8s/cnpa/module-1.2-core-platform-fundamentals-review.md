@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/cnpa/module-1.2-core-platform-fundamentals-review.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "3f84aa5f008a1816611acbbd24b076c7807577b284b2169eff76e032a96ac835"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]`

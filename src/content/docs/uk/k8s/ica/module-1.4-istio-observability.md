@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/ica/module-1.4-istio-observability.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "a7872bf74b603f1bb57a1e03d7b525eb406b564c56f6421942c5c440e40a0651"
 ---
 
 ## Складність: `[СЕРЕДНЯ]`

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1c9b04bcf41904149faa0dbeb61b635c351ec080"
 en_file: "src/content/docs/k8s/extending/module-1.6-admission-webhooks.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "7fe03a6af79fa493d836453acc11740741b504bcc515f88e2cc43915ffd53f31"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — Перехоплення та модифікація запитів до API

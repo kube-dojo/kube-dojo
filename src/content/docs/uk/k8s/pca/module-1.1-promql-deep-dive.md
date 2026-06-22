@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/pca/module-1.1-promql-deep-dive.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "1e266049ba28d032c88889b085a0ae16719d045cdf2bc6ce967e2c67afae6348"
 ---
 
 > **Напрямок PCA** | Складність: `[СКЛАДНО]` | Час: 50-60 хв | Цільова версія Kubernetes: 1.35 і новіша для лабораторних прикладів та операційних припущень.

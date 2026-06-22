@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1fb19793cd74345606fcace255a8421eb8501795"
 en_file: "src/content/docs/k8s/cnpe/module-1.1-exam-strategy-and-environment.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 10
+  content_sha: "0ec19d021f22431e15412515b546a280c715e497cb56545009fb36bb90cbf440"
 ---
 
 > **Напрямок CNPE** | Складність: `[СЕРЕДНЯ]` | Час на проходження: 45–60 хв

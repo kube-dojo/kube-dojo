@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1c9b04bcf41904149faa0dbeb61b635c351ec080"
 en_file: "src/content/docs/k8s/extending/module-1.5-advanced-operators.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "3689a6c29bd5b2950752cd09716761721bcbc7d9543fc4c47cdd24e704edb7d2"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — патерни операторів продакшн-рівня

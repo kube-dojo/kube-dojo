@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "6ec0c6e4ae7f1765a2922b7b79591aaca087bc1b"
 en_file: "src/content/docs/k8s/kca/module-1.1-advanced-kyverno-policies.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "27d2b9dd74ae19031f65b10c0f1315cc37b0576f7a27bf25e62a05b1503b894b"
 ---
 
 > **Складність**: `[СКЛАДНО]` — Домен 5: Просунуте написання політик Kyverno (32% іспиту)
