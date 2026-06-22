@@ -17,8 +17,14 @@
 </head>
 <body>
 <h1>#1911 UK Translation Swarm — Waves 1–2 (scale-down handoff)</h1>
-<p><strong>Date:</strong> 2026-06-22 (Europe/Budapest). <strong>Mode:</strong> SCALED DOWN per user
-(usage limit hit twice; user: "scale down now, scale up again at end of week if extra budget").</p>
+<p><strong>Date:</strong> 2026-06-22 (Europe/Budapest). <strong>Mode:</strong> HALTED at the k8s-cert-tree milestone (user flagged swarm spend after the usage cap hit multiple times).</p>
+<p style="background:#fff7e6;border:1px solid #e0b000;padding:.5rem .8rem;border-radius:5px"><strong>UPDATE (later same session):</strong> budget returned, so the swarm resumed and finished beyond waves 1–2:
+the <strong>8 wave-2 stragglers were re-run and validated</strong> (PR #2076 now <strong>82/82</strong>), and a
+<strong>wave 3 = 52 k8s-<em>missing</em> cert pages</strong> shipped as <strong>PR #2077</strong> (build-green).
+Net: the <strong>entire k8s certifications tree (stale + missing) is COMPLETE</strong> — ~207 pages across 4 PRs (#2074/#2075/#2076/#2077),
+currency ≈14%→≈33% once merged. The "8 stragglers deferred" / "78/82" notes below are SUPERSEDED.
+<strong>Remaining (held for a deliberate go):</strong> cloud/linux stale (78/37) + the big net-new blocks
+(platform 241 / ai-ml 142 / ai-history 74 / on-prem 58 / ai 44 = 559). Resume procedure below is unchanged.</p>
 
 <h2>What was built &amp; proven</h2>
 <p>A <strong>Claude-subagent + <code>sources</code> MCP</strong> translation pipeline — the differentiator is that
