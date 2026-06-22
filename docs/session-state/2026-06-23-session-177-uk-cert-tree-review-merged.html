@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 177 — #1911 UK k8s cert-tree: gate fixes + full review + 4 PRs merged</title>
+<style>
+ body{font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #2b6cb0;padding-bottom:.3rem}
+ h2{font-size:1.15rem;color:#2b6cb0;margin-top:1.6rem}
+ code{background:#f0f2f5;padding:1px 5px;border-radius:3px;font-size:13px}
+ .tldr{background:#ebf8ff;border-left:4px solid #2b6cb0;padding:.8rem 1rem;border-radius:4px}
+ .done{color:#22863a;font-weight:600}.warn{color:#b08800;font-weight:600}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:13.5px}
+ th,td{border:1px solid #d0d7de;padding:5px 8px;text-align:left;vertical-align:top}
+ th{background:#f6f8fa}
+ li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 177 — #1911 UK k8s cert-tree: gate false-positives fixed, all 207 pages reviewed, 4 PRs merged</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-23 (Europe/Budapest). <strong>Mode:</strong> resumed s176 (UK swarm halted). User: "we need to review all translations" before merge — review was skipped by the swarm; then "create a plan and execute, go slow, no fan-out, conserve usage; the book (#1876) is next after this section." <strong>Outcome:</strong> the 4 build-green cert-tree PRs (#2074–#2077, ~207 pages) were NOT actually mergeable — both #1911 quality gates had false-positive bugs. Fixed both gates (PRs #2079, #2081, codex-reviewed, merged), did a full inline de-russification + quality review of all 207 pages (MCP-grounded, no fan-out), fixed real defects, and <strong>merged all 4 PRs</strong>. UK currency ≈14%→≈33%. Build green (2169 pp, 0 err).</p>
+
+<h2>1. The two gate bugs (the real blocker)</h2>
+<p>The PRs were "build-green" but all failed the <strong>Ukrainian Russicism check</strong>. Tracing exact code points showed both #1911 gates were over-aggressive, not the translations:</p>
+<table>
+<tr><th>Gate</th><th>Bug</th><th>Proof it's a gate bug</th><th>Fix (merged)</th></tr>
+<tr><td><code>uk_calque_v2.py</code> MOJIBAKE_RE</td><td>flagged <code>/ _ = + ·</code> + combining stress marks as corruption</td><td>1477/1563 hits were <code>/</code> in legit X/Y pairs; <strong>main already had 395 such pairs in 167 merged files</strong></td><td><strong>#2079</strong> (issue #2078): whitelist punctuation+combining marks; still flags CJK/soft-hyphen/zero-width/box-drawing. +4 tests</td></tr>
+<tr><td><code>ukrainian.py</code> russicism gate</td><td>hard-failed <code>рахувати</code>(=count), <code>в цілому</code>(=as a whole), <code>цей самий</code>(=this same)</td><td>СУМ-11 + r2u confirm all legit; editing content would <em>introduce</em> errors</td><td><strong>#2081</strong> (issue #2080): →advisory + extend самий guard. codex R1 caught a <span class="warn">real P1</span> (the самий FP guard over-subtracted, could hide a genuine <code>самий кращий</code>) → narrowed to literal token, R2 APPROVE</td></tr>
+</table>
+<p>Both fixes had focused <strong>codex cross-family review</strong> (different family than opus author). Genuine content defects fixed on the PR branches: 4 invisible soft-hyphens (<code>одно­X</code>) + 1 <code>самий шлях</code>→<code>сам шлях</code>.</p>
+
+<h2>2. Full translation review (inline, MCP-grounded, no fan-out, per user)</h2>
+<ul>
+<li><strong>De-russification</strong> across all 207 pages: 61 detector calque flags reframed in context — active participles <code>працююч-</code> → <code>робоч-</code>/<code>активн-</code>/relative-clause (context: <code>робочий</code> collides with <code>робочий процес</code>=workflow / <code>робоче середовище</code>=work-env, so <code>активн-</code> in security content); <code>оточуюч-</code>→<code>навколишн-</code>; <code>простоююч-</code>→<code>невикористан-</code>/<code>бездіяльн-</code>; <code>знаходяться</code>(storage)→<code>зберігаються</code>; 7 list-introducing <code>наступні X</code>→<code>такі X</code>. <strong>Legit <code>наступні</code> kept</strong> (next/subsequent/temporal — judged per context). <strong>Every new word-form VESUM-verified.</strong></li>
+<li><strong>Completeness:</strong> 0/207 pages below 85% UK/EN word-ratio.</li>
+<li><strong>Leftover-English sweep:</strong> all hits legitimately English (proper nouns, kubernetes.io doc-page names + exam phrasing, literal kubectl/CIS error strings, code comments). One genuine prose defect fixed: <code>otca</code> module-1.1 callout started in English → translated (code comment left English).</li>
+<li><strong>Per PR:</strong> #2074 canary (2, clean prose) · #2075 w1 16 reframes · #2076 w2 24 reframes · #2077 w3 12 reframes + otca. All 4 PRs verified disjoint (no file overlap) before merge.</li>
+</ul>
+
+<h2>3. Decision D — ASCII-diagram labels kept English (this pass)</h2>
+<p>Systemic finding the automated stamp can't see: ASCII-art diagram labels ("Desired State", "What did we ask for?") are left in English on every page with diagrams. <strong>Kept English this pass</strong> (consistent with code/log output; translating box labels breaks <code>┌──┐</code> alignment). Same for a <code>cat &lt;&lt;EOF</code> heredoc lab artifact in cnpa. A dedicated diagram-localization pass can follow if wanted.</p>
+
+<h2>4. State</h2>
+<ul>
+<li><span class="done">MERGED:</span> #2079, #2081 (gate fixes); #2074, #2075, #2076, #2077 (UK cert tree, ~207 pages). Issues #2078, #2080 closed. Build green (2169 pp / 0 err). Worktrees + branches cleaned (g2-craft retained — not mine).</li>
+<li><span class="warn">Follow-up #2082:</span> refresh <code>calque_review</code> <code>content_sha</code> on the ~38 edited pages (their stamps are content-stale post-edit; cosmetic dashboard metadata — content IS reviewed). Mechanical, batch via <code>calque_review_stamp.py</code>.</li>
+</ul>
+
+<h2>5. NEXT — #1876 AI-history book (per user: "the book is next after this section")</h2>
+<p>The k8s cert-tree UK section is finished + merged. The book is the next workstream — recommend a <strong>fresh session</strong> (this one is context-heavy). Per s175 Phase-1: the book is carefully sourced, NOT fabrication-heavy → targeted spot-checks only (no full 73-chapter epic); per memory, post a What's-New/changelog update before/around it. Then back to #1911 (remaining ≈559 net-new + stale; regenerate work-list from <code>GET /api/uk/board</code> — swarm stays HALTED pending a deliberate go).</p>
+
+<h2>6. Durable lessons</h2>
+<ul>
+<li><strong>The #1911 swarm ships PRs WITHOUT the cross-family review phase</strong> — review the translations before merge (user emphatic). "build-green" ≠ reviewed.</li>
+<li>When a gate fails on swarm output, <strong>check if it's a gate false-positive vs a real defect</strong> (both UK gates had FP bugs; fixing the gate, not editing correct content, was right — editing would have introduced errors).</li>
+<li>De-russification review that worked: detector-driven, reframe in context, <strong>MCP verify_words every new form</strong>, completeness + leftover-English sweep (most English retention is legitimate). Translations are correctable post-merge.</li>
+</ul>
+</body>
+</html>
