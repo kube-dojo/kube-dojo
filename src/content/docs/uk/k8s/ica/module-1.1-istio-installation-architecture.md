@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/ica/module-1.1-istio-installation-architecture.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "3cf3f7880e9965dae789f4a8aca35cb05f0413899afeccca59f1f858786ba931"
 ---
 
 > **Складність:** `СЕРЕДНЯ`

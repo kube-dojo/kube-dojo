@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "b05978212c7fdf114941cd116091047a25b7616e"
 en_file: "src/content/docs/k8s/ica/module-1.2-istio-traffic-management.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "172644b037b699a1019f28d92424ff20d5eed031fd82328a112d63b9757618af"
 ---
 
 ## Складність: `[СКЛАДНИЙ]`

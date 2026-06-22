@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "adf9e378a471b249b2157ea56e485984936f4969"
 en_file: "src/content/docs/k8s/lfcs/module-1.3-running-systems-and-networking-practice.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "163591f3e59470d698d0ed4019246e8b99ea622c47287b6b87b28e516b5570d6"
 ---
 
 > **Напрямок LFCS** | Складність: `[СКЛАДНИЙ]` | Час: 45–60 хв | Цільова версія Kubernetes: 1.35+. Цей практичний модуль зосереджено на операціях із Linux-хостом, які водночас підтримують надійне адміністрування вузлів Kubernetes.

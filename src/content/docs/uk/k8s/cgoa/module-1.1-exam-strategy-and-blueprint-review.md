@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "311d4d1d3924e0120462a5587fc5ba2aa52c3662"
 en_file: "src/content/docs/k8s/cgoa/module-1.1-exam-strategy-and-blueprint-review.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "700a24c85c0935e286e5fadcb117e76c6aeea63b5a59e045111b24af56306294"
 ---
 
 > **Напрямок CGOA** | **Складність**: Середня | **Час на проходження**: 90 хвилин | **Передумови**: Досвід експлуатації Kubernetes не потрібен, але базове знання термінології Git і CI/CD буде корисним

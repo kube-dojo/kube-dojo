@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1c9b04bcf41904149faa0dbeb61b635c351ec080"
 en_file: "src/content/docs/k8s/extending/module-1.7-scheduler-plugins.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "f4500f8b6d9836f78421f15b4546de4b83c16f83a01bbf1ddcec61a47aa45701"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — розширення рішень планування Kubernetes

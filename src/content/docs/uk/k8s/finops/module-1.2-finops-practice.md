@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "f6dc2c2b384120b99106ee54aa04496c3930d081"
 en_file: "src/content/docs/k8s/finops/module-1.2-finops-practice.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 15
+  content_sha: "4a36c7a03ed258560b77ff6be022d605a8ff60134978586b4d960be960d37262"
 ---
 > **Сертифікаційний напрямок** | Складність: `[СЕРЕДНЯ]` | Час: 50 хвилин
 

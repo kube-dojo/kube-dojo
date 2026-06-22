@@ -7,6 +7,12 @@ sidebar:
 revision_pending: false
 en_commit: "311d4d1d3924e0120462a5587fc5ba2aa52c3662"
 en_file: "src/content/docs/k8s/cgoa/module-1.4-practice-questions-set-1.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "71a4e177e59fbc92c1279d88627edf25a671abd48d256cd2a586999a79027bbe"
 ---
 
 > **Напрямок CGOA** | Практичні запитання | Набір 1

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "efd6f6dabbfac99fc4dac8a86a4317b1c70c7d00"
 en_file: "src/content/docs/k8s/cnpa/module-1.5-practice-questions-set-2.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "16f04e7e5a211265ab377d12452d31c6ed010e5427de8d3a19e789236b81e266"
 ---
 
 > **Напрямок CNPA** | Практичні запитання | Набір 2 | Складність: середня | Час: 75 хвилин | Передумови: модулі CNPA з 1.1 до 1.4, базові об'єкти Kubernetes та словник платформної інженерії

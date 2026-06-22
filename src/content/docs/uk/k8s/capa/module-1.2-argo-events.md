@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "935de4732cac0a1f94506a5eb3419b4198917537"
 en_file: "src/content/docs/k8s/capa/module-1.2-argo-events.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "7f261d8525661e13da72167c22e2d78c172ae19e898915d884a32f9457fc3032"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — кілька взаємодійних CRD, залежності RBAC та налагодження між компонентами.

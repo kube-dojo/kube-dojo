@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "26342c0ca358c92129aa43ee22f0519a67887176"
 en_file: "src/content/docs/k8s/extending/module-1.3-controllers-client-go.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "8aa73082acb3b19592fb68638a874fe73eba2a1c218fcf8c4d3af3f19e2dbf0c"
 ---
 
 > **Складність**: `[СКЛАДНИЙ]` — повна реалізація контролера з нуля.

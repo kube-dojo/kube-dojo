@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "6ec0c6e4ae7f1765a2922b7b79591aaca087bc1b"
 en_file: "src/content/docs/k8s/kca/module-1.2-kyverno-operations-cli.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "003de5e8f947e63d4b7998625b946951bda80ecdb72c718e952fcb1c464b7616"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]` — кілька інструментів та операційних концепцій

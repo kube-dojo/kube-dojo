@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "adf9e378a471b249b2157ea56e485984936f4969"
 en_file: "src/content/docs/k8s/lfcs/module-1.2-essential-commands-practice.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "faa5265397c5ad23aae42c7c46dde4d0022de5235e72b1e8324e8f9ad0b5976a"
 ---
 
 > **Напрямок LFCS** | Складність: `[СЕРЕДНЯ]` | Час: 45-60 хв | Контекст Kubernetes: 1.35+

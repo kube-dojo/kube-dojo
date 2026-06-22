@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/lfcs/module-1.5-full-mock-exam.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 4
+  content_sha: "b5e6e2585a6c72ae69e09e7d92609b4ecef5a734f078fec48093b9a2b625b371"
 ---
 
 > **Напрямок LFCS** | Складність: `[СКЛАДНИЙ]` | Час: 90-120 хв

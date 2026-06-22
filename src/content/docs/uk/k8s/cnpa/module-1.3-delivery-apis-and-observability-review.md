@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "efd6f6dabbfac99fc4dac8a86a4317b1c70c7d00"
 en_file: "src/content/docs/k8s/cnpa/module-1.3-delivery-apis-and-observability-review.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "dd1409e9e4f077ee81b87a4e86ef98696e85c4b7e30828c6739133fab7b1fa4a"
 ---
 
 > **Напрямок CNPA** | Огляд для платформного інженера | **Доставка, API, спостережуваність та контракти надійності**

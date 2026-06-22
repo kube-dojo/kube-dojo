@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "0aa7ee45f0a30f3fe402f4669d39075937ce3865"
 en_file: "src/content/docs/k8s/otca/module-1.2-otel-collector-advanced.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "c39f94eea9a3672f38f9a97fb642444abfbbbe7f2093deb54a282db00bde30b9"
 ---
 > **Складність**: `[СКЛАДНИЙ]` — кілька взаємодійних компонентів, логіка конвеєра.
 >

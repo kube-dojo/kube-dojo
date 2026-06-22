@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "38858c08fc49740e5c88f5853ef3d9e484f92ab2"
 en_file: "src/content/docs/k8s/cnpa/module-1.4-practice-questions-set-1.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "5ade39892fceb0ff855cf898a908c10cc2e5f5c51ff14ddb33c4efde2319d30b"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]`

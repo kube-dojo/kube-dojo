@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "311d4d1d3924e0120462a5587fc5ba2aa52c3662"
 en_file: "src/content/docs/k8s/cgoa/module-1.3-patterns-and-tooling-review.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 8
+  content_sha: "08cc890bc223b5a675d0087adb9ccfa7a55d3ed460df66b94a9d89a9d82b52db"
 ---
 
 > **Напрямок CGOA** | Складність: **СЕРЕДНЯ** | Час: **75 хвилин** | Передумови: принципи GitOps, об'єкти Kubernetes, базовий словник CI/CD | Цільова версія Kubernetes: **1.35+**

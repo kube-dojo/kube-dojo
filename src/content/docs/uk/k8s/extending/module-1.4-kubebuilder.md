@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "1c9b04bcf41904149faa0dbeb61b635c351ec080"
 en_file: "src/content/docs/k8s/extending/module-1.4-kubebuilder.md"
+calque_review:
+  reviewed_at: "2026-06-22"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "199121f46efa6a9e87ef25073dea158536baf4c6f6445cbf22433e77d1b95294"
 ---
 > **Складність**: `[СКЛАДНИЙ]` — розробка операторів на основі фреймворку.
 >
