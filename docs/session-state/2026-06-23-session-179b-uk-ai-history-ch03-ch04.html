@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 179b — UK AI-history ch-03 + ch-04, 3-family reviewed & merged</title>
+<style>
+  body { font: 16px/1.6 -apple-system, system-ui, sans-serif; max-width: 62rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #1e40af; }
+  code { background: #eef; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #ccc; padding: .35rem .55rem; text-align: left; vertical-align: top; }
+  th { background: #e8eefc; }
+  .p1 { color: #b91c1c; font-weight: 600; }
+  .tldr { background: #fff7ed; border: 1px solid #fdba74; padding: .8rem 1rem; border-radius: 6px; }
+  .win { background: #f0fdf4; border: 1px solid #86efac; padding: .8rem 1rem; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Session 179b — UK AI-history book: ch-03 + ch-04 (continuation of s179)</h1>
+<p><strong>Date:</strong> 2026-06-23 · <strong>Issue:</strong> #1911 · <strong>PRs merged:</strong> #2088 (ch-03), #2089 (ch-04) · <strong>Predecessor:</strong> session 179 (ch-02, #2087)</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> After the user pointed out I'd stopped too early (opus-4.8 has no measured recall rot to ~654K; handoff threshold is 700K — use the headroom, don't conflate "conserve usage = no fan-out" with "do less"), I kept the same locked pipeline running in-session and shipped <strong>two more chapters: ch-03 "The Physical Bridge" (#2088) and ch-04 "The Statistical Roots" (#2089)</strong>, both 3-family reviewed pre-merge and merged. <strong>Three chapters total this session (ch-02/03/04).</strong> 69 chapters remain (ch-05 … ch-73).
+</div>
+
+<h2>The process correction that drove this session</h2>
+<p>s179 stopped after one chapter citing "conserve usage." The user corrected: <em>"we measured that in 4.8 there is no brain rot and we decided to go up to 700k — why don't you stick to it?"</em> The fix: <code>conserve usage</code> means <strong>no fan-out / no swarm</strong> (the parallel waste that was halted), NOT fewer chapters per session. Sequential per-chapter work with the 3-family review is the endorsed pipeline, not the swarm. Keep working in-session toward the 700K cache/recall ceiling; hand off before drift, not after one unit. See memory <code>feedback_context_canary_brain_rot</code> + the new <code>feedback_use_700k_headroom_dont_stop_early</code>.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Chapter</th><th>PR</th><th>Ratio</th><th>flags_resolved</th><th>grok 1st-try</th></tr>
+<tr><td>ch-03 The Physical Bridge (Shannon 1937; switching algebra; Nakashima)</td><td>#2088 merged</td><td>90%</td><td>24</td><td>✅</td></tr>
+<tr><td>ch-04 The Statistical Roots (Markov vs Nekrasov; 1913 Onegin count; →Shannon n-grams)</td><td>#2089 merged</td><td>89%</td><td>28</td><td>✅</td></tr>
+</table>
+<p>Each: inline opus translation → 3 cross-family reviews PRE-merge (agy <code>gemini-3.1-pro-high</code> / codex <code>gpt-5.5</code> / grok-4.20 via hermes) → orchestrator adjudicated <strong>every</strong> finding via the <code>sources</code> MCP → fix → stamp → build (2169 pp) → rebase-merge → prune. All CI green (incl. required Astro build + UK Russicism check).</p>
+
+<div class="win">
+<h2>The fleet's real catches (per chapter, near-disjoint across families)</h2>
+<strong>ch-03:</strong>
+<ul>
+<li class="p1">agy — <strong>Johanna (Hannsi) Piesch was female</strong>: «опублікував» → «опублікувала» (the other two missed the gender). Also «двостанний» VESUM-absent → «двопозиційний».</li>
+<li class="p1">codex + agy — «підметовий» (= <em>grammatical-subject-related</em>) mistranslated "underlying" → «засадничий»; «озброюючи» (arming) → «комутуючи» for "wiring".</li>
+<li>grok — flagged «Венівар Буш» as nonstandard. <strong>MCP adjudication corrected the reviewer:</strong> grok's «Ванневар» was also wrong; UA Wikipedia gives <strong>«Веннівер Буш»</strong> (applied).</li>
+</ul>
+<strong>ch-04:</strong>
+<ul>
+<li class="p1">agy — <strong>«царь»→«цар»</strong>: a russicism (Russian soft sign) the CI <code>[ыёъэ]</code> gate is <strong>structurally blind to</strong> (ь is a legal UA letter; only VESUM catches it). Also дієприслівник grammar errors (impersonal «породжено» + gerunds; dangling «рухаючись»).</li>
+<li class="p1">codex — <strong>«демонстративно»</strong> (= ostentatiously) mistranslated "demonstrably" → «доказово» (2×); case grammar «вісника»; «двокроковий/однокроковий».</li>
+<li>all three — «двостанний» (VESUM-absent) → «двостановий» (attested).</li>
+</ul>
+</div>
+
+<h2>Adjudication rejected confidently-wrong reviewer claims (MCP is the 2nd gate)</h2>
+<ul>
+<li>ch-03: «доповняльна функція» kept (VESUM-attested; over grok's Latinism «комплементарна»). «теоретичних комп'ютерних наук» kept (ch-01 voice, over codex's «інформатика»).</li>
+<li>ch-04: «передбачувальна» kept (VESUM-attested = predictive; codex misread it as "predictable"). «уручну» kept (attested + euphonic after «він»).</li>
+</ul>
+
+<h2>Reusable lessons</h2>
+<ul>
+<li><strong>The <code>[ыёъэ]</code> russicism gate is blind to wrong-letter-but-legal russicisms</strong> (e.g. «царь» with ь instead of «цар»). VESUM <code>verify_word</code> catches these; the 3-family review surfaced it. Worth a follow-up: a VESUM-membership lint for suspicious tokens, not just the forbidden-char class.</li>
+<li><strong>Case-sensitive replace-all is a footgun:</strong> «двостанн»→«двостанов» left two capitalised «Двостанний» in the ch-04 math block; my first verification grep also missed them (wrong case + ending). Always re-scan <code>grep -i</code> after a replace-all. (Caught + fixed before stamp.)</li>
+<li><strong>Chapter-trap: the Russian hard sign.</strong> ch-04 discusses Markov stripping the hard sign from Pushkin; naming it «тверді знаки» WITHOUT the ъ glyph keeps the CI gate green while staying faithful. Future chapters quoting Russian orthography need the same care.</li>
+<li><strong>Terminology baseline is compounding:</strong> the s179 logic/math terms (вивідний, нерозв'язний, несуперечливий) + this session's (двостановий, комутаційна схема, перешкода[hindrance], ланцюг Маркова, ймовірність переходу, коефіцієнт дисперсії, числення висловлювань) are all VESUM/wiki-grounded and reusable for ch-05+.</li>
+<li><strong>hermes/grok reliability improved</strong> — grok succeeded first try on both ch-03 and ch-04 (vs ch-02's empty-response + retry). Still budget one retry.</li>
+<li><strong>Token economy held:</strong> edited PRIMARY files; worktrees were commit/push staging only (cp), never read inside <code>.worktrees/</code>.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+<li><strong>Continue #1911 AI-history: ch-05 "The Neural Abstraction" → … → ch-73.</strong> <strong>69 chapters remain.</strong> Same locked pipeline; reuse the terminology baseline + the review-prompt templates in scratchpad. Per-chapter <code>feat(uk):</code>/<code>docs(uk):</code> + <code>Refs #1911</code>. EN source: <code>src/content/docs/ai-history/ch-NN-*.md</code>.</li>
+<li>Push multiple chapters per session toward the 700K context ceiling (per the user's directive); hand off before drift.</li>
+<li><strong>#2086</strong> still open: encode the multi-reviewer <code>calque_review</code> schema (board done = ≥2–3 families) + the s177 cert-tree re-review backlog (207 single-family pages). Fresh session recommended.</li>
+<li>Optional infra follow-up: VESUM-membership lint for UK content (would have caught «царь» / «двостанний» pre-review).</li>
+</ul>
+
+<p><em>Tree clean on main; only the not-mine <code>g2-craft</code> worktree remains. ch-02 handoff: <code>2026-06-23-session-179-uk-ai-history-ch02.html</code>.</em></p>
+</body>
+</html>
