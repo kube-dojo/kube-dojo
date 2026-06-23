@@ -83,8 +83,10 @@
 
 <h2>NEXT</h2>
 <ul>
-  <li>Continue ai-history: ch-02 onward, ~2–3 chapters/session, same inline pipeline. (EN source: <code>src/content/docs/ai-history/ch-NN-*.md</code>.)</li>
-  <li>Decide (user): keep opus-inline translate+review, or add a per-batch cross-family agy fluency pass.</li>
+  <li>Continue ai-history: ch-02 onward, ~2–3 chapters/session. (EN source: <code>src/content/docs/ai-history/ch-NN-*.md</code>.)</li>
+  <li><strong>DECISION RESOLVED (user, "fleet working together are stronger" + "gpt is a must"):</strong> drop opus-inline self-review. <strong>Locked pipeline: opus translates inline → 3 cross-family reviews (gpt-5.5/OpenAI + agy/Google + grok-4.*/xAI) → orchestrator adjudicates EVERY finding via the <code>sources</code> MCP → fix → merge.</strong> cursor/deepseek excluded from language review (Chinese-origin bases; deepseek review-hallucination). From ch-02 the 3-family review runs PRE-merge.</li>
+  <li><strong>Batch 1 fully 3-family reviewed</strong> (PR #2084 agy+grok, PR #2085 gpt-5.5, both merged): ~13 fixes, incl. 2 real P1-class catches the inline review missed (<code>двонаправлений</code>→<code>двоспрямований</code>; <code>сучасного</code>→<code>тогочасного</code> "contemporary" false-friend). The 3 families found near-disjoint issue sets — concrete proof 3-family beats self-review.</li>
+  <li><strong>API change to encode the gate = issue #2086</strong> (calque_review multi-reviewer schema + board done=≥2-3 families + wire codex/agy/grok MCP + mark ~359-page backlog "needs cross-family review"; backfill new-first). ACs filed; <strong>recommend a FRESH session</strong> to execute (high-leverage, scoped via interview — per <code>fresh-session-after-interview</code>). Memory: <code>feedback_translations_need_fleet_cross_family_review</code>.</li>
   <li>After ai-history (74): remaining #1911 net-new/stale blocks (platform 241 / ai-ml 142 / on-prem 58 / ai 44 / cloud+linux stale) — swarm still HALTED pending a deliberate go.</li>
 </ul>
 </body>
