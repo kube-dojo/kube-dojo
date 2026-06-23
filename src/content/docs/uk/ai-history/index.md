@@ -8,7 +8,7 @@ calque_review:
   detector_version: "v2"
   status: "clean"
   flags_resolved: 0
-  content_sha: "2da80ff6bd6f5e7d2cdc5784468bd8e3bc897f635ab8ff7d062a1f159ece0de4"
+  content_sha: "9131e4e5d31dd47b73ba89d6984ae30e50dc5f1231693aefe536edff66ac4185"
 ---
 
 # Історія ШІ
@@ -35,7 +35,7 @@ calque_review:
 | 4 | [Статистичне коріння](./ch-04-the-statistical-roots/) |
 | 5 | [Нейронна абстракція](./ch-05-the-neural-abstraction/) |
 
-## Частина 2 — Аналогова мрія та цифрова чиста дошка (1940-ві–1950-ті)
+## Частина 2 — Аналогова мрія та цифровий чистий аркуш (1940-ві–1950-ті)
 
 Перехід від аналогового обладнання, натхненного біологією, до цифрових архітектур фон Неймана.
 
@@ -129,7 +129,7 @@ calque_review:
 |---:|---|
 | 50 | [Увага — це все, що потрібно](./ch-50-attention-is-all-you-need/) |
 | 51 | [Рівень розповсюдження з відкритим кодом](./ch-51-the-open-source-distribution-layer/) |
-| 52 | [Двонаправлений контекст](./ch-52-bidirectional-context/) |
+| 52 | [Двоспрямований контекст](./ch-52-bidirectional-context/) |
 | 53 | [Світанок навчання за кількома прикладами](./ch-53-the-dawn-of-few-shot-learning/) |
 | 54 | [Хаб ваг](./ch-54-the-hub-of-weights/) |
 | 55 | [Закони масштабування](./ch-55-the-scaling-laws/) |
