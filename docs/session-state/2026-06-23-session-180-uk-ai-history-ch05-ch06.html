@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 180 — UK AI-history ch-05 + ch-06; MEMORY.md compaction; Headroom stream-idle diagnosis</title>
+<style>
+  body{font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.5rem;border-bottom:2px solid #333;padding-bottom:.3rem}
+  h2{font-size:1.15rem;margin-top:1.6rem;color:#0b5}
+  code{background:#f3f3f3;padding:.1rem .3rem;border-radius:3px}
+  table{border-collapse:collapse;margin:.6rem 0;font-size:13.5px}
+  th,td{border:1px solid #ccc;padding:.3rem .55rem;text-align:left;vertical-align:top}
+  th{background:#f0f0f0}
+  .tldr{background:#f6fff8;border-left:4px solid #0b5;padding:.6rem .9rem}
+  .warn{background:#fff8f0;border-left:4px solid #e80;padding:.6rem .9rem}
+  li{margin:.2rem 0}
+</style>
+</head>
+<body>
+<h1>Session 180 — UK AI-history ch-05 + ch-06; MEMORY.md compaction; Headroom stream-idle diagnosis</h1>
+<p class="tldr"><strong>TL;DR.</strong> Date: 2026-06-23 · Issue: #1911 · PRs merged: <strong>#2090 (ch-05)</strong>, <strong>#2091 (ch-06)</strong> · Predecessor: session 179b (ch-03+ch-04). Shipped two AI-history chapters through the locked inline-translate → 3-family review → MCP-adjudicate → merge pipeline. Compacted MEMORY.md twice (byte limit, then a newly-surfaced 200-line load cap). Diagnosed the <code>Stream idle timeout</code> errors to the Headroom proxy and captured a critical lesson: <strong>never translate from a Headroom-compressed Read</strong> — it silently drops source content. <strong>67 chapters remain (ch-07 … ch-73).</strong></p>
+
+<h2>Shipped</h2>
+<table>
+<tr><th>Item</th><th>PR</th><th>Result</th></tr>
+<tr><td><strong>MEMORY.md compaction</strong> (#1 fresh-session TODO)</td><td>—</td><td>100.8KB→16.6KB (241→190), then a PostToolUse hook revealed a <strong>200-line load cap</strong> → pruned to <strong>118 entries / 139 lines / 10.8KB</strong>. 124 dead/niche entries de-indexed total; <strong>all backing files retained on disk</strong> (recoverable via memory_search). Re-sectioned TOP PRIORITY / Agent Roster / Quality / Git-CI / Workflow. STATUS commit 32c5ceaaf.</td></tr>
+<tr><td><strong>ch-05 The Neural Abstraction</strong> (McCulloch–Pitts 1943)</td><td>#2090 ✅</td><td>3-family review (codex+agy+grok, near-disjoint), 27 MCP-adjudicated fixes (instrumental case; feed-forward→прямого поширення; existential operator→квантор; excitatory→збуджувальний; titles→English per series convention). Build+CI green. char-ratio 97.8%.</td></tr>
+<tr><td><strong>ch-06 The Cybernetics Movement</strong> (Wiener predictor, Behavior/Purpose/Teleology, Macy, Homeostat, dispersal)</td><td>#2091 ✅</td><td>agy flagged a <strong>SYSTEMIC drop</strong> (translated from a compressed Read). Re-read true EN in small chunks, restored ~30 dropped passages across cast/timeline/prose. char-ratio 93.4%→<strong>97.8%</strong>, 43/43 paragraphs. Rejected on evidence: codex's 3 title-drop P3s (FPs from its own compressed read — grep-confirmed complete), передбачувальна→прогностична (передбачувальний=predictive), цільовий тремор→інтенційний (faithful to source's "purpose tremor").</td></tr>
+</table>
+
+<h2>Headroom proxy — two failure modes diagnosed (NOT the repo)</h2>
+<p class="warn">The interactive session routes through the Headroom proxy (<code>ANTHROPIC_BASE_URL=127.0.0.1:8787</code>). It does <strong>synchronous pre-upstream context compression</strong> (stats: <code>run_seconds_max=45.1s</code> &gt; its own <code>compression_timeout=30s</code>, concurrency=3). Two consequences:</p>
+<ol>
+<li><strong>Stream-idle timeouts</strong> on large single generations: the proxy holds the request while compressing (no tokens stream) → client's idle timer fires → <code>Stream idle timeout - partial response received</code>. <em>Mitigation used:</em> write files in small chunks (worked — zero timeouts on ch-06's 6 chunks).</li>
+<li><strong>Lossy Reads:</strong> large <code>Read</code> tool outputs come back with <code>[N items compressed … hash=…]</code> markers that <strong>silently drop source content</strong>. Translating ch-06 from such a Read produced a summarized translation — caught only by cross-family review. <em>Fix:</em> read faithfulness-critical sources in &lt;40-line chunks (uncompressed); verify completeness with char-ratio ≥97% AND paragraph parity AND no per-paragraph outlier. New memory: <code>feedback_never_translate_from_compressed_read</code>.</li>
+</ol>
+<p>learn-ukrainian doesn't hit (1) because its interactive sessions likely stream direct (no proxy in path). <strong>Durable fix (user's call):</strong> relaunch Claude with <code>ANTHROPIC_BASE_URL</code>/<code>OPENAI_BASE_URL</code> unset — keeps the proxy for dispatch agents (token savings) but streams the interactive session direct. <strong>Did NOT touch the proxy</strong> (s166 blocker: <code>headroom install restart/start/apply</code> regenerates config and wipes agy's CPU/CoreML fixes).</p>
+
+<h2>Reusable lessons for ch-07+</h2>
+<ul>
+<li><strong>Author the translation directly inside the worktree</strong> (not in primary), so it never exists as an untracked duplicate — that duplicate blocked the ch-05 ff-merge (had to verify-identical + remove). ch-06 authored in-worktree → clean ff-merge.</li>
+<li><strong>Read the EN source in small chunks</strong> (≤40 lines) to dodge proxy compression. Verify completeness multi-signal, not just char-ratio.</li>
+<li>Locked conventions (from ch-02..05): paper/book/series titles in <strong>original English</strong> in « »; <code>Веннівер Буш</code>; mermaid timeline titles in English; <code>передбачувальний</code>=predictive (codex recurringly misreads as predictable — reject).</li>
+<li>Pipeline per chapter: opus inline translate (chunked) → 3-family review (codex --worktree / agy + grok read-only, brief gives both UK paths) → orchestrator adjudicates EVERY finding via <code>sources</code> MCP (VESUM/СУМ/check_russian_shadow), rejecting wrong reviewer claims → fix script with count-assertions → calque_review stamp → build/CI → squash-merge → worktree cleanup.</li>
+</ul>
+
+<h2>Next</h2>
+<ul>
+<li><strong>#1911 ch-07 (The Analog Bottleneck)</strong> — next; same pipeline. EN: <code>src/content/docs/ai-history/ch-07-*.md</code>. 67 chapters remain (ch-07 … ch-73).</li>
+<li><strong>#2086</strong> still open: encode multi-reviewer calque_review schema (board done = ≥2–3 families).</li>
+<li>Optional: relaunch session without the Headroom env to end the stream-idle friction.</li>
+</ul>
+<p>Tree clean on main (<code>be5cba3db</code>); only the not-mine <code>g2-craft</code> worktree remains.</p>
+</body>
+</html>
