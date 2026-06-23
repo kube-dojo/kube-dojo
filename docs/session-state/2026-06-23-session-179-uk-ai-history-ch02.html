@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 179 — UK AI-history ch-02 (The Universal Machine), 3-family review merged</title>
+<style>
+  body { font: 16px/1.6 -apple-system, system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #1e40af; }
+  code { background: #eef; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .92rem; }
+  th, td { border: 1px solid #ccc; padding: .35rem .55rem; text-align: left; vertical-align: top; }
+  th { background: #e8eefc; }
+  .p1 { color: #b91c1c; font-weight: 600; }
+  .ok { color: #15803d; font-weight: 600; }
+  blockquote { border-left: 4px solid #93c5fd; margin: .6rem 0; padding: .3rem .9rem; background: #f0f6ff; }
+  .tldr { background: #fff7ed; border: 1px solid #fdba74; padding: .8rem 1rem; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Session 179 — UK translation of the AI-history book: ch-02 "The Universal Machine"</h1>
+<p><strong>Date:</strong> 2026-06-23 · <strong>Issue:</strong> #1911 · <strong>PR:</strong> #2087 (merged) · <strong>Predecessor:</strong> session 178</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Continued the locked s178 pipeline on the AI-history book. <strong>ch-02 "The Universal Machine" translated inline (opus), 3-family reviewed PRE-merge (agy/Google + codex/OpenAI + grok-4.20/xAI), every finding adjudicated via the <code>sources</code> MCP, fixed, and merged (PR #2087).</strong> The fleet caught <strong>4 real P1s my inline translation missed</strong>, near-disjoint across families — exactly the s178 rationale. <strong>71 chapters remain</strong> (ch-03 … ch-73).
+</div>
+
+<h2>What shipped</h2>
+<ul>
+<li><strong>PR #2087 merged (rebase):</strong> <code>src/content/docs/uk/ai-history/ch-02-the-universal-machine.md</code> — full UK translation + 3-family review fixes + <code>calque_review</code> stamp (status=clean, detector v2, 26 flags resolved).</li>
+<li>Two commits: the inline opus translation, then the review-fix commit. All 11 CI checks green incl. the required <strong>Astro build</strong> and <strong>Ukrainian Russicism check</strong>. Local build green (2169 pages).</li>
+<li>Structure parity exact vs EN (4×H2, 3×<code>&lt;details&gt;</code>, mermaid timeline, tip/note, 8 table rows, both <code>Un(M)</code>); word ratio 88% (matches ch-01 — Ukrainian drops articles).</li>
+</ul>
+
+<h2>The locked pipeline, executed</h2>
+<p>opus translates inline → <strong>3 cross-family reviews PRE-merge</strong> → orchestrator adjudicates <strong>every</strong> finding via the <code>sources</code> MCP (agents can fabricate tool-use) → fix → merge.</p>
+<table>
+<tr><th>Family</th><th>Agent / model</th><th>Dispatch</th><th>Result</th></tr>
+<tr><td>Google</td><td>agy <code>gemini-3.1-pro-high</code> (sources MCP pre-configured)</td><td><code>dispatch_smart review --agent agy --mode read-only</code></td><td>NEEDS_CHANGES, MCP-grounded</td></tr>
+<tr><td>OpenAI</td><td>codex <code>gpt-5.5</code></td><td><code>review --agent codex --worktree … --new-branch …</code> (danger)</td><td>20 findings</td></tr>
+<tr><td>xAI</td><td>grok-4.20-0309-reasoning via hermes</td><td><code>review --agent hermes --model grok-4.20-0309-reasoning --mode read-only</code></td><td>empty on 1st try (hermes "no final response"); <strong>retry succeeded</strong> (46s)</td></tr>
+</table>
+<p><strong>#2030 gotcha respected:</strong> read-only reviews (agy, hermes) omit <code>--worktree</code> (avoids the FileNotFoundError crash); codex review uses danger+worktree.</p>
+
+<h2>The 4 real P1s the fleet caught (inline review missed) — near-disjoint</h2>
+<table>
+<tr><th>#</th><th>Found by</th><th>Issue (EN-verified)</th><th>Fix</th></tr>
+<tr><td class="p1">P1</td><td>agy</td><td>EN tip: "gave the second proof <em>its</em> enduring metaphor" — I rendered "and the metaphor" (machine gave both)</td><td>«дала <strong>другому доведенню його</strong> тривку метафору»</td></tr>
+<tr><td class="p1">P1</td><td>codex</td><td>§101: machine <strong>D</strong> is a "general-purpose machine", NOT the universal machine <strong>U</strong> — conflating two distinct concepts</td><td>«машину <strong>загального призначення</strong>, названу D»</td></tr>
+<tr><td class="p1">P1</td><td>grok</td><td>§67: Rosser "would later <strong>STRENGTHEN</strong> to plain consistency" — I rendered «послабив» (weakened), reversing the logic</td><td>«Россер <strong>посилив результат</strong>, показавши, що він справджується вже за звичайної несуперечливості»</td></tr>
+<tr><td class="p1">P1/omit</td><td>codex + grok</td><td>Newman cast row dropped "wrote to Church recommending Turing for Princeton"; recursive-function glossary dropped "by 1934"</td><td>both restored from exact EN</td></tr>
+</table>
+
+<h2>Adjudication: rejected 2 confidently-wrong reviewer claims (via MCP)</h2>
+<ul>
+<li><strong>grok "функційне → функціональне числення":</strong> REJECT. GRAC freq 0 for <em>both</em> forms; both VESUM-attested; the Entscheidungsproblem UA article uses neither. <code>функційний</code> is the normatively-preferred de-russified form and my usage is <em>consistent</em> (grok's "varies in text" claim is false).</li>
+<li><strong>codex "комп'ютерні науки → інформатика":</strong> REJECT — kept for consistency with merged ch-01's established voice; both attested.</li>
+<li><strong>circular/circle-free:</strong> my coinage <code>колова/безколова</code> (unattested) was flagged by 2 families → switched to VESUM-attested <strong>циклічна/нециклічна</strong> + English gloss retained (циклічність/нециклічність all confirmed in VESUM).</li>
+</ul>
+<p>~22 further P2/P3 de-calque/precision fixes applied (e.g. «перед лицем»→«зіткнувшись»; скінченно-станна→«зі скінченною кількістю станів»; вкарбував→<strong>запровадив</strong> термін; передавальні→<strong>передатні числа</strong> шестерень; логічно несуперечливою→<strong>зв'язною</strong>). Every new form VESUM-verified before use.</p>
+
+<h2>Terminology baseline (ground-checked, reusable for later chapters)</h2>
+<p>Confirmed against VESUM + the <strong>Gödel-incompleteness UA Wikipedia</strong> article: <code>вивідний/невивідний</code> = provable/unprovable (NOT «доказовний», which is not in VESUM and GRAC freq 0), <code>спростовний</code> = disprovable, <code>нерозв'язний</code> = undecidable, <code>розв'язність</code> = decidability, <code>несуперечливий</code> = consistent, <code>виведення</code> = derivation-within-a-system, <code>обчислюваність/означуваність</code> = computability/definability. Keep <code>функційне числення</code> (functional calculus).</p>
+
+<h2>Lessons / reusable</h2>
+<ul>
+<li><strong>3-family review earns its keep on technical prose.</strong> Inline opus + clean automated gates (uk_calque_v2 + ukrainian.py both passed first try) still left 4 real P1s — two of them subtle logic/concept reversals ("its metaphor", Rosser "strengthen") that only cross-family reading caught. The families' findings were near-disjoint (s178 finding holds).</li>
+<li><strong>Orchestrator MCP adjudication is the second load-bearing gate.</strong> 2 of the reviewers' claims were confidently wrong; auto-applying them would have <em>introduced</em> errors. Verify every finding against VESUM/СУМ/GRAC, don't trust agent-claimed tool-use.</li>
+<li><strong>hermes/grok is flaky</strong> ("no final response" empty on 1st dispatch) — a single retry fixed it (46s). Budget one retry for the xAI seat.</li>
+<li><strong>agy has the <code>sources</code> RAG MCP pre-configured</strong> (<code>~/.gemini/config/mcp_config.json</code>) → it actually ground-checks; still adjudicate.</li>
+<li>Token economy: edited the PRIMARY file (rules bundle already in context), used the worktree only as a commit/push staging area via <code>cp</code>; never read inside <code>.worktrees/</code>.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+<li><strong>Continue #1911 AI-history book: ch-03 "The Physical Bridge" → … → ch-73.</strong> 71 chapters remain. Same locked pipeline (opus inline → 3-family pre-merge → MCP-adjudicate → merge), per-chapter, <code>docs(uk):</code>/<code>feat(uk):</code> + <code>Refs #1911</code>. Cadence ~2-3 ch/session under the "go slow / conserve usage / no fan-out" constraint. EN source: <code>src/content/docs/ai-history/ch-NN-*.md</code>.</li>
+<li>Reuse this session's <strong>terminology baseline</strong> (above) and the review-prompt template in scratchpad to cut adjudication time on the next chapters.</li>
+<li><strong>#2086</strong> still open: encode the multi-reviewer <code>calque_review</code> schema + board done=≥2-3 families + reviewer-MCP wiring + the cert-tree re-review backlog (s177's 207 pages were single-family). Recommend a fresh session per <code>fresh-session-after-interview</code>.</li>
+</ul>
+
+<p><em>Worktrees: only primary + the not-mine <code>g2-craft</code> remain (session worktrees pruned). Tree clean on main.</em></p>
+</body>
+</html>
