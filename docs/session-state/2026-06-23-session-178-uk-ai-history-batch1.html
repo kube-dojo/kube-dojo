@@ -24,7 +24,7 @@
 <p class="meta">2026-06-23 · standalone orchestrator · continues s177 · epic #1911 · PR #2083 (merged)</p>
 
 <h2>TL;DR</h2>
-<p>Started the next workstream the user clarified in s177: <strong>translate the AI-history book to Ukrainian</strong> (the <code>ai-history</code> 74-page net-new block of #1911, was <strong>0% UK</strong>). Shipped <strong>batch 1 — <code>index.md</code> + <code>ch-01-the-laws-of-thought.md</code></strong> via <strong>PR #2083 (squash-merged)</strong>, all CI green incl. the required Astro build/schema gate. Sequential, no fan-out, conserve-usage per the s177 constraints.</p>
+<p>Started the next workstream the user clarified in s177: <strong>translate the AI-history book to Ukrainian</strong> (the <code>ai-history</code> 74-page net-new block of #1911, was <strong>0% UK</strong>). Shipped <strong>batch 1 — <code>index.md</code> (the book's landing/TOC page, = page 1 of 74) + <code>ch-01-the-laws-of-thought.md</code></strong> via PR #2083, then — after a mid-session user pivot to <strong>fleet review</strong> — got it reviewed by <strong>all 3 families</strong> (agy/grok → PR #2084; gpt-5.5 → PR #2085), all merged, all CI green. The fleet caught <strong>2 P1-class errors the inline review missed</strong>. <strong>Locked: 3-family cross-family review (gpt-5.5 + agy + grok-4.*) = definition-of-done</strong>; the API change to encode it = <strong>issue #2086</strong> (next, fresh session). The landing page is fully done — no outstanding work on it.</p>
 
 <h2>Constraints honored (user, s177)</h2>
 <ul>
