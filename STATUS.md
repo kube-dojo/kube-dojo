@@ -157,7 +157,7 @@
 
 ## TODO
 
-- [ ] **🧹 MEMORY.md compaction (FRESH SESSION, user-chosen s179b) — DO FIRST.** `~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/MEMORY.md` is ~99.5KB = 4× the 24.4KB load limit → lower entries are silently DROPPED at every cold-start (truncation warning visible at boot). Compact to <17KB: one short hook-line per entry, verify each entry's detail lives in its backing topic file BEFORE shortening its index line (lossy-risk on durable memory — don't rush). Deferred from s179b deliberately (delicate edit, end of heavy session).
+- [x] **🧹 MEMORY.md compaction — DONE s180.** `MEMORY.md` 100.8KB→16.56KB (241→190 entries); 51 dead entries de-indexed (calibration one-offs, superseded early model-roster trials, resolved/cancelled billing-throttle transients) — **all 51 backing files retained on disk, recoverable via `memory_search`** (verified 0 missing). Trim was non-lossy (verified every blurb's detail already lives in its backing topic file). Re-sectioned: TOP PRIORITY (live guardrails) + Agent Roster / Quality / Git-CI / Workflow. Now under the 17KB target with ~7.8KB headroom below the 24.4KB cold-start load limit → no more silent drops.
 
 **🆕 DO FIRST (fresh session) — next priorities. Board triaged to EXACTLY the 2 live curriculum streams (s175, user directive): #1876 + #1911.** Platform Engineering 100% DONE; #2020 quality-coverage epic CLOSED s174 (~100% module review); #1823 mermaid FIXED + CI-gated s175 (PR #2071). Live streams:
 - [x] **#2066 — 6 genuinely-un-reviewed (`auto_approved:true`) modules** — **DONE/CLOSED s174 (6/6).*…
