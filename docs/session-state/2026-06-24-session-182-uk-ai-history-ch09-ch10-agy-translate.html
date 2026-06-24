@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 182 — UK ai-history ch-09 + ch-10 merged; auto-orient hook; agy-translate probe</title>
+<style>
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.6rem; color: #0b5; }
+  code { background: #f3f3f3; padding: .1rem .3rem; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+  th, td { border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { background: #f7f7f7; }
+  .done { color: #0a7; font-weight: 600; }
+  .next { color: #c60; font-weight: 600; }
+  ul { margin: .3rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 182 — 2026-06-24</h1>
+<p><strong>Theme:</strong> Auto-orient SessionStart hook (user setup request) + UK ai-history <strong>ch-09 &amp; ch-10 merged</strong> (completes Parts 1 &amp; 2, chapters 1–10) via 3-family PRE-merge review + agy-as-translator probe.</p>
+
+<h2>Shipped this session</h2>
+<table>
+<tr><th>Item</th><th>PR/Issue</th><th>State</th></tr>
+<tr><td>Auto-orient on SessionStart (hands-off cold restart)</td><td>#2096</td><td class="done">MERGED + live in primary dir</td></tr>
+<tr><td>UK ai-history ch-09 "The Memory Miracle"</td><td>#2097</td><td class="done">MERGED (3-family reviewed, 10 fixes)</td></tr>
+<tr><td>UK ai-history ch-10 "The Imitation Game"</td><td>#2098</td><td class="done">MERGED (3-family reviewed, 11 fixes)</td></tr>
+<tr><td>agy adapter: enable long-form translation authoring</td><td>#2099</td><td class="next">FILED (ACs) — fix before routing translation to agy</td></tr>
+</table>
+
+<h2>Key decisions / contracts</h2>
+<ul>
+<li><strong>Auto-orient hook fix (root cause):</strong> <code>.claude/hooks/session-setup.sh</code> emitted the legacy top-level <code>{"additionalContext"}</code> form, which newer Claude Code silently ignores → the "invoke curriculum-orchestrator" reminder never reached the model, so the user retyped orientation each restart. Switched to <code>hookSpecificOutput.additionalContext</code> + enriched the directive to the full AUTO-ORIENT ritual (skill → <code>cold-start.sh</code> → continue-from-handoff → git/PR discipline). Parity with learn-ukrainian. <strong>Next restart self-orients.</strong></li>
+<li><strong>3-family PRE-merge pipeline (s178 lock) held:</strong> opus translates inline → codex/OpenAI + agy/Google + grok/xAI review → orchestrator adjudicates EVERY finding (ground-checked against the live file) → fix → merge. Findings were near-disjoint, as expected.</li>
+<li><strong>codex review quotes are lossy:</strong> on ch-09, 3 of codex's 5 findings were FALSE POSITIVES — it claimed missing «A / «—» / «в» that were actually present (codex drops punctuation when quoting). Ground-checked each against the file and rejected them. Always verify codex's "missing X" claims against the file.</li>
+<li><strong>agy is a high-value REVIEWER:</strong> it caught the only real P1s the others missed — ch-09 <code>шарнір</code> calque + <code>Хронометраж</code>=duration mistranslation; ch-10 <code>рахується</code>=matters false-friend ×2. Keep agy as the Google seat. (User directive: use agy more — confirmed worth it.)</li>
+</ul>
+
+<h2>agy-as-translator probe (user ask: "use agy for translating; it has MCP tools")</h2>
+<ul>
+<li><strong>Result: blocked by dispatch plumbing, NOT agy ability.</strong> agy ch-11 translation dispatch <strong>timed out at 306s, no file written</strong>.</li>
+<li>Gap 1 — <code>agy --print</code> defaults to <code>--print-timeout 5m0s</code>; the adapter doesn't raise it, so full-chapter generation dies before writing.</li>
+<li>Gap 2 — agy adapter MCP wiring is a "Phase-2 follow-up" (<code>adapters/agy.py:24,143</code>); <code>dispatch_smart --mcp</code> is review/search-only. So agy can't call the <code>sources</code> MCP during authoring — only Google Search grounding.</li>
+<li>Both are small adapter fixes (like the <code>--add-dir</code> fix #1858) → tracked in <strong>#2099</strong>; route to a code lane (cursor/codex), not opus. Memory: <code>feedback_agy_translation_authoring_blocked_by_dispatch_gaps</code>.</li>
+</ul>
+
+<h2>Quota state (user, s182)</h2>
+<ul>
+<li><strong>opus: 39% weekly left for 5 days</strong> → scarce; reserve for adjudication/merge, not bulk translation.</li>
+<li><strong>agy: just reset</strong> (Google-Ultra) — preferred lane for translation ONCE #2099 lands.</li>
+<li><strong>codex: resets tonight.</strong></li>
+</ul>
+
+<h2 class="next">Next session</h2>
+<ul>
+<li><strong>ch-11 "The Summer AI Named Itself" (Part 3 start) — NOT translated.</strong> agy attempt timed out; worktree removed. UK index already has the row (<code>Літо, коли ШІ дав собі назву</code>). EN: <code>src/content/docs/ai-history/ch-11-the-summer-ai-named-itself.md</code> (211 lines).</li>
+<li><strong>Decision for ch-11:</strong> either (a) land #2099 first (dispatch cursor/codex to fix the agy adapter) then translate ch-11 with agy to conserve opus; or (b) opus translates ch-11 inline now if quota allows. Given opus 39%/5d, prefer (a).</li>
+<li>63 chapters remain (ch-11 … ch-73). Per-chapter PR, <code>feat(uk):</code> + <code>Refs #1911</code>, 3-family PRE-merge, run <code>uk_calque_v2.py</code> + <code>scripts/quality/check_uk_changed.py</code> locally before push.</li>
+<li>Worktree note: <code>git worktree add</code> does NOT create the <code>node_modules</code> symlink → local build fails resolving <code>@astrojs/.../layers.css</code>. Fix: <code>ln -s /Users/krisztiankoos/projects/kubedojo/node_modules .worktrees/&lt;wt&gt;/node_modules</code>.</li>
+</ul>
+</body>
+</html>
