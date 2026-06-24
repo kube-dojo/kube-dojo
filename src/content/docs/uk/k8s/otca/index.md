@@ -3,6 +3,12 @@ title: "OTCA — Сертифікований спеціаліст із OpenTele
 sidebar:
   order: 0
   label: "OTCA"
+calque_review:
+  reviewed_at: "2026-06-25"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "1d58722b079dec2193d74965bcbcd37bc66961016199981e5c4042816715d93a"
 ---
 > **Іспит із множинним вибором** | 90 хвилин | Прохідний бал: 75% | $250 USD | **Сертифікація CNCF**
 
