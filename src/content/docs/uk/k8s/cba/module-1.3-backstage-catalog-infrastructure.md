@@ -430,7 +430,7 @@ proxy:
     '/grafana':
       target: https://grafana.internal.myorg.com
       headers:
-        Authorization: Bearer ***
+        Authorization: Bearer ${GRAFANA_TOKEN}
       allowedHeaders: ['Content-Type']
 ```
 
