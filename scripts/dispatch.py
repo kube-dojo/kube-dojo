@@ -564,14 +564,105 @@ def _markdown_word_count(text: str) -> int:
     return len(text.split())
 
 
+def _is_markdown_table_row(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return False
+    return "|" in stripped
+
+
+def _markdown_paragraph_blocks(text: str) -> list[str]:
+    """Partition *text* at blank-line boundaries outside fences and tables."""
+    if not text:
+        return []
+
+    lines = text.splitlines(keepends=True)
+    blocks: list[str] = []
+    current: list[str] = []
+    in_fence = False
+    in_table = False
+
+    def flush() -> None:
+        nonlocal in_table
+        if current:
+            blocks.append("".join(current))
+            current.clear()
+        in_table = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped.startswith("```"):
+            current.append(line)
+            in_fence = not in_fence
+            continue
+
+        if in_fence:
+            current.append(line)
+            continue
+
+        if _is_markdown_table_row(line):
+            in_table = True
+            current.append(line)
+            continue
+
+        if in_table:
+            in_table = False
+
+        if stripped == "":
+            current.append(line)
+            flush()
+            continue
+
+        current.append(line)
+
+    flush()
+    return blocks
+
+
+def _split_section_at_paragraphs(section: str, max_words: int) -> list[str]:
+    """Split an oversized heading-section at paragraph boundaries."""
+    cap = int(max_words * 1.5)
+    blocks = _markdown_paragraph_blocks(section)
+    if not blocks:
+        return [section]
+
+    sub_chunks: list[str] = []
+    current = ""
+    current_words = 0
+
+    for block in blocks:
+        block_words = _markdown_word_count(block)
+        if block_words > cap:
+            if current:
+                sub_chunks.append(current)
+                current = ""
+                current_words = 0
+            sub_chunks.append(block)
+            continue
+        if current and current_words + block_words > cap:
+            sub_chunks.append(current)
+            current = block
+            current_words = block_words
+        else:
+            current += block
+            current_words += block_words
+
+    if current:
+        sub_chunks.append(current)
+
+    return sub_chunks if sub_chunks else [section]
+
+
 def split_markdown_for_translation(md: str, max_words: int = 800) -> list[str]:
     """Split markdown into ordered translation chunks at heading boundaries.
 
     Chunk 0 is frontmatter plus any preamble before the first heading.
     Later chunks greedily pack consecutive heading-sections up to *max_words*.
-    A single oversized section may exceed *max_words*; sections are never
-    split mid-paragraph. Concatenating the returned chunks reproduces *md*
-    byte-for-byte via ``"".join(chunks)``.
+    A single oversized section is further split at blank-line paragraph
+    boundaries (never inside fenced code or tables) so sub-chunks stay near
+    *max_words*. Concatenating the returned chunks reproduces *md* byte-for-byte
+    via ``"".join(chunks)``.
     """
     if not md:
         return [""]
@@ -585,11 +676,18 @@ def split_markdown_for_translation(md: str, max_words: int = 800) -> list[str]:
         end = heading_positions[i + 1] if i + 1 < len(heading_positions) else len(md)
         sections.append(md[start:end])
 
+    pack_sections: list[str] = []
+    for section in sections[1:]:
+        if _markdown_word_count(section) > max_words:
+            pack_sections.extend(_split_section_at_paragraphs(section, max_words))
+        else:
+            pack_sections.append(section)
+
     chunks: list[str] = [sections[0]]
     current = ""
     current_words = 0
 
-    for section in sections[1:]:
+    for section in pack_sections:
         section_words = _markdown_word_count(section)
         if current and current_words + section_words > max_words:
             chunks.append(current)
@@ -610,7 +708,9 @@ def dispatch_agy_translate_chunked(
     en_markdown: str,
     instruction_header: str,
     *,
-    timeout: int = 900,
+    timeout: int = 240,
+    attempts: int = 4,
+    delay: float = 5.0,
 ) -> tuple[bool, str]:
     """Translate long EN markdown via agy in ≤800-word heading-boundary chunks.
 
@@ -627,8 +727,12 @@ def dispatch_agy_translate_chunked(
     total = len(chunks)
 
     for i, chunk in enumerate(chunks):
+        if i > 0:
+            time.sleep(delay)
         prompt = f"{instruction_header}\n{chunk}"
-        ok, output = dispatch_agy_translate(prompt, timeout=timeout)
+        ok, output = dispatch_agy_translate(
+            prompt, timeout=timeout, attempts=attempts
+        )
         if not ok:
             return False, f"chunk {i + 1}/{total} failed: {output}"
         translated.append(output)
@@ -640,7 +744,9 @@ def dispatch_agy_translate_chunked(
     return True, "\n".join(translated)
 
 
-def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
+def dispatch_agy_translate(
+    prompt: str, *, timeout: int = 600, attempts: int = 4
+) -> tuple[bool, str]:
     """Translate via agy CLI; capture Ukrainian output from stdout.
 
     agy ``-p`` sandboxes file writes to its scratch dir, so the caller
@@ -699,11 +805,18 @@ def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, st
             _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, err)
             return False, err or "empty translation stdout"
 
-    ok, output = _run_once()
-    if ok:
-        return True, output
-    print("agy translation failed — retrying once", file=sys.stderr)
-    return _run_once()
+    last_output = ""
+    for attempt in range(1, attempts + 1):
+        ok, output = _run_once()
+        if ok:
+            return True, output
+        last_output = output
+        if attempt < attempts:
+            print(
+                f"agy attempt {attempt}/{attempts} failed — retrying",
+                file=sys.stderr,
+            )
+    return False, last_output
 
 
 _CLAUDE_TEXT_ONLY_DISALLOWED = (
@@ -1279,8 +1392,14 @@ def main():
     afp.add_argument(
         "--timeout",
         type=int,
-        default=900,
-        help="Per-chunk timeout in seconds (default: 900)",
+        default=240,
+        help="Per-chunk timeout in seconds (default: 240)",
+    )
+    afp.add_argument(
+        "--attempts",
+        type=int,
+        default=4,
+        help="Per-chunk agy retry attempts (default: 4)",
     )
 
     # codex
@@ -1352,6 +1471,7 @@ def main():
             en_markdown,
             instruction_header,
             timeout=args.timeout,
+            attempts=args.attempts,
         )
         if ok:
             print(output)
