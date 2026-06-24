@@ -129,31 +129,19 @@ fi
 # offline.
 ( claude update >/dev/null 2>&1 & )
 
-# --- headroom routing guard (added 2026-06-17) ---
-# Load headroom routing env even from a stale shell, verify the proxy is up, and
-# fall back to DIRECT (no proxy) if it cannot be revived -- so Claude never launches
-# pointing at a dead endpoint.
-if [ -z "${ANTHROPIC_BASE_URL:-}" ] && [ -f "$HOME/.profile" ]; then
-    source "$HOME/.profile" || true
-fi
-if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
-    HEADROOM_HEALTH_URL="${ANTHROPIC_BASE_URL%/}/health"
-    if ! curl -fsS --max-time 2 "$HEADROOM_HEALTH_URL" >/dev/null 2>&1; then
-        echo "headroom proxy down -- attempting restart..."
-        "$HOME/.local/bin/headroom" install start --profile default >/dev/null 2>&1 || true
-        if ! curl -fsS --max-time 2 "$HEADROOM_HEALTH_URL" >/dev/null 2>&1; then
-            launchctl bootstrap "gui/$(id -u)" \
-                "$HOME/Library/LaunchAgents/com.headroom.default.plist" >/dev/null 2>&1 || true
-        fi
-        sleep 2
-        if ! curl -fsS --max-time 2 "$HEADROOM_HEALTH_URL" >/dev/null 2>&1; then
-            echo "headroom unavailable -- launching Claude DIRECT (no proxy)"
-            unset ANTHROPIC_BASE_URL OPENAI_BASE_URL COPILOT_PROVIDER_BASE_URL
-        fi
-    fi
-    unset HEADROOM_HEALTH_URL
-fi
-# --- end headroom routing guard ---
+# --- headroom routing: DISABLED (user, 2026-06-24, s181) ---
+# Headroom proxy routing turned OFF. Its pre-upstream compression tripped the
+# 30s stream-idle timeout on large model outputs (full-chapter translation
+# Writes) and made large Read outputs lossy ([N compressed...] silently drops
+# source -- see feedback_never_translate_from_compressed_read). Launch Claude
+# DIRECT, no proxy. Force-unset the routing vars regardless of shell/.profile so
+# nothing leaks through. The proxy daemon may keep running idle (harmless) --
+# stop it separately from a clean session if desired; do NOT `headroom install`.
+# To RE-ENABLE: restore the prior "headroom routing guard" block from git
+# history (present until this commit) and confirm the proxy is healthy.
+unset ANTHROPIC_BASE_URL OPENAI_BASE_URL COPILOT_PROVIDER_BASE_URL
+echo "headroom routing DISABLED -- launching Claude DIRECT (no proxy)"
+# --- end headroom routing ---
 
 echo "Launching Claude Code (native build from PATH: $(command -v claude))..."
 exec claude --chrome --permission-mode bypassPermissions "$@"
