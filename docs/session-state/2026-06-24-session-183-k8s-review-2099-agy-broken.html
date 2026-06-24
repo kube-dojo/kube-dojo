@@ -62,8 +62,9 @@ unchanged</strong> (the 16-word stub; empty git diff), and the word counts are i
 agy in print+danger mode <strong>does not write files; it fabricates success</strong>. Recorded on #2099 + memory
 <code>feedback_agy_translation_authoring_blocked_by_dispatch_gaps</code>.
 </blockquote>
-<p><strong>Implication:</strong> the translation marathon (items 3–4 + the 4 remaining stale) <strong>cannot route to agy</strong>.
-Always verify agy authoring by <code>git diff</code>/<code>wc -w</code>, never its self-reported counts. agy remains an excellent <em>reviewer</em>.</p>
+<p><strong>Implication:</strong> always verify agy authoring by <code>git diff</code>/<code>wc -w</code>, never its self-reported counts. agy remains an excellent <em>reviewer</em>.</p>
+
+<p><strong>RESOLUTION (s183-late):</strong> root cause = agy <code>-p</code> sandboxes file writes to <code>~/.gemini/antigravity-cli/scratch/</code> and ignores the target path. Fixed by flipping the lane to <strong>capture agy's stdout</strong> instead of asking it to write files (<strong>PR #2104 merged</strong>): <code>dispatch_agy_translate</code> now returns real, faithful translations; added section <strong>chunking</strong> (agy truncates one response at ~900w) + an <code>agy-translate-file</code> CLI + tests. <strong>Hardened</strong> (retries=4 / fail-fast 240s / inter-chunk delay / oversized-section split) in <strong>PR #2105</strong> (auto-merge on green). <strong>BUT agy <code>-p</code> still INTERMITTENTLY HANGS</strong> (300s+ on single calls, even tiny chunks — no stuck procs/locks; genuine agy CLI flakiness) → full-module runs are unreliable even with retries. Single-chunk works. So agy is a <em>flaky extra lane</em>, not the primary.</p>
 
 <h2>Remaining work (the translation marathon — needs a lane decision)</h2>
 <p>k8s board now: <strong>256/261 stamped</strong> (257 after #2103). Remaining 4 stale, all needing translation:</p>
@@ -77,7 +78,7 @@ Always verify agy authoring by <code>git diff</code>/<code>wc -w</code>, never i
 
 <h2>Next-session recommendation</h2>
 <ol>
-<li><strong>Decide the translation lane</strong> (agy is out): either (a) fix agy's real file-write capability in print/danger mode — a code task for cursor/codex, the deeper issue behind #2099 AC#3 — or (b) accept <strong>inline-opus / Claude-subagent swarm</strong> under the opus 39%/5d budget. The 3 small partial indexes are cheap inline; the 2× ~8000-word backstage stubs are the heavy lift.</li>
+<li><strong>Translation lane RESOLVED (user s183):</strong> authoring = <strong>codex/gpt-5.5, deepseek-4-pro, grok-4.* or grok-build</strong> (reliable file-writers, unlike agy) via <code>dispatch_smart draft --agent X --worktree …</code> with a translation brief → 3-family cross-family review (non-author families) → opus MCP-adjudicates → merge. agy = hardened-but-flaky extra lane (use only if it behaves). <strong>opus does NOT translate inline this session (user); may a next session.</strong></li>
 <li>Finish the 4 remaining stale → k8s 261/261.</li>
 <li>Then <code>ai</code> (44) → <code>ai-ml-engineering</code> (142), per locked pipeline: translate → 3-family review (codex/grok + opus adjudication) → merge. (NOT agy for authoring.)</li>
 <li>Pull the exact stale/missing list from <code>/api/uk/board</code> at cold-start.</li>
