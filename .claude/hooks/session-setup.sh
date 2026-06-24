@@ -79,6 +79,17 @@ if [ -f "$MEMORY_FILE" ]; then
   fi
 fi
 
+# 8. Stale `astro dev` server check. Vite/Astro dev servers leak memory over
+# long uptimes — a forgotten one reached ~5.4 GB after 2.5 days (s182). RSS
+# under-reports it (mostly compressed), so flag by UPTIME: any astro dev whose
+# elapsed time shows days (etime contains '-') is almost certainly stale.
+# start-docs.sh now auto-stops after 12h; this catches servers started manually.
+STALE_DEV=$(/bin/ps -axo pid,etime,command 2>/dev/null | grep "astro dev" | grep -v grep | awk '$2 ~ /-/ {print "      PID "$1" (up "$2")"}')
+if [ -n "$STALE_DEV" ]; then
+  ISSUES+=("STALE astro dev server(s) running 1+ day — Vite leaks memory over long uptimes (can reach multi-GB). Kill, then restart only if needed (\`npx astro preview\` for view-only doesn't leak):
+$STALE_DEV")
+fi
+
 # Build output. The AUTO-ORIENT directive is always emitted (interactive sessions
 # only — headless already exited at line 6). Belt-and-suspenders for CLAUDE.md
 # "FIRST ACTION, every session — no exceptions" — the rule still drives, this
