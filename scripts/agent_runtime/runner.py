@@ -378,6 +378,10 @@ def invoke(
         entrypoint,
         tool_config,
     )
+    if agent_name == "agy":
+        tc = dict(effective_tool_config or {})
+        tc.setdefault("hard_timeout", hard_timeout)
+        effective_tool_config = tc
     plan = adapter.build_invocation(
         prompt=prompt,
         mode=mode,

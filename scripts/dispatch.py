@@ -541,7 +541,7 @@ def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, st
                 model=AGY_TRANSLATE_MODEL,
                 task_id=None,
                 session_id=None,
-                tool_config=None,
+                tool_config={"hard_timeout": timeout},
             )
             env = build_agent_env(provider="agy", overrides=_AGENT_ENV_OVERRIDES)
             t0 = time.time()
