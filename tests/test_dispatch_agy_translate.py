@@ -48,11 +48,33 @@ def test_dispatch_agy_translate_empty_stdout_fails(monkeypatch: pytest.MonkeyPat
 
     with patch.object(dispatch.AgyAdapter, "build_invocation", return_value=plan), patch(
         "dispatch.subprocess.run", return_value=_completed("")
-    ), patch("dispatch._log"):
-        ok, err = dispatch.dispatch_agy_translate("translate X")
+    ) as run_mock, patch("dispatch._log"):
+        ok, err = dispatch.dispatch_agy_translate("translate X", attempts=4)
 
     assert ok is False
     assert err
+    assert run_mock.call_count == 4
+
+
+def test_dispatch_agy_translate_retries_until_success() -> None:
+    plan = SimpleNamespace(cmd=["agy", "-p", "prompt"], cwd=Path("."))
+    call_count = 0
+
+    def fake_run(*_args, **_kwargs) -> CompletedProcess[str]:
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            return _completed("")
+        return _completed(_TRANSLATION_BODY)
+
+    with patch.object(dispatch.AgyAdapter, "build_invocation", return_value=plan), patch(
+        "dispatch.subprocess.run", side_effect=fake_run
+    ) as run_mock, patch("dispatch._log"):
+        ok, output = dispatch.dispatch_agy_translate("translate X", attempts=4)
+
+    assert ok is True
+    assert output == _TRANSLATION_BODY
+    assert run_mock.call_count == 3
 
 
 def test_extract_agy_translation_from_stdout_unwraps_markdown_fence() -> None:
@@ -114,20 +136,42 @@ def test_split_markdown_never_splits_inside_fence() -> None:
     )
     chunks = dispatch.split_markdown_for_translation(md, max_words=5)
     assert "".join(chunks) == md
-    before_chunk = next(c for c in chunks if "## Before" in c)
-    assert "```bash\n# not a heading\n## also not a heading\n```" in before_chunk
+    fence_chunk = next(c for c in chunks if "```bash" in c)
+    assert "```bash\n# not a heading\n## also not a heading\n```" in fence_chunk
     assert not any(
         c.strip() == "## also not a heading" for c in chunks
     )
 
 
-def test_split_markdown_respects_max_words_except_oversized_section() -> None:
+def test_split_markdown_respects_max_words_with_paragraph_split() -> None:
     big = _words(900)
     md = f"---\ntitle: X\n---\n\n## Huge\n\n{big}\n\n## Small\n\nTail.\n"
     chunks = dispatch.split_markdown_for_translation(md, max_words=800)
-    for chunk in chunks[1:-1]:
-        assert dispatch._markdown_word_count(chunk) <= 800 or big in chunk
-    assert dispatch._markdown_word_count(chunks[-1]) <= 800
+    cap = int(800 * 1.5)
+    for chunk in chunks[1:]:
+        assert dispatch._markdown_word_count(chunk) <= cap
+    assert "".join(chunks) == md
+
+
+def test_split_markdown_splits_oversized_section_at_paragraphs() -> None:
+    big_para1 = _words(1000)
+    big_para2 = _words(1000)
+    md = (
+        "## Huge\n\n"
+        f"{big_para1}\n\n"
+        "```bash\n"
+        "echo hello\n"
+        "```\n\n"
+        f"{big_para2}\n"
+    )
+    chunks = dispatch.split_markdown_for_translation(md, max_words=800)
+    cap = int(800 * 1.5)
+    assert "".join(chunks) == md
+    for chunk in chunks:
+        assert dispatch._markdown_word_count(chunk) <= cap
+    fence_chunks = [c for c in chunks if "```bash" in c]
+    assert len(fence_chunks) == 1
+    assert "```bash\necho hello\n```" in fence_chunks[0]
 
 
 def test_dispatch_agy_translate_chunked_echoes_and_concatenates(
@@ -146,12 +190,16 @@ def test_dispatch_agy_translate_chunked_echoes_and_concatenates(
     header = "HEADER"
     calls: list[str] = []
 
-    def fake_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
+    def fake_translate(
+        prompt: str, *, timeout: int = 600, attempts: int = 4
+    ) -> tuple[bool, str]:
         calls.append(prompt)
         return True, prompt.removeprefix(f"{header}\n")
 
     monkeypatch.setattr(dispatch, "dispatch_agy_translate", fake_translate)
-    ok, output = dispatch.dispatch_agy_translate_chunked(md, header, timeout=900)
+    ok, output = dispatch.dispatch_agy_translate_chunked(
+        md, header, timeout=900, attempts=4
+    )
 
     assert ok is True
     assert len(calls) >= 2
@@ -176,7 +224,9 @@ def test_dispatch_agy_translate_chunked_fails_when_chunk_fails(
     )
     call_count = 0
 
-    def fake_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
+    def fake_translate(
+        prompt: str, *, timeout: int = 600, attempts: int = 4
+    ) -> tuple[bool, str]:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
@@ -184,8 +234,48 @@ def test_dispatch_agy_translate_chunked_fails_when_chunk_fails(
         return True, "ok"
 
     monkeypatch.setattr(dispatch, "dispatch_agy_translate", fake_translate)
-    ok, err = dispatch.dispatch_agy_translate_chunked(md, "HDR", timeout=900)
+    ok, err = dispatch.dispatch_agy_translate_chunked(
+        md, "HDR", timeout=900, attempts=4
+    )
 
     assert ok is False
     assert "chunk 2/" in err
     assert "boom" in err
+
+
+def test_dispatch_agy_translate_chunked_sleeps_and_passes_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    md = (
+        "---\n"
+        "title: Delay\n"
+        "---\n"
+        "\n"
+        "## One\n\n"
+        f"{_words(500)}\n\n"
+        "## Two\n\n"
+        f"{_words(500)}\n"
+    )
+    sleep_calls: list[float] = []
+    translate_kwargs: list[dict[str, int]] = []
+
+    def fake_sleep(delay: float) -> None:
+        sleep_calls.append(delay)
+
+    def fake_translate(
+        prompt: str, *, timeout: int = 600, attempts: int = 4
+    ) -> tuple[bool, str]:
+        translate_kwargs.append({"timeout": timeout, "attempts": attempts})
+        return True, "ok"
+
+    monkeypatch.setattr(dispatch.time, "sleep", fake_sleep)
+    monkeypatch.setattr(dispatch, "dispatch_agy_translate", fake_translate)
+    chunks = dispatch.split_markdown_for_translation(md)
+    ok, _ = dispatch.dispatch_agy_translate_chunked(
+        md, "HDR", timeout=240, attempts=3, delay=2.5
+    )
+
+    assert ok is True
+    assert sleep_calls == [2.5] * (len(chunks) - 1)
+    assert all(k == {"timeout": 240, "attempts": 3} for k in translate_kwargs)
+    assert len(translate_kwargs) == len(chunks)
