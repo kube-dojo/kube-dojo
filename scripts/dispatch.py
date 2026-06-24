@@ -542,6 +542,104 @@ def _extract_agy_translation_from_stdout(raw: str) -> str:
     return text
 
 
+_HEADING_LINE_RE = re.compile(r"^#{1,6} ")
+
+
+def _markdown_heading_positions(md: str) -> list[int]:
+    """Return start offsets of ATX headings outside fenced code blocks."""
+    positions: list[int] = []
+    in_fence = False
+    pos = 0
+    for line in md.splitlines(keepends=True):
+        if not in_fence and _HEADING_LINE_RE.match(line):
+            positions.append(pos)
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+        pos += len(line)
+    return positions
+
+
+def _markdown_word_count(text: str) -> int:
+    return len(text.split())
+
+
+def split_markdown_for_translation(md: str, max_words: int = 800) -> list[str]:
+    """Split markdown into ordered translation chunks at heading boundaries.
+
+    Chunk 0 is frontmatter plus any preamble before the first heading.
+    Later chunks greedily pack consecutive heading-sections up to *max_words*.
+    A single oversized section may exceed *max_words*; sections are never
+    split mid-paragraph. Concatenating the returned chunks reproduces *md*
+    byte-for-byte via ``"".join(chunks)``.
+    """
+    if not md:
+        return [""]
+
+    heading_positions = _markdown_heading_positions(md)
+    if not heading_positions:
+        return [md]
+
+    sections = [md[: heading_positions[0]]]
+    for i, start in enumerate(heading_positions):
+        end = heading_positions[i + 1] if i + 1 < len(heading_positions) else len(md)
+        sections.append(md[start:end])
+
+    chunks: list[str] = [sections[0]]
+    current = ""
+    current_words = 0
+
+    for section in sections[1:]:
+        section_words = _markdown_word_count(section)
+        if current and current_words + section_words > max_words:
+            chunks.append(current)
+            current = section
+            current_words = section_words
+        else:
+            current += section
+            current_words += section_words
+
+    if current:
+        chunks.append(current)
+
+    chunks = [c for c in chunks if c]
+    return chunks if chunks else [md]
+
+
+def dispatch_agy_translate_chunked(
+    en_markdown: str,
+    instruction_header: str,
+    *,
+    timeout: int = 900,
+) -> tuple[bool, str]:
+    """Translate long EN markdown via agy in ≤800-word heading-boundary chunks.
+
+    *instruction_header* should carry glossary / de-russification / keep-code-English
+    rules and also instruct the model to translate ONLY the chunk below, not add or
+    repeat frontmatter unless present in this chunk, and output only the translated
+    markdown for this chunk.
+
+    Returns ``(True, full_translation)`` on success, or ``(False, error_detail)``
+    naming the failing chunk index.
+    """
+    chunks = split_markdown_for_translation(en_markdown)
+    translated: list[str] = []
+    total = len(chunks)
+
+    for i, chunk in enumerate(chunks):
+        prompt = f"{instruction_header}\n{chunk}"
+        ok, output = dispatch_agy_translate(prompt, timeout=timeout)
+        if not ok:
+            return False, f"chunk {i + 1}/{total} failed: {output}"
+        translated.append(output)
+        print(
+            f"chunk {i + 1}/{total} ok ({_markdown_word_count(output)}w)",
+            file=sys.stderr,
+        )
+
+    return True, "\n".join(translated)
+
+
 def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
     """Translate via agy CLI; capture Ukrainian output from stdout.
 
@@ -1167,6 +1265,24 @@ def main():
         help="Timeout in seconds (default: 600)",
     )
 
+    # agy-translate-file (chunked long-module path)
+    afp = subparsers.add_parser(
+        "agy-translate-file",
+        help="Translate an EN markdown file via chunked agy (stdout capture)",
+    )
+    afp.add_argument("--en", required=True, help="Path to English markdown file")
+    afp.add_argument(
+        "--header",
+        required=True,
+        help="Path to instruction header file (glossary + chunk rules)",
+    )
+    afp.add_argument(
+        "--timeout",
+        type=int,
+        default=900,
+        help="Per-chunk timeout in seconds (default: 900)",
+    )
+
     # codex
     xp = subparsers.add_parser("codex", help="Dispatch prompt to Codex CLI (codex exec)")
     xp.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
@@ -1225,6 +1341,22 @@ def main():
         ok, output = dispatch_agy_translate(prompt, timeout=args.timeout)
         if ok:
             print(output)
+        sys.exit(0 if ok else 1)
+
+    elif args.agent == "agy-translate-file":
+        en_path = Path(args.en)
+        header_path = Path(args.header)
+        en_markdown = en_path.read_text(encoding="utf-8")
+        instruction_header = header_path.read_text(encoding="utf-8")
+        ok, output = dispatch_agy_translate_chunked(
+            en_markdown,
+            instruction_header,
+            timeout=args.timeout,
+        )
+        if ok:
+            print(output)
+        else:
+            print(output, file=sys.stderr)
         sys.exit(0 if ok else 1)
 
     elif args.agent == "qwen":
