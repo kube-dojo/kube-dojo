@@ -79,11 +79,16 @@ if [ -f "$MEMORY_FILE" ]; then
   fi
 fi
 
-# Build output. The FIRST ACTION reminder is always emitted (interactive sessions
+# Build output. The AUTO-ORIENT directive is always emitted (interactive sessions
 # only — headless already exited at line 6). Belt-and-suspenders for CLAUDE.md
 # "FIRST ACTION, every session — no exceptions" — the rule still drives, this
-# just keeps it in working memory on follow-on turns.
-CONTEXT="FIRST ACTION (per CLAUDE.md): if you have not yet invoked the curriculum-orchestrator skill this session, do it now via the Skill tool BEFORE responding to the user.
+# makes a cold restart hands-off so the user does not retype the orientation
+# prompt each time (parity with learn-ukrainian's SessionStart hook).
+CONTEXT="AUTO-ORIENT — run this ritual BEFORE responding to the user's first message, even if that message is unrelated, trivial, or empty (do NOT skip it; this replaces the orientation prompt the user used to type by hand):
+  1. Invoke the curriculum-orchestrator skill via the Skill tool (skip only if already invoked this session).
+  2. Run: bash scripts/cold-start.sh — parse the kubedojo:orient / kubedojo:briefing / kubedojo:session / kubedojo:pending-decisions blocks.
+  3. Continue from the latest session handoff (docs/session-state/...): state the recommended next action, then proceed with it unless the user's message redirects you.
+  4. Hold git/PR discipline throughout: branch in .worktrees/ (never in the primary dir), PR + cross-family review before merge, never push direct to main.
 
 SESSION SETUP CHECK:"
 
@@ -105,5 +110,10 @@ INFO:"
   done
 fi
 
-printf '{"additionalContext": %s}' "$(printf '%s' "$CONTEXT" | jq -Rs '.')"
+# Emit via the current SessionStart hook schema (hookSpecificOutput.additionalContext).
+# The legacy top-level {"additionalContext": ...} form is silently ignored by newer
+# Claude Code builds — which is why this reminder previously never reached the model
+# and the user had to retype the orientation prompt each restart.
+jq -n --arg msg "$CONTEXT" \
+  '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$msg}}'
 exit 0
