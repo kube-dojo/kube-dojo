@@ -27,6 +27,7 @@
 <tr><td>UK ai-history ch-09 "The Memory Miracle"</td><td>#2097</td><td class="done">MERGED (3-family reviewed, 10 fixes)</td></tr>
 <tr><td>UK ai-history ch-10 "The Imitation Game"</td><td>#2098</td><td class="done">MERGED (3-family reviewed, 11 fixes)</td></tr>
 <tr><td>agy adapter: enable long-form translation authoring</td><td>#2099</td><td class="next">FILED (ACs) — fix before routing translation to agy</td></tr>
+<tr><td>Guard runaway <code>astro dev</code> memory leak (auto-stop + stale warning)</td><td>#2100</td><td class="next">PR open (CI running) — see "Memory leak" below</td></tr>
 </table>
 
 <h2>Key decisions / contracts</h2>
@@ -52,11 +53,19 @@
 <li><strong>codex: resets tonight.</strong></li>
 </ul>
 
-<h2 class="next">Next session</h2>
+<h2>Memory leak — runaway astro dev (PR #2100)</h2>
 <ul>
-<li><strong>ch-11 "The Summer AI Named Itself" (Part 3 start) — NOT translated.</strong> agy attempt timed out; worktree removed. UK index already has the row (<code>Літо, коли ШІ дав собі назву</code>). EN: <code>src/content/docs/ai-history/ch-11-the-summer-ai-named-itself.md</code> (211 lines).</li>
-<li><strong>Decision for ch-11:</strong> either (a) land #2099 first (dispatch cursor/codex to fix the agy adapter) then translate ch-11 with agy to conserve opus; or (b) opus translates ch-11 inline now if quota allows. Given opus 39%/5d, prefer (a).</li>
-<li>63 chapters remain (ch-11 … ch-73). Per-chapter PR, <code>feat(uk):</code> + <code>Refs #1911</code>, 3-family PRE-merge, run <code>uk_calque_v2.py</code> + <code>scripts/quality/check_uk_changed.py</code> locally before push.</li>
+<li>User flagged a node process eating ~5.4 GB. Diagnosed: a forgotten <code>astro dev</code> (port 4333) up <strong>2.5 days</strong> — RSS only ~89 MB but <code>phys_footprint</code> 5.4 GB (mostly compressed → drove the 6.4 GB compressor + memory pressure). Vite/Astro dev servers leak over long uptimes (upstream, not fixable).</li>
+<li>Root cause: <code>start-docs.sh</code> launched it <code>nohup … &amp;</code> with no lifetime bound. Fix (PR #2100): start-docs.sh auto-stops after <code>KUBEDOJO_DEV_MAX_HOURS</code> (default 12h, PID-reuse-safe); SessionStart hook flags any astro dev up 1+ day. Use <code>npx astro preview</code> for leak-free view-only.</li>
+</ul>
+
+<h2 class="next">Next session — PLAN PIVOT (user, s182): pause the book, finish k8s "fully ready per API"</h2>
+<ul>
+<li><strong>Pause ai-history book translation.</strong> Clean stop at ch-10 (Parts 1 &amp; 2 done). 61 chapters remain (ch-11 … ch-73) for later; ch-11 EN = <code>src/content/docs/ai-history/ch-11-the-summer-ai-named-itself.md</code>, UK index row present (<code>Літо, коли ШІ дав собі назву</code>).</li>
+<li><strong>⚠ Board reality (grounded, not assumed): k8s is already 98% TRANSLATED.</strong> <code>/api/uk/board</code> k8s = <code>total 261 · current 256 · stale 5 · missing 0 · reviewed 168</code>. So "finish k8s" = <strong>REVIEW, not translation</strong>: ~93 current pages are unreviewed + 5 stale to refresh → goal is <strong>261/261 reviewed</strong>.</li>
+<li><strong>Plan: k8s to fully-ready.</strong> (1) refresh the 5 stale k8s pages; (2) cross-family review the ~93 unreviewed current k8s pages — <strong>agents do R1 (codex/agy/grok), orchestrator adjudicates every finding via <code>sources</code> MCP</strong> (vigilance: today codex produced many false-positive "missing punctuation" claims → ground-check each against the live file); (3) mark the board reviewed. Pull the exact page list from <code>/api/uk/board</code> at cold-start.</li>
+<li><strong>"Use agents + save context":</strong> review-dispatches keep the bulk reading out of the main window; opus only adjudicates (cheap per-page). For later TRANSLATION volume (NOT k8s), the gaps are <code>platform</code> 241 missing · <code>ai-ml-engineering</code> 142 · <code>cloud</code> 78 stale+14 · <code>ai</code> 44 — and <strong>fix #2099 first</strong> so agy can translate on its fresh quota (or use the s176 Claude-subagent swarm for MCP-validated bulk).</li>
+<li><strong>Quota:</strong> opus 39%/5d, agy reset, codex resets tonight.</li>
 <li>Worktree note: <code>git worktree add</code> does NOT create the <code>node_modules</code> symlink → local build fails resolving <code>@astrojs/.../layers.css</code>. Fix: <code>ln -s /Users/krisztiankoos/projects/kubedojo/node_modules .worktrees/&lt;wt&gt;/node_modules</code>.</li>
 </ul>
 </body>
