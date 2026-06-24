@@ -3,6 +3,12 @@ title: "Частина 4: Доставка застосунків (16%)"
 sidebar:
   order: 0
   label: "Частина 4: Доставка застосунків"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "34cec570a46fdc984087785a2f2587bf01f50b73a75dcd41280401bed29f8fea"
 ---
 Основи CI/CD, пакування застосунків з Helm та Kustomize, та стратегії випуску.
 
@@ -16,4 +22,4 @@ sidebar:
 
 ---
 
-[← Частина 3: Хмарна нативна архітектура](../part3-cloud-native-architecture/)
+[← Частина 3: Cloud Native архітектура](../part3-cloud-native-architecture/)

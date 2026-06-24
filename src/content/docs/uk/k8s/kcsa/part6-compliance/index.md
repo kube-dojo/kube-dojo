@@ -3,6 +3,12 @@ title: "Частина 6: Відповідність вимогам та фре�
 sidebar:
   order: 0
   label: "Частина 6: Відповідність"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "f1e75d1632130ae79c1c3dd4c02036edfc97af1689108bd558e659ca1fd01776"
 ---
 Ця частина охоплює вимоги відповідності та фреймворки безпеки, що стосуються середовищ Kubernetes.
 

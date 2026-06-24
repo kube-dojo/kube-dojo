@@ -2,6 +2,12 @@
 title: "\u041f\u0456\u0434\u0441\u0443\u043c\u043a\u043e\u0432\u0438\u0439 \u0442\u0435\u0441\u0442 \u0447\u0430\u0441\u0442\u0438\u043d\u0438 1: \u0410\u0440\u0445\u0456\u0442\u0435\u043a\u0442\u0443\u0440\u0430 \u043a\u043b\u0430\u0441\u0442\u0435\u0440\u0430"
 sidebar:
   order: 9
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "0e453c6a77eecee1ff693db40f03eda213fcf6f3a915c5c9214fe24ddb94bcf5"
 ---
 > **Мета**: Перевірте свої знання з усіх модулів частини 1 перед переходом до частини 2.
 >

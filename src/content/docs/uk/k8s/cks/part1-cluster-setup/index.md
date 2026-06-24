@@ -3,6 +3,12 @@ title: "Частина 1: Налаштування кластера"
 sidebar:
   order: 0
   label: "Частина 1: Налаштування кластера"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "587aba537cb32ef8148410883e6f60eb83c5b24bb3140b65798c7ad9f1ab2b3a"
 ---
 
 Безпечне налаштування кластера, включаючи мережеві політики, CIS benchmarks, зміцнення ingress та захист метаданих вузлів.

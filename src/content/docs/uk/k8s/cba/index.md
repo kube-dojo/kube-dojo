@@ -6,6 +6,12 @@ sidebar:
 slug: uk/k8s/cba/index
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
 en_file: "src/content/docs/k8s/cba/index.md"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "20dda48c7cc868c5a08f70f84db6892a97b04bae867b8b32d305c1e5ae322fcb"
 ---
 > **Тестовий іспит** | 90 хвилин | Прохідний бал: 66% | $250 USD | **Запущено у 2025 році**
 

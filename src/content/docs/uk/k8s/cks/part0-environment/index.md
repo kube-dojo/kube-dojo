@@ -3,6 +3,12 @@ title: "Частина 0: Середовище"
 sidebar:
   order: 0
   label: "Частина 0: Середовище"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "f03bbfa349c33f6027b6852a09e879fe59d43e8e774e8c091930726fb3d3db76"
 ---
 
 Налаштуйте лабораторію безпеки CKS, опануйте основні інструменти безпеки та сплануйте стратегію іспиту.

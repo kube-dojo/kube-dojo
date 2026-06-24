@@ -6,6 +6,12 @@ sidebar:
   label: "ICA"
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
 en_file: "src/content/docs/k8s/ica/index.md"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "0b5ad86a9c5d854e2cf33e99d79a87989e7f3eceb0e1241410d0dd1e1aa331de"
 ---
 > **Іспит на основі продуктивності** | 120 хвилин | Прохідний бал: 68% | $250 USD
 

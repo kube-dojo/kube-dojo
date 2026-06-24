@@ -3,6 +3,12 @@ title: "Частина 5: Безпека платформи (16%)"
 sidebar:
   order: 0
   label: "Частина 5: Безпека платформи"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "e389ae5c2ad5bc8a01fd12b55b1d054e08f9405b123cf586a6292b0e6c0f3a69"
 ---
 Ця частина охоплює засоби безпеки на рівні платформи, включно з безпекою образів, спостережуваністю та інструментами безпеки.
 

@@ -3,6 +3,12 @@ title: "Частина 2: Зміцнення кластера"
 sidebar:
   order: 0
   label: "Зміцнення кластера"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "e684344f70941d380a912a8a65cb41cec8a010df5b65dc4253750eb93e744c5f"
 ---
 
 Зміцнення кластерів Kubernetes за допомогою RBAC, безпеки ServiceAccount, конфігурації API-сервера, оновлень та обмежень доступу до API.

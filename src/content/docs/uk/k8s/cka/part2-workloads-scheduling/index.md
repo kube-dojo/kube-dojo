@@ -3,6 +3,12 @@ title: "Частина 2: Робочі навантаження та плану�
 sidebar:
   order: 0
   label: "Частина 2: Робочі навантаження та планування"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "d9ad5c6ca580b6b0740f63f7c73aa4b334a8e86c676ae06ed62f1a5ec1b3c30d"
 ---
 ## Модулі
 

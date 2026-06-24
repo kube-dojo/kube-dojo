@@ -2,6 +2,12 @@
 title: "\u041a\u0443\u043c\u0443\u043b\u044f\u0442\u0438\u0432\u043d\u0438\u0439 \u0442\u0435\u0441\u0442 \u0427\u0430\u0441\u0442\u0438\u043d\u0438 3: \u0421\u0435\u0440\u0432\u0456\u0441\u0438 \u0442\u0430 \u043c\u0435\u0440\u0435\u0436\u0430"
 sidebar:
   order: 10
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "e1816ea717685f2c9c188a0363875533447b5ac7ddd857397a27339295c7fc80"
 ---
 > **Обмеження часу**: 45 хвилин
 >

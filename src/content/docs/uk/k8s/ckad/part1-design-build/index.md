@@ -3,6 +3,12 @@ title: "Частина 1: Проєктування та створення"
 sidebar:
   order: 0
   label: "Проєктування та створення"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "a0167a5e84a61e82a13e4e9d7d741549c7468942a90086fda652cdd94facf08b"
 ---
 
 Навчіться проєктувати та створювати хмарні застосунки за допомогою образів контейнерів, Jobs, багатоконтейнерних Подів та постійного сховища.

@@ -3,6 +3,12 @@ title: "Частина 3: Спостережуваність"
 sidebar:
   order: 0
   label: "Спостережуваність"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "18333ecf5d3b135aff45826fe96e26d584f4612638ea85250237ee92a4cecbcf"
 ---
 
 Спостерігайте, моніторте та налагоджуйте застосунки, що працюють у Kubernetes, за допомогою проб, логування, метрик та обробки застарілих API.

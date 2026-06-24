@@ -3,6 +3,12 @@ title: "Навчальна програма KCSA"
 sidebar:
   order: 1
   label: "KCSA"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "8d827ae6b9ca59caa9c809f7aeb03f8366f5603b0bd7ed04a57825dbc587cf7a"
 ---
 > **Kubernetes and Cloud Native Security Associate** - Сертифікація початкового рівня з основ безпеки хмарних технологій
 

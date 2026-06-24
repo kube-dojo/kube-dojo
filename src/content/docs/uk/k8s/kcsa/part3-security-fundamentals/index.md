@@ -3,6 +3,12 @@ title: "Частина 3: Основи безпеки (18%)"
 sidebar:
   order: 0
   label: "Частина 3: Основи безпеки"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "ec4c01f68a6e41d04b260e471377cbc6d52820bf3bbbabe665572e73703a928f"
 ---
 Ця частина охоплює основні примітиви безпеки робочих навантажень та мережі перед моделюванням загроз і контролем платформи.
 
