@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -512,27 +513,46 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
 
 AGY_TRANSLATE_MODEL = "gemini-3.1-pro-high"
 
-_AGY_FILE_WRITE_SUFFIX = (
-    "\n\nWrite your COMPLETE Ukrainian translation as raw Markdown to this "
-    "absolute file path and write NOTHING to stdout: {out_path}. Do NOT abridge, "
-    "summarize, or omit any section — reproduce every paragraph, table row, "
-    "list item, and quiz Q&A. If the source has a `## Sources` section, "
-    "translate and include it."
+_AGY_PRINT_SUFFIX = (
+    "\n\nOutput ONLY the complete translated markdown as your entire response, "
+    "printed to stdout. Do NOT write any files, do NOT create scripts, "
+    "do NOT use any tools — emit the translation directly. "
+    "Do NOT abridge, summarize, or omit any section — reproduce every paragraph, "
+    "table row, list item, quiz Q&A, and any `## Sources` section. "
+    "Do NOT add any preamble, explanation, or code fences around the output — "
+    "the response must BE the markdown document, starting with its frontmatter "
+    "or first line."
 )
 
 
-def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
-    """Translate via agy CLI; read Ukrainian output from a temp file, not stdout.
+def _agy_non_whitespace_len(text: str) -> int:
+    return sum(1 for ch in text if not ch.isspace())
 
-    agy returns a prose summary on stdout. The caller contract matches
-    ``dispatch_gemini_with_retry``: ``(ok, translated_text)``.
+
+def _extract_agy_translation_from_stdout(raw: str) -> str:
+    """Normalize agy stdout; unwrap accidental ```markdown fences."""
+    text = raw.strip()
+    if not text:
+        return text
+    if text.startswith(("---", "#", ">")):
+        return text
+    match = re.search(r"```(?:markdown|md)?\s*\n(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return text
+
+
+def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
+    """Translate via agy CLI; capture Ukrainian output from stdout.
+
+    agy ``-p`` sandboxes file writes to its scratch dir, so the caller
+    contract matches ``dispatch_gemini_with_retry``: ``(ok, translated_text)``.
     """
     adapter = AgyAdapter()
 
     def _run_once() -> tuple[bool, str]:
+        full_prompt = prompt + _AGY_PRINT_SUFFIX
         with tempfile.TemporaryDirectory() as td:
-            out_path = os.path.join(td, "translation.md")
-            full_prompt = prompt + _AGY_FILE_WRITE_SUFFIX.format(out_path=out_path)
             cwd = Path(td)
             plan = adapter.build_invocation(
                 prompt=full_prompt,
@@ -566,16 +586,20 @@ def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, st
                 return False, "agy CLI not found"
 
             elapsed = time.time() - t0
-            out_file = Path(out_path)
-            if out_file.is_file():
-                text = out_file.read_text()
-                if text.strip():
-                    _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, text, True, elapsed)
-                    return True, text
+            text = _extract_agy_translation_from_stdout(result.stdout or "")
+            if (
+                result.returncode == 0
+                and text
+                and _agy_non_whitespace_len(text) >= 50
+            ):
+                _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, text, True, elapsed)
+                return True, text
 
-            err = redact_text((result.stderr or result.stdout or "no file written").strip())
+            err = redact_text(
+                (result.stderr or result.stdout or "empty translation stdout").strip()
+            )
             _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, err)
-            return False, err or "no file written"
+            return False, err or "empty translation stdout"
 
     ok, output = _run_once()
     if ok:
@@ -1130,6 +1154,19 @@ def main():
     rp.add_argument("--github", type=int, metavar="ISSUE", help="Post output to GitHub issue")
     rp.add_argument("--timeout", type=int, default=900, help="Timeout in seconds (default: 900)")
 
+    # agy-translate
+    ap = subparsers.add_parser(
+        "agy-translate",
+        help="Dispatch Ukrainian translation prompt to agy CLI (stdout capture)",
+    )
+    ap.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
+    ap.add_argument(
+        "--timeout",
+        type=int,
+        default=600,
+        help="Timeout in seconds (default: 600)",
+    )
+
     # codex
     xp = subparsers.add_parser("codex", help="Dispatch prompt to Codex CLI (codex exec)")
     xp.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
@@ -1179,6 +1216,13 @@ def main():
     elif args.agent == "codex":
         prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
         ok, output = dispatch_codex(prompt, args.model, args.timeout)
+        if ok:
+            print(output)
+        sys.exit(0 if ok else 1)
+
+    elif args.agent == "agy-translate":
+        prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
+        ok, output = dispatch_agy_translate(prompt, timeout=args.timeout)
         if ok:
             print(output)
         sys.exit(0 if ok else 1)
