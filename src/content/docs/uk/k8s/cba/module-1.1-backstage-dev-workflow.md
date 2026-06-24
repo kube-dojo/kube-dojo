@@ -3,6 +3,12 @@ title: "Модуль 1.1: Робочий процес розробника в Ba
 slug: uk/k8s/cba/module-1.1-backstage-dev-workflow
 sidebar:
   order: 11
+calque_review:
+  reviewed_at: "2026-06-25"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 0
+  content_sha: "23355e69e4e032ec994f890f1feb06b08e0b0a4bd2c9e63a8bdf8ba7275a0bb4"
 ---
 > **Complexity**: `[COMPLEX]` - Повностековий TypeScript-проєкт з інструментами монорепозиторію
 >

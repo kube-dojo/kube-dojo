@@ -3,6 +3,12 @@ title: "CGOA — Сертифікований спеціаліст із GitOps"
 sidebar:
   order: 1
   label: "CGOA"
+calque_review:
+  reviewed_at: "2026-06-25"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "83c267450c10da80d5dbda3ab1d27dfb02219b5e787a2c41d179a4e4a6768daa"
 ---
 > **Іспит із множинним вибором** | 90 хвилин | Прохідний бал: 75% | $250 USD
 

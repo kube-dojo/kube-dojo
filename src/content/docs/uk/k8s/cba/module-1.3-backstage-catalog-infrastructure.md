@@ -3,6 +3,12 @@ title: "Модуль 1.3: Каталог та інфраструктура Backs
 slug: uk/k8s/cba/module-1.3-backstage-catalog-infrastructure
 sidebar:
   order: 13
+calque_review:
+  reviewed_at: "2026-06-25"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 2
+  content_sha: "be13190440df38e0c7b233d1e5a9e353b939a6e9c449bb8d57a5924ad0f43be4"
 ---
 > **Складність**: `[СКЛАДНО]` — Охоплює два екзаменаційні домени (44% CBA разом)
 >
