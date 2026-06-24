@@ -3,6 +3,12 @@ title: "Частина 4: Вразливості мікросервісів"
 sidebar:
   order: 0
   label: "Вразливості мікросервісів"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "afa807c814dcdc46e71d1ec1df775dfdcf47418b218bffa34389b111b0fa5354"
 ---
 
 Мінімізація вразливостей мікросервісів за допомогою контекстів безпеки, Pod Security Admission, управління секретами та ізоляції середовища виконання.

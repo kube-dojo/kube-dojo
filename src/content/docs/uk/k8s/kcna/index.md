@@ -3,8 +3,14 @@ title: "Навчальна програма KCNA"
 sidebar:
   order: 1
   label: "KCNA"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "6718381576d21e2fee9a36ad432d7995b91318aff48e47b4a69ca8020db1edc6"
 ---
-> **Kubernetes and Cloud Native Associate** - Сертифікація початкового рівня з основ хмарних технологій
+> **Kubernetes and Cloud Native Associate** - Сертифікація початкового рівня з основ Cloud Native
 
 ## Про KCNA
 
@@ -27,7 +33,7 @@ KCNA — це іспит з **множинним вибором відповід
 | [Частина 0](part0-introduction/) | Вступ | - | 2 |
 | [Частина 1](part1-kubernetes-fundamentals/) | Основи Kubernetes | 44% | 8 |
 | [Частина 2](part2-container-orchestration/) | Оркестрація контейнерів | 28% | 4 |
-| [Частина 3](part3-cloud-native-architecture/) | Хмарна архітектура | 12% | 8 |
+| [Частина 3](part3-cloud-native-architecture/) | Cloud Native архітектура | 12% | 8 |
 | [Частина 4](part4-application-delivery/) | Доставка застосунків | 16% | 2 |
 | **Всього** | | **100%** | **24** |
 
@@ -53,15 +59,15 @@ KCNA — це іспит з **множинним вибором відповід
 - [2.3 Зберігання](part2-container-orchestration/module-2.3-storage/) - PV, PVC, StorageClass
 - [2.4 Конфігурація](part2-container-orchestration/module-2.4-configuration/) - ConfigMaps та Secrets
 
-### Частина 3: Хмарна архітектура (8 модулів) — 12%
+### Частина 3: Cloud Native архітектура (8 модулів) — 12%
 *Включає спостережуваність (об'єднано листопад 2025)*
 
-- [3.1 Принципи хмарних технологій](part3-cloud-native-architecture/module-3.1-cloud-native-principles/) - 12-factor apps
+- [3.1 Принципи Cloud Native](part3-cloud-native-architecture/module-3.1-cloud-native-principles/) - 12-factor apps
 - [3.2 Екосистема CNCF](part3-cloud-native-architecture/module-3.2-cncf-ecosystem/) - Проєкти та ландшафт
 - [3.3 Хмарні патерни](part3-cloud-native-architecture/module-3.3-patterns/) - Service mesh, GitOps
 - [3.4 Основи спостережуваності](part3-cloud-native-architecture/module-3.4-observability-fundamentals/) - Метрики, логи, трейси
 - [3.5 Інструменти спостережуваності](part3-cloud-native-architecture/module-3.5-observability-tools/) - Prometheus, Grafana, Jaeger
-- [3.8 AI/ML у хмарних технологіях](part3-cloud-native-architecture/module-3.8-ai-ml-cloud-native/) - AI/LLM навантаження, планування GPU, обслуговування моделей
+- [3.8 AI/ML у Cloud Native](part3-cloud-native-architecture/module-3.8-ai-ml-cloud-native/) - AI/LLM навантаження, планування GPU, обслуговування моделей
 - [3.9 WebAssembly](part3-cloud-native-architecture/module-3.9-webassembly/) - Wasm як альтернатива контейнерам, WASI, SpinKube
 - [3.10 Зелені обчислення та сталий розвиток](part3-cloud-native-architecture/module-3.10-green-computing/) - Вуглецево-орієнтоване планування, ефективність ресурсів
 

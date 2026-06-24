@@ -3,6 +3,12 @@ title: "Частина 5: Усунення несправностей"
 sidebar:
   order: 0
   label: "Частина 5: Усунення несправностей"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "3105951d3948c72752c651de5fc0faa007f18ea601bb562674ac31856baba7c1"
 ---
 ## Модулі
 

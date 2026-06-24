@@ -3,6 +3,12 @@ title: "Частина 3: Сервіси та мережа"
 sidebar:
   order: 0
   label: "Частина 3: Сервіси та мережа"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "3764323a0e12200a609d7113c3951b78c67addb2eb3085faece16fc0b08d1998"
 ---
 ## Модулі
 

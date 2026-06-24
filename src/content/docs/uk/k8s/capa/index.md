@@ -6,13 +6,19 @@ sidebar:
   label: "CAPA"
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
 en_file: "src/content/docs/k8s/capa/index.md"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 6
+  content_sha: "25d75f4f895a9416b5fd5e41776e4be35c35b9caca982f1e0ce6b8121eda650e"
 ---
 
 > **Іспит у форматі тестів (multiple-choice)** | 90 хвилин | Прохідний бал: 75% | $250 USD | **Сертифікація CNCF**
 
 ## Огляд
 
-CAPA (Certified Argo Project Associate) підтверджує знання чотирьох проєктів Argo: Argo Workflows, Argo CD, Argo Rollouts та Argo Events. Це **теоретичний іспит** — тести з декількома варіантами відповідей, що перевіряють ваше розуміння концепцій, архітектури та паттернів використання Argo.
+CAPA (Certified Argo Project Associate) підтверджує знання чотирьох проєктів Argo: Argo Workflows, Argo CD, Argo Rollouts та Argo Events. Це **теоретичний іспит** — тести з декількома варіантами відповідей, що перевіряють ваше розуміння концепцій, архітектури та патернів використання Argo.
 
 **KubeDojo покриває ~95% тем CAPA** через існуючі модулі toolkit та дисциплін Platform Engineering, а також два спеціалізовані модулі CAPA, що охоплюють просунуті теми Argo Workflows та Argo Events.
 
@@ -104,8 +110,8 @@ Pending → Running → Succeeded/Failed/Error
 ### Компетенції
 - **Розуміти** Application CRD та його життєвий цикл синхронізації
 - **Налаштовувати** політики синхронізації (auto-sync, self-heal, prune)
-- **Використовувати** ApplicationSet для розгортання у декількох кластерах/середовищах
-- **Впроваджувати** паттерн App-of-Apps
+- **Використовувати** ApplicationSet для розгортання в кількох кластерах та для кількох орендарів
+- **Впроваджувати** патерн App-of-Apps
 - **Налаштовувати** RBAC за допомогою проєктів та ролей
 - **Керувати** розгортанням у декількох кластерах за допомогою Argo CD
 
@@ -156,7 +162,7 @@ merge         → Комбінування генераторів з логік�
 pull-request  → Генерація застосунків з PR (preview-середовища)
 scm-provider  → Виявлення репозиторіїв з організацій GitHub/GitLab
 
-ПАТТЕРН APP-OF-APPS
+ПАТЕРН APP-OF-APPS
 ══════════════════════════════════════════════════════════════
 Root Application
 ├── Application: frontend (→ git/apps/frontend)
@@ -233,7 +239,7 @@ AnalysisRun          → Екземпляр шаблону (як Job для Cron
 
 | Модуль | Тема | Релевантність |
 |--------|-------|-----------|
-| [Модуль 1.2: Argo Events — автоматизація на основі подій для Kubernetes](module-1.2-argo-events/) | Архітектура EventSource, Sensor, EventBus, Trigger, паттерни на основі подій | Пряма |
+| [Модуль 1.2: Argo Events — автоматизація на основі подій для Kubernetes](module-1.2-argo-events/) | Архітектура EventSource, Sensor, EventBus, Trigger, патерни на основі подій | Пряма |
 
 ### Ресурси для вивчення
 
@@ -290,7 +296,7 @@ AWS Lambda       → Виклик функції Lambda
 Slack            → Надсилання сповіщення у Slack
 Log              → Логування події (для налагодження)
 
-ПОШИРЕНИЙ ПАТТЕРН: GitHub Push → Argo Workflow
+ПОШИРЕНИЙ ПАТЕРН: GitHub Push → Argo Workflow
 ══════════════════════════════════════════════════════════════
 EventSource (GitHub webhook)
     ↓ подія push

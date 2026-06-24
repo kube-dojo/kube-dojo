@@ -3,6 +3,12 @@ title: "Частина 1: Основи Kubernetes (46%)"
 sidebar:
   order: 0
   label: "Частина 1: Основи K8s"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "d2d704060a74fb5ec17fe82121b9bad6586a3daf69f6bf126d1b3238ffa559b4"
 ---
 Найбільший домен іспиту. Охоплює що таке Kubernetes, його архітектуру, основні ресурси та базове налагодження.
 

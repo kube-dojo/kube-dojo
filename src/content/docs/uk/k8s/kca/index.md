@@ -6,6 +6,12 @@ sidebar:
 slug: uk/k8s/kca/index
 en_commit: "7e01a3686e7eed601474920f79697275be77476d"
 en_file: "src/content/docs/k8s/kca/index.md"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "bae923cd8ad65c8f99841f3f24a0fa277cdf146c67f458cfde39619f5de216e1"
 ---
 > **Тестовий іспит** | 90 хвилин | Прохідний бал: 75% | $250 USD | **Запущено у 2024 році**
 

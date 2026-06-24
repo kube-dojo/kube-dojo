@@ -3,6 +3,12 @@ title: "Частина 4: Сховище"
 sidebar:
   order: 0
   label: "Частина 4: Сховище"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "55eeee74b158544e21f1c0f251614dd00693efe70eff437f0baba852be610b0f"
 ---
 ## Модулі
 

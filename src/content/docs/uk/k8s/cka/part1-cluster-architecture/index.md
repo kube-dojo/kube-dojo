@@ -3,6 +3,12 @@ title: "Частина 1: Архітектура кластера, встано�
 sidebar:
   order: 0
   label: "Частина 1: Архітектура кластера"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "830b93bedcae46204cfd79f6924e7e441669c01db5028acb9715fe5c79926fb4"
 ---
 ## Модулі
 

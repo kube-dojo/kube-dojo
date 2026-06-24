@@ -2,6 +2,12 @@
 title: "\u0427\u0430\u0441\u0442\u0438\u043d\u0430 2 \u2014 \u041f\u0456\u0434\u0441\u0443\u043c\u043a\u043e\u0432\u0438\u0439 \u0442\u0435\u0441\u0442: \u0420\u043e\u0431\u043e\u0447\u0456 \u043d\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0442\u0430 \u043f\u043b\u0430\u043d\u0443\u0432\u0430\u043d\u043d\u044f"
 sidebar:
   order: 11
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "d62523c2180e382a1429a85df96ad2ea1cdfb5e3dcf347e6a361a6cd86cf0a09"
 ---
 > **Мета**: Перевірити засвоєння матеріалу з усіх модулів Частини 2 перед переходом до Частини 3.
 >

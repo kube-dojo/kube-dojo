@@ -6,6 +6,12 @@ sidebar:
   label: "PCA"
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
 en_file: "src/content/docs/k8s/pca/index.md"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "a562a590881bfbb6cc3c64013c4a6bc31660d2bb5beec71d034f6a4155acfd23"
 ---
 > **Тест із варіантами відповідей** | 90 хвилин | Прохідний бал: 75% | $250 USD | **Сертифікація CNCF**
 

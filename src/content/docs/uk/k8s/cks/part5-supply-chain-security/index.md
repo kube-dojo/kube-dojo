@@ -3,6 +3,12 @@ title: "Частина 5: Безпека ланцюга постачання"
 sidebar:
   order: 0
   label: "Безпека ланцюга постачання"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "659ebded00a8b6250abacce5977640bc65cbc5c042147af54f4ee2ea19cdda59"
 ---
 
 Захист ланцюга постачання програмного забезпечення за допомогою безпеки образів, сканування вразливостей, статичного аналізу та контролерів допуску.

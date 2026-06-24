@@ -3,6 +3,12 @@ title: "Частина 0: Середовище"
 sidebar:
   order: 0
   label: "Середовище"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "0af609d128807e49bb830139088f9d5bd9544aa46fa02afc876da7b16a79d1ad"
 ---
 
 Підготуйте середовище для іспиту, ознайомтеся з форматом CKAD та налагодьте ефективний робочий процес розробника перед переходом до предметних тем.

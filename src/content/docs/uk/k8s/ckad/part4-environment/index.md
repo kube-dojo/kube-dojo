@@ -3,6 +3,12 @@ title: "Частина 4: Конфігурація середовища та б�
 sidebar:
   order: 0
   label: "Конфігурація середовища та безпека"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "7c306c002f940f11fdd3e7c14e0203313be3348c2576e2737a970533f3631cc4"
 ---
 
 Налаштовуйте середовище та безпеку застосунків за допомогою ConfigMaps, Secrets, керування ресурсами, SecurityContexts, ServiceAccounts та CRDs.

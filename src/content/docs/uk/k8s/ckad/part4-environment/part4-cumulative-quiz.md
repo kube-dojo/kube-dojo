@@ -2,6 +2,12 @@
 title: "\u041f\u0456\u0434\u0441\u0443\u043c\u043a\u043e\u0432\u0438\u0439 \u0442\u0435\u0441\u0442 \u0447\u0430\u0441\u0442\u0438\u043d\u0438 4: \u0421\u0435\u0440\u0435\u0434\u043e\u0432\u0438\u0449\u0435 \u0437\u0430\u0441\u0442\u043e\u0441\u0443\u043d\u043a\u0456\u0432, \u043a\u043e\u043d\u0444\u0456\u0433\u0443\u0440\u0430\u0446\u0456\u044f \u0442\u0430 \u0431\u0435\u0437\u043f\u0435\u043a\u0430"
 sidebar:
   order: 7
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 13
+  content_sha: "5b8822680595d31144f13b476afd82623e59b2c64b2e3383707c2546f8ff9c58"
 ---
 > **Обмеження часу**: 25 хвилин (симуляція тиску іспиту)
 >
@@ -52,7 +58,7 @@ k create configmap app-settings \
 ### Запитання 2: Secret як змінна оточення
 **[3 хвилини]**
 
-Створіть Secret з назвою `db-creds` зі значеннями `username=admin` та `password=secret123`. Потім створіть під з назвою `db-client` з nginx, який має ці значення як змінні оточення `DB_USER` та `DB_PASS`.
+Створіть Secret з назвою `db-creds` зі значеннями `username=admin` та `password=secret123`. Потім створіть Под з назвою `db-client` з nginx, який має ці значення як змінні оточення `DB_USER` та `DB_PASS`.
 
 <details>
 <summary>Відповідь</summary>
@@ -92,7 +98,7 @@ EOF
 ### Запитання 3: Ліміти ресурсів
 **[2 хвилини]**
 
-Створіть під з назвою `limited-pod` з nginx, який має:
+Створіть Под з назвою `limited-pod` з nginx, який має:
 - Запит пам'яті: 128Mi
 - Ліміт пам'яті: 256Mi
 - Запит CPU: 100m
@@ -128,7 +134,7 @@ EOF
 ### Запитання 4: SecurityContext — Запуск від не-root
 **[3 хвилини]**
 
-Створіть під з назвою `secure-pod` з busybox, який:
+Створіть Под з назвою `secure-pod` з busybox, який:
 - Працює від користувача з ID 1000
 - Працює від групи з ID 3000
 - Має `fsGroup` встановлений у 2000
@@ -174,7 +180,7 @@ server {
 }
 ```
 
-Потім створіть під з назвою `nginx-custom`, який монтує цей ConfigMap до `/etc/nginx/conf.d/default.conf`.
+Потім створіть Под з назвою `nginx-custom`, який монтує цей ConfigMap до `/etc/nginx/conf.d/default.conf`.
 
 <details>
 <summary>Відповідь</summary>
@@ -218,7 +224,7 @@ EOF
 ### Запитання 6: Сервісний акаунт
 **[2 хвилини]**
 
-Створіть Сервісний акаунт з назвою `app-sa` та під з назвою `app-pod` з nginx, який використовує цей Сервісний акаунт.
+Створіть Сервісний акаунт з назвою `app-sa` та Под з назвою `app-pod` з nginx, який використовує цей Сервісний акаунт.
 
 <details>
 <summary>Відповідь</summary>
@@ -266,7 +272,7 @@ echo  # новий рядок
 ### Запитання 8: Видалення capabilities
 **[3 хвилини]**
 
-Створіть під з назвою `minimal-caps` з nginx, який:
+Створіть Под з назвою `minimal-caps` з nginx, який:
 - Видаляє ВСІ capabilities
 - Додає лише capability `NET_BIND_SERVICE`
 - Запобігає ескалації привілеїв
@@ -301,7 +307,7 @@ EOF
 ### Запитання 9: Клас QoS
 **[2 хвилини]**
 
-Створіть під з назвою `guaranteed-pod` з nginx, який має клас QoS Guaranteed. Яка конфігурація ресурсів потрібна?
+Створіть Под з назвою `guaranteed-pod` з nginx, який має клас QoS Guaranteed. Яка конфігурація ресурсів потрібна?
 
 <details>
 <summary>Відповідь</summary>
@@ -396,12 +402,12 @@ k delete database production-db 2>/dev/null
 
 Якщо ви набрали менше 80%, перегляньте ці теми:
 
-- **Пропустили Q1, Q5**: Перегляньте [Модуль 4.1](/uk/k8s/ckad/part4-environment/module-4.1-configmaps/) (ConfigMaps) — створення та монтування томів
-- **Пропустили Q2, Q7**: Перегляньте [Модуль 4.2](/uk/k8s/ckad/part4-environment/module-4.2-secrets/) (Secrets) — змінні оточення та декодування
-- **Пропустили Q3, Q9**: Перегляньте [Модуль 4.3](/uk/k8s/ckad/part4-environment/module-4.3-resources/) (Ресурси) — запити, ліміти, QoS
-- **Пропустили Q4, Q8**: Перегляньте [Модуль 4.4](/uk/k8s/ckad/part4-environment/module-4.4-securitycontext/) (SecurityContexts) — користувач/група, capabilities
-- **Пропустили Q6**: Перегляньте [Модуль 4.5](/uk/k8s/ckad/part4-environment/module-4.5-serviceaccounts/) (Сервісні акаунти) — створення та призначення
-- **Пропустили Q10**: Перегляньте [Модуль 4.6](/uk/k8s/ckad/part4-environment/module-4.6-crds/) (CRDs) — власні ресурси
+- **Помилки в Q1, Q5**: Перегляньте [Модуль 4.1](/uk/k8s/ckad/part4-environment/module-4.1-configmaps/) (ConfigMaps) — створення та монтування томів
+- **Помилки в Q2, Q7**: Перегляньте [Модуль 4.2](/uk/k8s/ckad/part4-environment/module-4.2-secrets/) (Secrets) — змінні оточення та декодування
+- **Помилки в Q3, Q9**: Перегляньте [Модуль 4.3](/uk/k8s/ckad/part4-environment/module-4.3-resources/) (Ресурси) — запити, ліміти, QoS
+- **Помилки в Q4, Q8**: Перегляньте [Модуль 4.4](/uk/k8s/ckad/part4-environment/module-4.4-securitycontext/) (SecurityContexts) — користувач/група, capabilities
+- **Помилки в Q6**: Перегляньте [Модуль 4.5](/uk/k8s/ckad/part4-environment/module-4.5-serviceaccounts/) (Сервісні акаунти) — створення та призначення
+- **Помилки в Q10**: Перегляньте [Модуль 4.6](/uk/k8s/ckad/part4-environment/module-4.6-crds/) (CRDs) — власні ресурси
 
 ---
 

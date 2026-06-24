@@ -3,6 +3,12 @@ title: "Частина 4: Модель загроз Kubernetes (18%)"
 sidebar:
   order: 0
   label: "Частина 4: Модель загроз"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "6e8c03135725f17223c5ccffef7397ae358701f2216c3588c1a764d7b1527581"
 ---
 Ця частина знайомить із моделюванням загроз для Kubernetes та поширеними поверхнями атак, створюючи контекст перед вивченням безпеки платформи та відповідності вимогам.
 

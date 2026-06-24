@@ -3,6 +3,12 @@ title: "Частина 3: Зміцнення системи"
 sidebar:
   order: 0
   label: "Зміцнення системи"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "3e93365edc0def4503b9c4f79772c83941a8a3c0c58f741c538ba3627b9aa2ba"
 ---
 
 Зміцнення операційної системи хоста за допомогою AppArmor, Seccomp, модулів безпеки ядра та мережевого захисту.

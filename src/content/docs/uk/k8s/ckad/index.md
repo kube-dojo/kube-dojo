@@ -3,6 +3,12 @@ title: "Навчальна програма CKAD"
 sidebar:
   order: 1
   label: "CKAD"
+calque_review:
+  reviewed_at: "2026-06-24"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "a7a10773951a2535d31f71338d3920033fc04451778e95b99611362982a2a704"
 ---
 > **Certified Kubernetes Application Developer** — Продемонструйте свою здатність проєктувати, створювати та розгортати хмарні застосунки на Kubernetes
 
