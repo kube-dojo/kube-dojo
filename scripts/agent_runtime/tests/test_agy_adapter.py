@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from agent_runtime.adapters.agy import AgyAdapter
 
 
-def _build(mode: str) -> list[str]:
+def _build(mode: str, *, tool_config: dict | None = None) -> list[str]:
     adapter = AgyAdapter()
     plan = adapter.build_invocation(
         prompt="p",
@@ -19,7 +19,7 @@ def _build(mode: str) -> list[str]:
         model="gemini-3.5-flash-high",
         task_id=None,
         session_id=None,
-        tool_config=None,
+        tool_config=tool_config,
     )
     return plan.cmd
 
@@ -42,12 +42,42 @@ def test_build_invocation_always_includes_dangerously_skip(monkeypatch) -> None:
             "-p",
             "p",
             "--dangerously-skip-permissions",
+            "--add-dir",
+            "/tmp",
+            "--print-timeout",
+            "3590s",
             "--model",
             "Gemini 3.5 Flash (High)",
         ], (
             f"mode={mode} must produce the same cmd because agy has no "
             f"mode-specific permission flag"
         )
+
+
+def test_build_invocation_print_timeout_derived_from_dispatch_hard_timeout(
+    monkeypatch,
+) -> None:
+    """``--print-timeout`` tracks ``tool_config['hard_timeout']`` minus margin.
+
+    Draft-class dispatches use a 3600s outer timeout; agy must receive a
+    matching print-timeout so long-form authoring survives past the CLI's
+    5m default (#2099).
+    """
+    monkeypatch.setattr("agent_runtime.adapters.agy.shutil.which", lambda _: "agy")
+    adapter = AgyAdapter()
+
+    plan = adapter.build_invocation(
+        prompt="p",
+        mode="danger",
+        cwd=Path("/repo/.worktrees/x"),
+        model="gemini-3.1-pro-high",
+        task_id=None,
+        session_id=None,
+        tool_config={"hard_timeout": 3600},
+    )
+
+    idx = plan.cmd.index("--print-timeout")
+    assert plan.cmd[idx + 1] == "3590s"
 
 
 def test_build_invocation_maps_model_slug(monkeypatch) -> None:

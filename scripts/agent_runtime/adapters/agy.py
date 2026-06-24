@@ -52,6 +52,15 @@ _RATE_LIMIT_PATTERNS = (
 )
 _RATE_LIMIT_RE = re.compile("|".join(_RATE_LIMIT_PATTERNS), re.IGNORECASE)
 
+# Outer runner hard_timeout default (``runner.invoke``). Used when callers do
+# not pass ``tool_config["hard_timeout"]`` so agy still gets a print-timeout
+# above the CLI's 5m default.
+_DEFAULT_HARD_TIMEOUT_S = 3600
+
+# Let agy's own --print-timeout fire slightly before the runner SIGKILL so
+# long-form authoring fails with a clean CLI error instead of a mid-flush kill.
+_PRINT_TIMEOUT_MARGIN_S = 10
+
 
 # Canonical model display strings accepted by ``agy --model`` (verbatim from
 # ``agy models``). The runtime passes a slug like ``gemini-3.1-pro-high``;
@@ -80,6 +89,11 @@ def _normalize_model(value: str) -> str:
 _AGY_MODEL_BY_NORMALIZED: dict[str, str] = {
     _normalize_model(name): name for name in _AGY_MODEL_NAMES
 }
+
+
+def _agy_print_timeout_s(hard_timeout: int) -> int:
+    """Derive ``agy --print-timeout`` from the outer dispatch hard timeout."""
+    return max(1, hard_timeout - _PRINT_TIMEOUT_MARGIN_S)
 
 
 class AgyAdapter:
@@ -133,6 +147,15 @@ class AgyAdapter:
         # both past "agy fabrication" verdicts. (#1827)
         cmd += ["--add-dir", str(cwd)]
 
+        # ``agy -p`` / ``agy --print`` default to --print-timeout 5m0s. The
+        # runner's hard_timeout only bounds the outer process; without this
+        # flag long-form authoring dies at ~300s before writing output (#2099).
+        tc = tool_config or {}
+        hard_timeout = tc.get("hard_timeout", _DEFAULT_HARD_TIMEOUT_S)
+        if isinstance(hard_timeout, (int, float)) and hard_timeout > 0:
+            print_timeout_s = _agy_print_timeout_s(int(hard_timeout))
+            cmd += ["--print-timeout", f"{print_timeout_s}s"]
+
         resolved_model = self._resolve_model_flag(model)
         if resolved_model:
             cmd += ["--model", resolved_model]
@@ -141,9 +164,8 @@ class AgyAdapter:
             cmd.append(f"--conversation={session_id}")
 
         # Phase 2 follow-up: agy uses `agy plugin` for MCP configuration,
-        # not a per-invocation CLI flag like gemini-cli. The adapter accepts
-        # tool_config for GeminiAdapter API parity but does not act on it yet.
-        _ = tool_config
+        # not a per-invocation CLI flag like gemini-cli. ``mcp_server_names``
+        # is accepted for GeminiAdapter API parity but not acted on yet.
         _ = task_id
 
         return InvocationPlan(
