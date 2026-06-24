@@ -92,12 +92,24 @@ New memory: <code>feedback_ci_russicism_gate_is_check_uk_changed</code>.
 <li><strong>Translation convention for "stored program" (ch-08):</strong> kept «stored program» in <strong>English</strong> wherever the text discusses the <em>phrase-as-historical-artifact</em> (the chapter's thesis is it wasn't coined until 1949); Ukrainian <code class="uk">збережена програма</code> for the <em>concept</em>. mermaid timeline title translated (matches ch-01–05; ch-06's English title is the outlier).</li>
 </ul>
 
-<h2>Next action</h2>
-<p><strong>Continue #1911 UK ai-history: ch-09 "The Memory Miracle"</strong> (EN <code>src/content/docs/ai-history/ch-09-the-memory-miracle.md</code>),
-then ch-10…, same locked pipeline. <strong>63 chapters remain (ch-09 … ch-73).</strong> Push multiple chapters per session toward the
-~820K context ceiling (per the re-grounded handoff threshold), hand off before drift. <strong>From ch-09, add <code>check_uk_changed.py</code>
-to the local self-review</strong> (this session's lesson) so the CI russicism gate never round-trips.</p>
+<h2>Headroom proxy DISABLED (user directive, end of s181)</h2>
+<div class="lesson">
+ch-09's full-chapter translation <code>Write</code> (~36 KB) <strong>timed out repeatedly</strong> on the Headroom proxy's 30s stream-idle cap — the same pre-upstream-compression failure mode behind the s180 lossy-Read bug. User called it: <strong>disable Headroom.</strong>
+<ul>
+<li><strong><code>start-claude.sh</code></strong> — the "headroom routing guard" block replaced with an unconditional <code>unset ANTHROPIC_BASE_URL OPENAI_BASE_URL COPILOT_PROVIDER_BASE_URL</code> before <code>exec claude</code> → launches DIRECT. (commit <code>34134f498</code>, on main.)</li>
+<li><strong><code>~/.profile</code></strong> — the "headroom persistent env" export block commented out (dotfile, untracked) so no shell re-exports the proxy URL.</li>
+<li>Proxy daemon (Python :8787, launchd) left running idle — harmless. <strong>NOT</strong> touched via <code>headroom install …</code> (s166 blocker: regenerates config).</li>
+<li><strong>Reversible.</strong> Installed version is <strong>0.27.0</strong>; its <code>COMPRESSION_TIMEOUT_SECONDS</code> knob tunes the compression timer, NOT the generic request read cap long <code>/v1/messages</code> turns trip — so it would likely NOT fix the stall. The on-point fix ("give buffered Anthropic request paths their own longer read timeout") is <strong>UNRELEASED</strong>. <strong>Re-enable only once that changelog entry ships in a release</strong> (then restore both blocks, buy back the ~22% token savings as a sure thing). Memory: <code>feedback_headroom_disabled_reenable_when_readtimeout_fix_ships</code>.</li>
+</ul>
+<strong>Restart impact:</strong> only THIS Claude session needs relaunching (env fixed at launch). codex/agy/grok and other dispatch agents are spawned fresh per call and inherit the no-proxy env automatically — no separate restart. Their outputs are small and never tripped the timeout anyway.
+</div>
 
-<p style="color:#718096; font-size:.85em; margin-top:2rem;">Session 181 · 2026-06-24 · standalone orchestrator (opus-4.8 1M) · PRs #2092 + #2093 merged · 2 chapters / ~50 review flags adjudicated · 0 broken builds</p>
+<h2>Next action (FIRST after restart)</h2>
+<p><strong>Resume #1911 UK ai-history: ch-09 "The Memory Miracle"</strong> (EN <code>src/content/docs/ai-history/ch-09-the-memory-miracle.md</code>, 176 lines incl. a footnote).
+Worktree <code>.worktrees/uk-ch09</code> already exists off fresh main (clean — translation NOT started; the EN is fully read). Then <strong>ch-10 "The Imitation Game"</strong> — <strong>finishing ch-09 + ch-10 fully translates Parts 1 &amp; 2 of the book (chapters 1–10)</strong>; Part 3 begins at ch-11. Same s178-locked pipeline.
+<strong>63 chapters remain (ch-09 … ch-73).</strong></p>
+<p><strong>Carry-forward lessons:</strong> (1) <strong>No more proxy</strong> → full-chapter single-<code>Write</code> works, Reads are lossless (no more &lt;40-line-chunk workaround needed for correctness — though chunked reads are still fine). (2) <strong>Run BOTH russicism gates locally before push</strong> — <code>uk_calque_v2.py</code> AND the CI gate <code>scripts/quality/check_uk_changed.py</code> (s181: CI blocks surface forms like nominative <code class="uk">воєнний</code> that the local gate passes). (3) codex review needs a throwaway scratch worktree (danger-mode cwd); agy/grok read-only, no worktree.</p>
+
+<p style="color:#718096; font-size:.85em; margin-top:2rem;">Session 181 · 2026-06-24 · standalone orchestrator (opus-4.8 1M) · PRs #2092 + #2093 merged · 2 chapters / ~50 review flags adjudicated · Headroom disabled · 0 broken builds</p>
 </body>
 </html>
