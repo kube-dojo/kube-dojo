@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 184 — 2026-06-25 — k8s UK 261/261 complete</title>
+<style>
+body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.5rem;color:#1a1a2e;background:#fafafc}
+h1{font-size:1.7rem;border-bottom:3px solid #4361ee;padding-bottom:.4rem}
+h2{font-size:1.25rem;margin-top:2rem;color:#3a0ca3;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+h3{font-size:1.05rem;color:#4361ee;margin-top:1.3rem}
+code{background:#eef;padding:1px 5px;border-radius:3px;font-size:.88em}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92em}
+th,td{border:1px solid #ccd;padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#e8ecff}
+.ok{color:#0a7d23;font-weight:600}.bad{color:#c1121f;font-weight:600}.warn{color:#bc6c25;font-weight:600}
+.tldr{background:#eef6ff;border-left:4px solid #4361ee;padding:.8rem 1.1rem;border-radius:0 6px 6px 0}
+blockquote{border-left:3px solid #bbb;margin:.6rem 0;padding:.3rem .9rem;color:#444;background:#f4f4f8}
+ul li{margin:.2rem 0}
+</style>
+</head>
+<body>
+<h1>Session 184 — 2026-06-25</h1>
+<p class="tldr"><strong>UK k8s track → 261/261 current.</strong> Finished the 4 remaining stale k8s pages + rescued an orphaned, uncommitted module-1.1 translation off <code>main</code>. The 3-family cross-family review (opus-inline + agy + grok) caught <strong>real defects every deterministic gate passed</strong> — codex/gpt-5.5 produced a pervasively code-switched module-1.3 (English left in Ukrainian prose, wrong cases, a corrupted word); re-translated cleanly via deepseek; agy then caught deepseek redacting a teaching placeholder. PR #2103 merged (5 files), PR #2106 stamps the review. Also confirmed the auto-orient SessionStart hook (the user's setup ask) is already wired + firing — verified, no change needed.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Item</th><th>State</th></tr>
+<tr><td><strong>PR #2103</strong> — complete all 5 remaining stale UK k8s pages (index.md, cba/module-1.1, cba/module-1.3, cgoa/index, otca/index)</td><td class="ok">MERGED (squash) → k8s <strong>261/261 current</strong>, 0 stale, 0 missing</td></tr>
+<tr><td><strong>PR #2106</strong> — calque_review frontmatter stamps on the 5 reviewed pages</td><td class="warn">OPEN at handoff (CI running) — merge on green</td></tr>
+<tr><td>Auto-orient SessionStart hook (user's "load skill + cold-start automatically" ask)</td><td class="ok">Already done (s182 #2096) — verified firing this session; user can stop typing the prompt</td></tr>
+<tr><td>Memory: codex code-switches on long UK translations (passes gates)</td><td class="ok">Recorded + indexed</td></tr>
+</table>
+
+<h2>The headline: 3-family review caught gate-invisible defects</h2>
+<p>All 4 new translations were dispatched (user's s183 lane decision: authoring = codex/deepseek/grok, NOT inline-opus, NOT agy which fabricates). Every file passed the deterministic gates (<code>check_uk_changed.py</code>, <code>uk_calque_v2.py</code>, no forbidden letters). The cross-family read found what the gates structurally cannot:</p>
+<ul>
+<li><strong>module-1.3 v1 (codex/gpt-5.5) — REJECTED.</strong> Pervasive English↔Ukrainian <strong>code-switching</strong> (<code>Default SQLite</code>, <code>strictly для local</code>, <code>can efficiently handle intense навантаження</code>), <strong>grammatical-case errors</strong> (<code>для виробниче середовище</code> → should be <code>виробничого середовища</code>), and a <strong>corrupted word</strong> (<code>розробкиelopment</code>). Gates passed it because the defects are untranslated-English + wrong-case, not russicisms/calques. grok caught the corruption; agy + opus-inline caught the code-switching.</li>
+<li><strong>module-1.3 re-translated via deepseek-v4-pro</strong> — structural parity exact vs EN (headings 44/52/48/72 = fences/rows/lists), zero code-switching, correct cases. The codex failure was fully resolved.</li>
+<li><strong>module-1.3 v2 (deepseek) — agy caught</strong> the placeholder <code>${GRAFANA_TOKEN}</code> redacted to <code>***</code> (deepseek treated a teaching env-var-substitution example as a secret to mask). Restored; <code>${...}</code> placeholder parity now 11/11 vs EN.</li>
+</ul>
+
+<h3>False positives rejected via ground-check (the adjudication earning its keep)</h3>
+<ul>
+<li>grok: "frontmatter slug/order failure" — UK slugs correct (<code>uk/</code>-prefixed); order pre-existing.</li>
+<li>agy: module-1.1 "resolution/ingestion mistranslation" — <code>розв'язання залежностей</code> is the correct established term; <code>поглинання</code> defensible.</li>
+<li>agy v2: "untranslated prose block 484–488" — it's a <code>```text</code> code fence, identical in EN (verbatim by rule); "pervasive code-switching" — deterministic prose scan was clean.</li>
+</ul>
+
+<h2>Per-file outcome</h2>
+<table>
+<tr><th>File</th><th>Author</th><th>Words (UK/EN)</th><th>Verdict</th></tr>
+<tr><td>k8s/index.md</td><td>prior</td><td>1319/1297</td><td class="ok">PASS</td></tr>
+<tr><td>cba/module-1.1</td><td>prior (rescued from main)</td><td>7868/7995</td><td class="ok">PASS (5 P3 знаходиться WARN, left)</td></tr>
+<tr><td>cba/module-1.3</td><td>codex→<strong>deepseek</strong></td><td>7643/7889</td><td class="ok">PASS after re-translate + GRAFANA_TOKEN fix</td></tr>
+<tr><td>cgoa/index.md</td><td>deepseek</td><td>1622/1608</td><td class="ok">PASS</td></tr>
+<tr><td>otca/index.md</td><td>deepseek</td><td>1937/1928</td><td class="ok">PASS (+ sidebar order 1→0 aligned to EN)</td></tr>
+</table>
+
+<h2>Git / CI</h2>
+<ul>
+<li>PR #2103: squash-merged at <code>8fbd7fde0</code>; all 11 CI checks green incl. required Astro build (5m40s), Ukrainian Russicism check, Site health, CodeQL, vitest.</li>
+<li>Branch <code>fix-uk-k8s-stale</code> auto-deleted on merge; primary fast-forwarded; 4 throwaway author-worktrees + branches removed; <code>.worktrees/g2-craft</code> preserved (not ours, #1623).</li>
+<li>PR #2106 (review stamps) open — frontmatter-only, merge on CI green.</li>
+</ul>
+
+<h2>Next actions</h2>
+<ol>
+<li><strong>Merge PR #2106</strong> (review stamps) once CI green → board reviewed 217→222.</li>
+<li><strong>Translation volume order (user s182):</strong> <code>ai</code> (44 missing, 0% UK) → <code>ai-ml-engineering</code> (142 missing, 0% UK) → platform (241) / cloud. Same lane: dispatch authoring to <strong>deepseek</strong> (preferred — codex code-switches on long modules; see new memory) / grok, then 3-family cross-family review (agy + grok + opus-inline) → opus MCP-adjudicate → merge. <strong>Scan every codex-authored translation for code-switching</strong> (a gate blind spot).</li>
+<li><strong>k8s reviewed-sweep (s182 stretch):</strong> 261/261 current but only ~222/261 reviewed — ~39 current pages still unreviewed. Optional deliberate cross-family sweep next.</li>
+<li><strong>AI-history book #1911</strong> remains PAUSED at ch-11 (resume after the ai/ai-ml volume, per user pivot).</li>
+</ol>
+
+<h2>Lane lesson (recorded as memory)</h2>
+<blockquote><code>feedback_codex_translation_code_switches_on_long_modules</code>: codex/gpt-5.5 is a reliable file-<em>writer</em> but a poor <em>translator</em> on long (~8000w) UK modules — pervasive code-switching + case errors that PASS the deterministic gates. Prefer <strong>deepseek</strong> for translation authoring; the cross-family review of any codex translation MUST scan for untranslated English in prose. deepseek's own failure mode: redacts teaching <code>${TOKEN}</code> placeholders to <code>***</code> — verify placeholder parity after.</blockquote>
+</body>
+</html>
