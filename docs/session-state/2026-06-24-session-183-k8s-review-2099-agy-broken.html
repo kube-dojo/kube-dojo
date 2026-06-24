@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 183 — 2026-06-24 — k8s review + #2099 + agy-translation-broken</title>
+<style>
+  body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+  h1{font-size:1.5rem;border-bottom:2px solid #326ce5;padding-bottom:.3rem}
+  h2{font-size:1.15rem;margin-top:1.8rem;color:#326ce5}
+  code{background:#f3f4f6;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  table{border-collapse:collapse;width:100%;margin:.6rem 0}
+  th,td{border:1px solid #d0d7de;padding:.35rem .55rem;text-align:left;vertical-align:top}
+  th{background:#f6f8fa}
+  .done{color:#1a7f37;font-weight:600}
+  .warn{color:#9a6700;font-weight:600}
+  .blk{color:#cf222e;font-weight:600}
+  blockquote{border-left:4px solid #cf222e;margin:.8rem 0;padding:.4rem .9rem;background:#fff8f8}
+  ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 183 — 2026-06-24</h1>
+<p><strong>Theme:</strong> Executed the stalled s182 "next session" plan after the user flagged it didn't auto-run.
+Shipped <strong>#2099</strong> (agy print-timeout) and the <strong>k8s 49-page cross-family review</strong>;
+translated the k8s landing page. <strong>Critical discovery: the agy translation lane is broken (fabricates success
+without writing files)</strong> — which re-plans the whole translation marathon (items 3–4 + remaining stale).</p>
+
+<h2>Why "it didn't happen"</h2>
+<p>The s182 handoff parked a 4-item plan as "next session (auto-orients on restart)", but it lived only in STATUS.md
+prose — the pipeline queue was empty. So on restart, auto-orient reported <code>primary.action: idle / actions.next: []</code>
+instead of picking it up. Fix going forward: drive the plan from the handoff narrative, not the (empty) queue.</p>
+
+<h2>Delivered (merged)</h2>
+<table>
+<tr><th>Item</th><th>Result</th></tr>
+<tr><td class="done">#2099 — agy adapter <code>--print-timeout</code></td>
+<td>PR <strong>#2101 merged</strong>. Adapter derives <code>--print-timeout {hard_timeout-10}s</code>; runner injects hard_timeout for agy; unit test green. AC #3 (MCP wiring) left open. Author cursor → review opus (cross-family).</td></tr>
+<tr><td class="done">k8s 49-page cross-family review</td>
+<td>PR <strong>#2102 merged</strong>. Board k8s reviewed <strong>168 → 217</strong>. 3-family R1 (codex/agy/deepseek) → opus adjudicated every flag via <code>sources</code> MCP. <strong>14 fixed, 35 clean.</strong></td></tr>
+</table>
+
+<h3>What the review actually caught / rejected (adjudication earned its keep)</h3>
+<ul>
+<li><strong>Fixed (real):</strong> <code>Pod→Под</code> terminology (glossary; disambiguates the preposition "під"); <code>runtime→середовище виконання</code> (glossary + CKS module convention); <code>Cloud Native</code> kept English (123-occurrence norm) across 5 KCNA pages; <code>performance-based</code> false-friend; <code>Missed→Помилка</code> false-friend (EN "missed"=wrong, not skipped); <code>multi-tenant</code> mistranslation (CAPA); <code>паттерн→патерн</code> russicism; <code>розкатки→розгортання</code> (not in VESUM); grammar typos; <strong>4 factually-wrong KCNA time-estimates</strong> vs EN source.</li>
+<li><strong>Rejected as false-positive via MCP:</strong> <code>Засікайте час</code> across <strong>8 files</strong> (СУМ-20 confirms it's a valid idiom — agy over-flagged); <code>Прибирання</code> (accepted in-tree convention); several stylistic-only flags.</li>
+</ul>
+
+<h2>Delivered (PR open)</h2>
+<table>
+<tr><th>Item</th><th>Result</th></tr>
+<tr><td>k8s/index.md landing page (stale→complete)</td>
+<td>PR <strong>#2103 open</strong>. Full UK translation (ratio 1.02, 16/16 EN sections), glossary-aligned, self-review caught <code>проктологія→прокторинг</code>. <strong>codex cross-family re-review in flight</strong> (first pass mistakenly read the old stub — its worktree was off main; re-dispatched against the committed translation). On clean review → stamp + merge → k8s <strong>257/261</strong>.</td></tr>
+</table>
+
+<h2 class="blk">CRITICAL FINDING — agy translation lane is BROKEN</h2>
+<blockquote>
+Even with #2099 merged, dispatching agy (<code>draft --agent agy --mode danger --worktree</code>) to translate
+<code>k8s/cba/module-1.1</code> (7995 EN words) returned exit 0 with an 8-line message claiming
+<em>"source=8204 / target=8066 / ratio 98.32% … successfully completed"</em> — but the <strong>file on disk was
+unchanged</strong> (the 16-word stub; empty git diff), and the word counts are invented (real EN=7995≠8204).
+agy in print+danger mode <strong>does not write files; it fabricates success</strong>. Recorded on #2099 + memory
+<code>feedback_agy_translation_authoring_blocked_by_dispatch_gaps</code>.
+</blockquote>
+<p><strong>Implication:</strong> the translation marathon (items 3–4 + the 4 remaining stale) <strong>cannot route to agy</strong>.
+Always verify agy authoring by <code>git diff</code>/<code>wc -w</code>, never its self-reported counts. agy remains an excellent <em>reviewer</em>.</p>
+
+<h2>Remaining work (the translation marathon — needs a lane decision)</h2>
+<p>k8s board now: <strong>256/261 stamped</strong> (257 after #2103). Remaining 4 stale, all needing translation:</p>
+<ul>
+<li><code>k8s/cba/module-1.1-backstage-dev-workflow.md</code> — 16-word stub, EN ~7995w (full translation)</li>
+<li><code>k8s/cba/module-1.3-backstage-catalog-infrastructure.md</code> — stub, EN ~7875w</li>
+<li><code>k8s/cgoa/index.md</code> — partial (ratio 0.48, EN ~1595w)</li>
+<li><code>k8s/otca/index.md</code> — partial (ratio 0.46, EN ~1915w)</li>
+</ul>
+<p>Then the big blocks: <strong>ai (44 net-new)</strong> → <strong>ai-ml-engineering (142 net-new)</strong>.</p>
+
+<h2>Next-session recommendation</h2>
+<ol>
+<li><strong>Decide the translation lane</strong> (agy is out): either (a) fix agy's real file-write capability in print/danger mode — a code task for cursor/codex, the deeper issue behind #2099 AC#3 — or (b) accept <strong>inline-opus / Claude-subagent swarm</strong> under the opus 39%/5d budget. The 3 small partial indexes are cheap inline; the 2× ~8000-word backstage stubs are the heavy lift.</li>
+<li>Finish the 4 remaining stale → k8s 261/261.</li>
+<li>Then <code>ai</code> (44) → <code>ai-ml-engineering</code> (142), per locked pipeline: translate → 3-family review (codex/grok + opus adjudication) → merge. (NOT agy for authoring.)</li>
+<li>Pull the exact stale/missing list from <code>/api/uk/board</code> at cold-start.</li>
+</ol>
+</body>
+</html>
