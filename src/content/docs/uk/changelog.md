@@ -5,6 +5,22 @@ sidebar:
   order: 2
 ---
 
+## 25 червня 2026 — Велике оновлення українського перекладу
+
+### Покриття зросло приблизно вдвічі (~14% → ~35%)
+
+Актуальне покриття українською зросло приблизно вдвічі за цей цикл. Повноту ми вимірюємо за **актуальністю** (відповідністю поточній англійській версії), а не за наявністю файлу.
+
+- **Увесь трек сертифікацій Kubernetes** тепер повністю перекладено й перевірено на калькування — CKA, CKAD, CKS, KCNA, KCSA, а також усі сторінки сертифікацій (CGOA, OTCA, CBA та інші). Трек k8s: 261 із 261 сторінок актуальні.
+- Трек **«Передумови» (Prerequisites)** лишається повністю перекладеним і перевіреним на природність української.
+- Розпочато переклад **книги з історії ШІ** — Частини 1 і 2 (перші десять розділів) уже доступні; кожен розділ перевірили три незалежні модельні родини перед злиттям.
+
+### Що далі в черзі на переклад
+
+Наступні на переклад — треки **AI** та **AI/ML Engineering**, далі Platform Engineering і Cloud.
+
+---
+
 ## 14 червня 2026 — Стан перекладу та новий англомовний контент
 
 ### Як ми тепер вимірюємо переклад
@@ -210,26 +226,3 @@ KubeDojo тепер повністю узгоджений з **Kubernetes 1.35**
 ## Грудень 2025 — Початковий випуск
 
 KubeDojo стартував із 311 модулями, що охоплюють усі 5 сертифікацій Kubestronaut, а також платформну інженерію, Linux та поглиблене вивчення IaC. Повну історію проєкту дивіться у [журналі комітів](https://github.com/kube-dojo/kube-dojo.github.io/commits/main).
-## April 17, 2026 — New Top-Level AI Track
-
-### AI Is Now a First-Class Learner Track
-
-New top-level `AI` track:
-- `AI Foundations`
-- `AI-Native Work`
-
-This track is separate from `AI/ML Engineering`:
-- `AI` is the accessible front door
-- `AI/ML Engineering` remains the advanced builder path
-
-### What It Covers
-
-- what AI is
-- what LLMs are
-- prompting basics
-- verification
-- privacy, safety, and trust
-- using AI for learning, writing, research, and coding
-- AI-native work habits, assistants, agents, and workflow design
-
----
