@@ -26,10 +26,14 @@ ul li{margin:.2rem 0}
 <table>
 <tr><th>Item</th><th>State</th></tr>
 <tr><td><strong>PR #2103</strong> — complete all 5 remaining stale UK k8s pages (index.md, cba/module-1.1, cba/module-1.3, cgoa/index, otca/index)</td><td class="ok">MERGED (squash) → k8s <strong>261/261 current</strong>, 0 stale, 0 missing</td></tr>
-<tr><td><strong>PR #2106</strong> — calque_review frontmatter stamps on the 5 reviewed pages</td><td class="warn">OPEN at handoff (CI running) — merge on green</td></tr>
+<tr><td><strong>PR #2106</strong> — calque_review frontmatter stamps on the 5 reviewed pages</td><td class="ok">MERGED → k8s reviewed 217→222</td></tr>
+<tr><td><strong>PR #2107</strong> — What's New page UK status refresh (was stale ~14%; now ~35% + k8s tree + AI-History Parts 1-2)</td><td class="ok">MERGED (user flagged the page was stale)</td></tr>
+<tr><td><strong>PR #2094</strong> — Dependabot actions/checkout v6→v7</td><td class="ok">MERGED — SHA verified upstream (9c091bb…=v7.0.0), no interface break, all checks green</td></tr>
+<tr><td><strong>PR #2095</strong> — Dependabot npm minor-patch (sharp/eslint/vitest/happy-dom/ts-eslint)</td><td class="ok">MERGED — 4 required checks green; <code>detect</code> = known non-required #2015 papercut</td></tr>
 <tr><td>Auto-orient SessionStart hook (user's "load skill + cold-start automatically" ask)</td><td class="ok">Already done (s182 #2096) — verified firing this session; user can stop typing the prompt</td></tr>
 <tr><td>Memory: codex code-switches on long UK translations (passes gates)</td><td class="ok">Recorded + indexed</td></tr>
 </table>
+<p><strong>PR queue is empty at handoff.</strong> 5 PRs merged this session (#2103, #2106, #2107, #2094, #2095); primary on <code>main</code>, working tree clean, only <code>g2-craft</code> worktree remains (not ours).</p>
 
 <h2>The headline: 3-family review caught gate-invisible defects</h2>
 <p>All 4 new translations were dispatched (user's s183 lane decision: authoring = codex/deepseek/grok, NOT inline-opus, NOT agy which fabricates). Every file passed the deterministic gates (<code>check_uk_changed.py</code>, <code>uk_calque_v2.py</code>, no forbidden letters). The cross-family read found what the gates structurally cannot:</p>
@@ -60,12 +64,12 @@ ul li{margin:.2rem 0}
 <ul>
 <li>PR #2103: squash-merged at <code>8fbd7fde0</code>; all 11 CI checks green incl. required Astro build (5m40s), Ukrainian Russicism check, Site health, CodeQL, vitest.</li>
 <li>Branch <code>fix-uk-k8s-stale</code> auto-deleted on merge; primary fast-forwarded; 4 throwaway author-worktrees + branches removed; <code>.worktrees/g2-craft</code> preserved (not ours, #1623).</li>
-<li>PR #2106 (review stamps) open — frontmatter-only, merge on CI green.</li>
+<li>PR #2106 (review stamps), #2107 (What's New), #2094 + #2095 (Dependabot) all merged — PR queue empty.</li>
 </ul>
 
 <h2>Next actions</h2>
 <ol>
-<li><strong>Merge PR #2106</strong> (review stamps) once CI green → board reviewed 217→222.</li>
+<li><strong>Done this session:</strong> #2106 merged (reviewed 217→222); What's New UK status refreshed (#2107); both Dependabot PRs handled (#2094 checkout-v7 SHA-verified, #2095 npm). PR queue empty.</li>
 <li><strong>Translation volume order (user s182):</strong> <code>ai</code> (44 missing, 0% UK) → <code>ai-ml-engineering</code> (142 missing, 0% UK) → platform (241) / cloud. Same lane: dispatch authoring to <strong>deepseek</strong> (preferred — codex code-switches on long modules; see new memory) / grok, then 3-family cross-family review (agy + grok + opus-inline) → opus MCP-adjudicate → merge. <strong>Scan every codex-authored translation for code-switching</strong> (a gate blind spot).</li>
 <li><strong>k8s reviewed-sweep (s182 stretch):</strong> 261/261 current but only ~222/261 reviewed — ~39 current pages still unreviewed. Optional deliberate cross-family sweep next.</li>
 <li><strong>AI-history book #1911</strong> remains PAUSED at ch-11 (resume after the ai/ai-ml volume, per user pivot).</li>
