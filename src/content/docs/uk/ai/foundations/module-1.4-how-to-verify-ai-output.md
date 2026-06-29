@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "37a4c9706c39c59221b4e86f77b1f740adcb8728"
 en_file: "src/content/docs/ai/foundations/module-1.4-how-to-verify-ai-output.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 8
+  content_sha: "73955f770109e46503d0d4285c92f5627369d6eb7f67fd55e5c8eff6d793c404"
 ---
 
 > **Складність**: `[СЕРЕДНЯ]`

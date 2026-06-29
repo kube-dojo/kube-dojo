@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "ed7b67bc0bb2c0ac3c83cc60c320b587352e2400"
 en_file: "src/content/docs/ai/foundations/module-1.2-what-are-llms.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 3
+  content_sha: "3a299831fb70ed10392446277ab48de6c9fc56ef44e1a8081b48ebb41736da79"
 ---
 
 > **Складність**: `[ШВИДКИЙ]`

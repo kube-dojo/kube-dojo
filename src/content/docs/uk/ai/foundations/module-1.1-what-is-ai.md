@@ -7,6 +7,12 @@ sidebar:
 revision_pending: false
 en_commit: "0f2b8625b838e4b9abd3293bb6dc53152b9f1a17"
 en_file: "src/content/docs/ai/foundations/module-1.1-what-is-ai.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 9
+  content_sha: "81ae3cf2ce90471eacebcd288cffa4911113781bafe9894137c63e913c6f494a"
 ---
 
 > **Складність**: `[ШВИДКИЙ]`

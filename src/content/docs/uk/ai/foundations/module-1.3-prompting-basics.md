@@ -5,6 +5,12 @@ sidebar:
   order: 3
 en_commit: "d6176359ab5e8f48eca8068cf4912c7037e0b514"
 en_file: "src/content/docs/ai/foundations/module-1.3-prompting-basics.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "260a33c9deb46858ed9cdc7eb556779fb8f51f4ac38b6c89262a13fc2d56118c"
 ---
 
 > **Основи ШІ** | Складність: `[ШВИДКИЙ]` | Час: 30-40 хв

@@ -5,6 +5,12 @@ sidebar:
   order: 5
 en_commit: "b3246c29a2d7f82741bcb21a175592367c7d3530"
 en_file: "src/content/docs/ai/foundations/module-1.5-privacy-safety-and-trust.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 15
+  content_sha: "2e580ebd7a155bf2622eca0fe83b480441ea6c9b7d697e3908fffa5bb70e144b"
 ---
 
 > **Складність**: `[СЕРЕДНІЙ]`
