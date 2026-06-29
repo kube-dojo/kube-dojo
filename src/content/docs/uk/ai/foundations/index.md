@@ -6,6 +6,12 @@ sidebar:
   label: "Основи"
 en_commit: "d519ac76fc90f3e2407bfc063435d4c0f5c2a6af"
 en_file: "src/content/docs/ai/foundations/index.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 5
+  content_sha: "3ae174f1540f48a6ada95d9582b8affe0a99ee39c5896870d9dc0a61c77f4dd7"
 ---
 
 > **Основи ШІ** | 6 модулів | ~8–12 годин

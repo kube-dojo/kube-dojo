@@ -6,6 +6,12 @@ sidebar:
   order: 6
 en_commit: "b3246c29a2d7f82741bcb21a175592367c7d3530"
 en_file: "src/content/docs/ai/foundations/module-1.6-using-ai-for-learning-writing-research-and-coding.md"
+calque_review:
+  reviewed_at: "2026-06-29"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 10
+  content_sha: "75602f8a6f7d08325a7bd48037a7cf83c964f635ba0f04ec44ac8e67f82f4304"
 ---
 
 > **Складність**: `[СЕРЕДНІЙ]`
