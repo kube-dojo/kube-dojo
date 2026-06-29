@@ -42,7 +42,22 @@ from pathlib import Path
 
 # Packages permitted to carry an install script (lockfile `hasInstallScript`).
 # Keep minimal and reviewed. Identity is the lockfile path, not the declared name.
+# Honoured ONLY at the top level (`node_modules/<name>`); a legitimate nested copy
+# must be opted in by its full path in ALLOWLIST_INSTALL_PATHS below.
 ALLOWLIST_INSTALL: set[str] = {"esbuild", "fsevents", "sharp"}
+
+# Specific NESTED install-hook packages that are explicitly audited, keyed by FULL
+# lockfile path. The top-level-only rule deliberately refuses to trust an allow-listed
+# leaf name at a nested path (a worm could nest a rogue `esbuild`), so each legitimate
+# nested copy is opted in here one exact path at a time. Entries still pass the
+# alias-masquerade and EXPECTED_HOOKS subset checks below.
+#   - node_modules/astro/node_modules/sharp: astro pins sharp 0.34.5 nested (the
+#     top-level sharp is 0.35.1 with no install script). Audited: resolved from the npm
+#     registry with a pinned sha512 integrity, no `name` alias, genuine `sharp` (native
+#     image library that legitimately builds its binary via the `install` hook).
+ALLOWLIST_INSTALL_PATHS: set[str] = {
+    "node_modules/astro/node_modules/sharp",
+}
 
 # For an allow-listed package, its DECLARED install-lifecycle hooks must be a subset
 # of these. fsevents builds via binding.gyp with no explicit script => empty set.
@@ -119,11 +134,16 @@ def main(argv: list[str]) -> int:
             install_hook_pkgs.append(path.removeprefix("node_modules/"))
             is_top_level = path == f"node_modules/{leaf}"
             lock_name = meta.get("name")
-            if leaf not in ALLOWLIST_INSTALL or not is_top_level:
+            # Allowed if it is a top-level allow-listed name, OR its exact nested path
+            # is explicitly audited. Everything else (incl. a nested allow-listed leaf
+            # that is NOT path-allow-listed) is a violation.
+            allowed = (leaf in ALLOWLIST_INSTALL and is_top_level) or path in ALLOWLIST_INSTALL_PATHS
+            if not allowed:
                 violations.append(
                     f"[install-hook] {path} — declares an install script and is not a "
                     f"top-level audited dependency (allow-list {sorted(ALLOWLIST_INSTALL)}, "
-                    f"top-level only)"
+                    f"top-level only) nor an audited nested path "
+                    f"(ALLOWLIST_INSTALL_PATHS)"
                 )
             elif lock_name and lock_name != leaf:
                 # `esbuild: npm:evil@x` installs `evil` at node_modules/esbuild but the
