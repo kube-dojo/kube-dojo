@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 185 — UK ai/foundations translated + 3-family reviewed</title>
+<style>
+ body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #333;padding-bottom:.3rem}
+ h2{font-size:1.15rem;margin-top:1.6rem;color:#0b5}
+ code{background:#f3f3f3;padding:1px 4px;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0}
+ th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;font-size:.92em}
+ th{background:#f0f0f0}
+ .ok{color:#0a7}.warn{color:#b50}.tldr{background:#f7fbff;border-left:4px solid #0b5;padding:.6rem 1rem}
+</style>
+</head>
+<body>
+<h1>Session 185 — 2026-06-29 — UK <code>ai/foundations</code> translated + 3-family reviewed</h1>
+
+<p class="tldr"><b>TL;DR.</b> Started the <code>ai</code>-track UK translation volume (was 0% UK). Translated the full <b>AI Foundations</b> section (7 files) via deepseek, then ran deep per-file 3-family review and fixed <b>51 real defects</b> that every deterministic gate passed. Validating module 1 first caught two systemic author failure modes — <b>ratio-padding</b> (brief's "≥97% word-count" floor made deepseek invent sentences incl. a fabricated "two-gate architecture" concept) and <b>file-write corruption</b> (per-line <code>N|N|N|N|N|</code> prefix breaking frontmatter) — both fixed at the brief/guard layer before scaling. <b>PR #2109</b> open (merge on CI green). Follow-up <b>#2110</b> filed for corpus-wide <code>production</code>→<code>продакшен</code> normalization.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>File</th><th>Ratio</th><th>Review fixes</th></tr>
+<tr><td>index.md</td><td>—</td><td>title/acronym consistency (agy+codex)</td></tr>
+<tr><td>1.1 What Is AI?</td><td>93.7%</td><td>corruption strip + 8 padded sentences + обоє→обидва</td></tr>
+<tr><td>1.2 What Are LLMs?</td><td>91.9%</td><td>3 (tolerувати, RAG phrasing, Контур→Орієнтовне)</td></tr>
+<tr><td>1.3 Prompting Basics</td><td>88.4%</td><td>7 (рецензійний≠критичний, readiness probes, senior, garbled clause…)</td></tr>
+<tr><td>1.4 How to Verify AI Output</td><td>91.7%</td><td>8 (tolerувати, unquoted≠unprotected, дійсний/розділяти calques, [СЕРЕДНЯ]…)</td></tr>
+<tr><td>1.5 Privacy, Safety, Trust</td><td>91.0%</td><td>15 (витікати misuse, credential≠account, system-of-record, outage, redacted…)</td></tr>
+<tr><td>1.6 Using AI for Learning…</td><td>92.6%</td><td>10 (негр→тіньовий автор, достовірність→репутація, unescape bash quotes…)</td></tr>
+</table>
+<p>All 7: gates pass (<code>check_uk_changed</code> + <code>uk_calque_v2</code>), hybrid code-switch scan clean, <code>npm run build</code> green (2169 pages render), <code>calque_review</code> stamped (reviewed, v2).</p>
+
+<h2>Decisions / contracts (durable)</h2>
+<ul>
+<li><b>Pipeline</b> (locked, proven this session): deepseek author (fidelity brief, off-opus) → corruption guard → gates → <b>per-file</b> 3-family review (agy/Google + codex/OpenAI + opus-inline/Anthropic) → opus adjudicates EVERY finding vs EN → fix → merge.</li>
+<li><b>Fidelity over ratio.</b> No word-count floor; Ukrainian is naturally 88–95% of EN. Padding to hit a number is fabrication. (Brief template fixed; memory <code>feedback_uk_translation_author_guards</code>.)</li>
+<li><b>Two deterministic guards the gates miss</b> — run after every author write: (1) raw-byte corruption check <code>head -1 == ---</code> &amp; no <code>^[0-9]+\|</code> prefix; (2) hybrid latin+cyrillic scan (catches <code>tolerувати</code>-class). Found corruption in 1.1 and hybrids in 3 of 7 modules.</li>
+<li><b>Per-file reviews, not batch.</b> A 6-file batch review made both agy and codex go shallow; single-file reviews were thorough (1.4 alone: 8 real defects). Alternate families across the section.</li>
+<li><b>Adjudicate, don't rubber-stamp.</b> Rejected ~6 reviewer false positives (codex's already-present <code>та</code>/blockquotes; "restore EN prompt blocks" — translating prompt examples is the section convention + pedagogically correct; agy's "Senior-інженер" which would <i>introduce</i> code-switching).</li>
+<li><b><code>production</code>→<code>продакшен</code> deferred to #2110</b> (corpus-wide: foundations ~23 + uk/k8s ~35). Corpus uses продакшен 555:35; grammar-sensitive (~13 case-varied standalones) so best as one focused pass, not wedged into this PR. Brief fixed so remaining ai modules use продакшен from the start.</li>
+</ul>
+
+<h2>Next actions</h2>
+<ul>
+<li><b>Merge #2109</b> on CI green (if not already merged this session).</li>
+<li><b>Continue <code>ai</code> track</b> (endorsed DO-NEXT): next section <code>ai-building</code> (5 files), then <code>ai-engineering-foundations</code> (13), <code>ai-for-kubernetes-platform-work</code> (5), <code>ai-native-work</code> (5), <code>open-models-local-inference</code> (8) — ~37 modules remain in <code>ai</code> (was 44). Reuse <code>scratchpad/uk-translate-brief-template.md</code> (fidelity brief, продакшен rule) + <code>dispatch_uk.sh</code> / <code>review_uk.sh</code> helpers. Then <code>ai-ml-engineering</code> (142), platform (241), cloud.</li>
+<li><b>#2110</b> corpus-wide production→продакшен normalization (grammar-sensitive).</li>
+</ul>
+
+<h2>Process note</h2>
+<p>Session opened with the user asking why the curriculum-orchestrator skill wasn't auto-loading at start. Root cause: the <code>SessionStart</code> AUTO-ORIENT hook injects guidance as <i>text</i>, not an enforced action — it depends on the agent treating it as literal step 0. Now done; should be invoked first every session.</p>
+</body>
+</html>
