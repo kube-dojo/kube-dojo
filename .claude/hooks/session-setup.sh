@@ -90,16 +90,112 @@ if [ -n "$STALE_DEV" ]; then
 $STALE_DEV")
 fi
 
-# Build output. The AUTO-ORIENT directive is always emitted (interactive sessions
-# only — headless already exited at line 6). Belt-and-suspenders for CLAUDE.md
-# "FIRST ACTION, every session — no exceptions" — the rule still drives, this
-# makes a cold restart hands-off so the user does not retype the orientation
-# prompt each time (parity with learn-ukrainian's SessionStart hook).
-CONTEXT="AUTO-ORIENT — run this ritual BEFORE responding to the user's first message, even if that message is unrelated, trivial, or empty (do NOT skip it; this replaces the orientation prompt the user used to type by hand):
-  1. Invoke the curriculum-orchestrator skill via the Skill tool (skip only if already invoked this session).
-  2. Run: bash scripts/cold-start.sh — parse the kubedojo:orient / kubedojo:briefing / kubedojo:session / kubedojo:pending-decisions blocks.
-  3. Continue from the latest session handoff (docs/session-state/...): state the recommended next action, then proceed with it unless the user's message redirects you.
-  4. Hold git/PR discipline throughout: branch in .worktrees/ (never in the primary dir), PR + cross-family review before merge, never push direct to main.
+# ============================================================================
+# COMPACT ORIENTATION PACKET
+# ============================================================================
+# ROOT CAUSE (2026-06-29, the bug the user hit on every restart): additionalContext
+# MUST stay small — a few KB. The previous version inlined the FULL ~15KB
+# curriculum-orchestrator SKILL.md body PLUS the FULL ~34KB cold-start dump → ~50KB.
+# The harness flags any hook output that large as "Output too large", PERSISTS it
+# to a file, and hands the model only a ~2KB PREVIEW that cuts off BEFORE the
+# orientation. Net effect: the model woke up blind to the DO-NEXT and the user had
+# to re-prompt the cold-start every single session.
+#
+# Parity reference: learn-ukrainian/.claude/hooks/session-setup.sh emits a ~1KB
+# POINTER packet that lands directly in context and is reliably acted on. So here
+# we do the same: a TIGHT packet with the orchestrator identity + discipline +
+# the single DO-NEXT focus item + the handoff pointer. The full role (roster,
+# dispatch commands) loads on demand via the curriculum-orchestrator Skill; the
+# full briefing JSON via `bash scripts/cold-start.sh`.
+
+# Run cold-start for its SIDE EFFECTS (services-up + read-only fetch + fresh
+# briefing) but EXTRACT only a compact summary — never inline the whole dump.
+# Outer timeout so a slow/down API can't hang session start; on failure the
+# extractor falls back to a "run cold-start yourself" directive.
+COLDSTART_BIN="$PROJECT_DIR/scripts/cold-start.sh"
+COLDSTART_OUT=""
+if [ -f "$COLDSTART_BIN" ]; then
+  if command -v timeout >/dev/null 2>&1; then
+    COLDSTART_OUT=$(timeout 30 bash "$COLDSTART_BIN" 2>/dev/null || true)
+  elif command -v gtimeout >/dev/null 2>&1; then
+    COLDSTART_OUT=$(gtimeout 30 bash "$COLDSTART_BIN" 2>/dev/null || true)
+  else
+    COLDSTART_OUT=$(bash "$COLDSTART_BIN" 2>/dev/null || true)
+  fi
+fi
+
+# Extract DO-NEXT (briefing.focus[0]) + latest-handoff pointer + workspace state
+# from cold-start's labeled blocks. Prefer the venv python; fall back to system.
+PYBIN="$PROJECT_DIR/.venv/bin/python"
+[ -x "$PYBIN" ] || PYBIN="$(command -v python3 2>/dev/null)"
+ORIENT_BODY=""
+if [ -n "$COLDSTART_OUT" ] && [ -n "$PYBIN" ]; then
+  # Pass the cold-start dump via env var, NOT a pipe: `python - <<'PY'` already
+  # consumes stdin for the SCRIPT, so a piped stdin would leave sys.stdin.read()
+  # empty (the focus item would silently never parse). Env var keeps them separate.
+  ORIENT_BODY=$(COLDSTART_OUT="$COLDSTART_OUT" "$PYBIN" - <<'PY' 2>/dev/null || true
+import os, re, json, sys
+text = os.environ.get("COLDSTART_OUT", "")
+blocks, cur, buf = {}, None, []
+for line in text.splitlines():
+    m = re.match(r'^--- kubedojo:(\S+) ---\s*$', line.strip())
+    if m:
+        if cur is not None:
+            blocks[cur] = "\n".join(buf)
+        cur, buf = m.group(1), []
+    else:
+        buf.append(line)
+if cur is not None:
+    blocks[cur] = "\n".join(buf)
+
+def loadj(name):
+    raw = (blocks.get(name, "") or "").strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+brief = loadj("briefing")
+sess = loadj("session")
+focus = (brief.get("focus") if isinstance(brief, dict) else None) or []
+do_next = (focus[0].strip() if focus and isinstance(focus[0], str) else "")[:2000]
+latest = (sess.get("latest") if isinstance(sess, dict) else None) or {}
+hpath = (latest.get("path", "") or "").strip()
+htldr = (latest.get("tldr", "") or "").strip()[:500]
+workspace = (blocks.get("workspace", "") or "").strip()[:400]
+pending = (blocks.get("pending-decisions", "") or "").strip()[:200]
+
+out = []
+if do_next:
+    out.append("DO NEXT (top focus item from the live briefing):\n" + do_next)
+else:
+    out.append("DO NEXT: queue may be empty — propose work or check blockers. "
+               "Run `bash scripts/cold-start.sh` for the full briefing.")
+if hpath:
+    out.append("Latest handoff: " + hpath + (("\n  " + htldr) if htldr else ""))
+if workspace:
+    out.append("Workspace (git status --short):\n" + workspace)
+if pending and pending.lower() not in ("(empty)", "readme.md"):
+    out.append("Pending decisions: " + pending)
+sys.stdout.write("\n\n".join(out))
+PY
+)
+fi
+if [ -z "$ORIENT_BODY" ]; then
+  ORIENT_BODY="(cold-start produced no briefing — RUN IT YOURSELF NOW as your first action: bash scripts/cold-start.sh, then act on its DO-NEXT focus item.)"
+fi
+
+CONTEXT="ORCHESTRATOR SESSION — auto-oriented by the SessionStart hook. You ARE the KubeDojo curriculum orchestrator: you own the module queue, dispatch authors/reviewers, PR hygiene, and session handoffs. Standalone session = you ARE the main orchestrator; drive the queue, ask only on irreversible or ambiguous actions.
+
+Load-bearing discipline (do NOT violate):
+  - Branch in .worktrees/ — NEVER branch/switch in the primary dir; never push direct to main.
+  - PR + cross-family adversarial review before every merge.
+  - Dispatch authors/reviewers for content/code — orchestrate, don't inline-write modules.
+Full role detail (agent roster, dispatch commands, review protocol) loads ON DEMAND via the curriculum-orchestrator Skill. Full live briefing JSON: \`bash scripts/cold-start.sh\` (or curl 127.0.0.1:8768/api/briefing/session?compact=1).
+
+$ORIENT_BODY
+
+AUTO-ORIENT — before responding to the user's first message (even if it seems unrelated, trivial, or empty): state the DO-NEXT action above, then proceed with it unless the user's message redirects you. Cold-start has ALREADY run — do NOT wait to be told to orient.
 
 SESSION SETUP CHECK:"
 
@@ -123,8 +219,8 @@ fi
 
 # Emit via the current SessionStart hook schema (hookSpecificOutput.additionalContext).
 # The legacy top-level {"additionalContext": ...} form is silently ignored by newer
-# Claude Code builds — which is why this reminder previously never reached the model
-# and the user had to retype the orientation prompt each restart.
+# Claude Code builds — which is why an earlier version's reminder never reached the
+# model and the user had to retype the orientation prompt each restart.
 jq -n --arg msg "$CONTEXT" \
   '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$msg}}'
 exit 0
