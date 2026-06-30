@@ -155,17 +155,38 @@ echo "headroom routing DISABLED -- launching Claude DIRECT (no proxy)"
 # `--agent infra-orchestrator` → SESSION_HANDOFF_AGENT=claude-infra. An explicit
 # SESSION_HANDOFF_AGENT already in the environment wins. Mapping + argv parsing
 # live in scripts/lib/handoff_identity.sh (mirrors learn-ukrainian, #2113).
-if [ -z "${SESSION_HANDOFF_AGENT:-}" ] && [ -f "$PROJECT_DIR/scripts/lib/handoff_identity.sh" ]; then
+# Derive the selected `--agent` from argv ONCE (last-wins, stops at `--`) — used
+# both for the cold-start handoff identity and for the default-lane agent
+# injection below. Sourcing is unconditional (it only defines functions); the
+# handoff-identity export still only happens when SESSION_HANDOFF_AGENT is unset.
+_selected_agent=""
+if [ -f "$PROJECT_DIR/scripts/lib/handoff_identity.sh" ]; then
     # shellcheck source=scripts/lib/handoff_identity.sh
     source "$PROJECT_DIR/scripts/lib/handoff_identity.sh"
     _selected_agent="$(handoff_agent_from_argv "$@")"
-    _handoff_slot="$(handoff_identity_for_agent "$_selected_agent")"
-    if [ -n "$_handoff_slot" ]; then
-        export SESSION_HANDOFF_AGENT="$_handoff_slot"
-        echo "Handoff identity: $SESSION_HANDOFF_AGENT (from --agent $_selected_agent)"
+    if [ -z "${SESSION_HANDOFF_AGENT:-}" ]; then
+        _handoff_slot="$(handoff_identity_for_agent "$_selected_agent")"
+        if [ -n "$_handoff_slot" ]; then
+            export SESSION_HANDOFF_AGENT="$_handoff_slot"
+            echo "Handoff identity: $SESSION_HANDOFF_AGENT (from --agent $_selected_agent)"
+        fi
+        unset _handoff_slot
     fi
-    unset _selected_agent _handoff_slot
 fi
 
+# ZERO-TYPING AUTO-START: every lane runs through an agent whose `initialPrompt`
+# (in .claude/agents/<name>.md) fires on launch, so the session orients and
+# starts driving WITHOUT the user typing a first message. The default
+# (curriculum) lane carries no explicit `--agent`, so default it to
+# `curriculum-orchestrator` here — making `./start-claude.sh` symmetric with
+# `--agent infra-orchestrator`. Any explicit `--agent` (incl. infra) is left
+# untouched. Opt out (bare, idle claude) with KUBEDOJO_NO_DEFAULT_AGENT=1.
+CLAUDE_ARGS=(--chrome --permission-mode bypassPermissions)
+if [ -z "$_selected_agent" ] && [ -z "${SESSION_HANDOFF_AGENT:-}" ] && [ -z "${KUBEDOJO_NO_DEFAULT_AGENT:-}" ]; then
+    CLAUDE_ARGS+=(--agent curriculum-orchestrator)
+    echo "Default lane → --agent curriculum-orchestrator (auto-orients + drives the queue; no typing needed)"
+fi
+unset _selected_agent
+
 echo "Launching Claude Code (native build from PATH: $(command -v claude))..."
-exec claude --chrome --permission-mode bypassPermissions "$@"
+exec claude "${CLAUDE_ARGS[@]}" "$@"
