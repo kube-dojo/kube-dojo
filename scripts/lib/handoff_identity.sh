@@ -20,22 +20,27 @@
 # handoff_agent_from_argv "$@"
 # Echo the value of `--agent <v>` / `--agent=<v>` from an argv list, or nothing.
 # Does NOT consume the argument — the caller still forwards "$@" to claude
-# unchanged. First occurrence wins.
+# unchanged. Matches how `claude` itself resolves the flag, so the derived
+# handoff identity can never disagree with the agent claude actually selects:
+#   - Stop at `--`: everything after it is passthrough DATA, not options.
+#   - LAST occurrence wins (commander-style), not first.
 handoff_agent_from_argv() {
-  local prev='' arg=''
+  local prev='' arg='' found=''
   for arg in "$@"; do
+    if [ "$arg" = "--" ]; then
+      break
+    fi
     case "$arg" in
       --agent=*)
-        printf '%s' "${arg#--agent=}"
-        return 0
+        found="${arg#--agent=}"
         ;;
     esac
     if [ "$prev" = "--agent" ]; then
-      printf '%s' "$arg"
-      return 0
+      found="$arg"
     fi
     prev="$arg"
   done
+  printf '%s' "$found"
 }
 
 # handoff_identity_for_agent "<agent-name>"
