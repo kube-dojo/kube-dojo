@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 186 — UK ai/ai-building translated + 3-family reviewed + merged</title>
+<style>
+body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem;border-bottom:2px solid #333;padding-bottom:.3rem}
+h2{font-size:1.15rem;margin-top:1.6rem;color:#0b5}
+code{background:#f3f3f3;padding:1px 4px;border-radius:3px;font-size:.9em}
+table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;font-size:.92em;vertical-align:top}
+th{background:#f0f0f0}
+.ok{color:#0a7}.warn{color:#b50}
+.tldr{background:#f7fbff;border-left:4px solid #0b5;padding:.6rem 1rem}
+</style>
+</head>
+<body>
+<h1>Session 186 — 2026-06-30 — UK <code>ai/ai-building</code> translated + 3-family reviewed + merged</h1>
+
+<div class="tldr">
+<b>TL;DR.</b> Continued the <code>ai</code>-track UK translation volume (foundations shipped s185). Translated the
+full <b>AI Building</b> section (5 files: index + 4 modules) via deepseek, ran <b>per-file 2-dispatched-reviewer
+(agy + codex) + opus adjudication</b>, fixed ~80 real defects every deterministic gate passed, gates+build green,
+merged to main (PR #2117). User confirmed the <b>2-reviewer</b> setup (agy/Google + codex/OpenAI + opus/Anthropic
+adjudicates) — it earned its keep: agy and codex found <b>near-disjoint</b> defect sets. <code>ai</code> track
+now 12/44 current (foundations 7 + ai-building 5). Pipeline + guards + brief improved for the next section.
+</div>
+
+<h2>What shipped — PR #2117 (rebase-merged to main)</h2>
+<table>
+<tr><th>File</th><th>Ratio</th><th>agy R1</th><th>codex R1</th><th>Key fixes (opus-adjudicated vs EN)</th></tr>
+<tr><td>index.md</td><td>93%</td><td>APPROVE</td><td>CLEAN</td><td>structured output→<code>структуровані вихідні дані</code>; shipping→<code>випуск</code></td></tr>
+<tr><td>1.1 from-chat-to-ai-systems</td><td>91%</td><td>1 P1 (multi-site)</td><td>10 P2</td><td><code>record(s)</code>→<code>записи/дані</code> (was <code>облікові дані</code>=credentials, 9×); AI→ШІ ×37; production→продакшен; breaking change→<code>несумісна</code> (not критична); owns→<code>відповідає за</code>; Senior thinking→<code>мислення старшого фахівця</code> (not старше=older); pull request<code>-ів</code>→apostrophe-decl</td></tr>
+<tr><td>1.2 models-apis-structured-output</td><td>86%</td><td>APPROVE</td><td>8 P2</td><td>policy→<code>політик/політики</code> (not політичний) ×3; responsive→<code>швидка реакція</code> (not чутливість) ×2; fall back→<code>використати</code> (not відкочуватися); grounding strategy→<code>прив'язки до джерел</code></td></tr>
+<tr><td>1.3 tools-retrieval-boundaries</td><td>93%</td><td>10 P1 + 16 P2</td><td>10 P2</td><td>prompt injection→<code>промпт-ін'єкція</code> (not впровадження); downstream→<code>цільовий</code> ×5; DB view→<code>подання</code> (not представлення); ground truth→<code>відповіді</code> (not істина); system of record→<code>система обліку</code>; diff→<code>зміни</code>; against→<code>у</code> (calque) ×3; expense→компенсувати; adversarial→ворожих; +grammar (~34 edits total — weakest file)</td></tr>
+<tr><td>1.4 evaluation-iteration-shipping</td><td>92%</td><td>1 P1 + 5 P2</td><td>8 P2</td><td><b>Refusal behavior</b>→<code>відмова відповідати</code> (disambiguated the 5 label sites; <b>kept <code>відмова</code>=failure</b>, the correct standard UA reliability term — partial-reject of agy's blanket failure→помилка); policy false-friend ×3; owns→<code>відповідає за</code> ×2; refund terminology; рухає гроші→переказує кошти</td></tr>
+</table>
+
+<p><b>Gates/build:</b> <span class="ok">all 5</span> pass <code>check_uk_changed.py</code> + <code>uk_calque_v2.py</code>;
+hybrid code-switch guard clean; <code>calque_review</code> stamped (reviewed, v2); <code>npm run build</code> green (2169 pages);
+CI green incl. <b>Astro build (5m55s)</b> + <b>Ukrainian Russicism check</b>. Board: ai-building 5/5 <code>current|reviewed</code>, 0 missing.</p>
+
+<h2>Decisions / contracts (durable)</h2>
+<ul>
+<li><b>2-dispatched-reviewer standard (user-confirmed):</b> per file run <b>agy (Google/Gemini-3.1-Pro) + codex (OpenAI/gpt-5.5)</b>;
+<b>opus (Anthropic) adjudicates EVERY finding vs the EN source</b>. This is stronger than s185's "alternate agy/codex". The two
+families found near-disjoint sets every time (codex caught 10 semantic false-friends on 1.1 agy missed; agy caught the
+credentials P1 codex missed) — strong justification for running both, not alternating.</li>
+<li><b>Reject reviewer over-reach, not just false positives.</b> agy's P1 "failure→помилка throughout" was <b>partially rejected</b>:
+<code>відмова</code> is the correct standard Ukrainian reliability term (<code>відмовостійкість</code>, <code>режими відмов</code>=failure modes).
+The valid core was the <i>collision</i> with "refusal" → disambiguated only the "Refusal behavior" label to <code>відмова відповідати</code>. (no-yes-man applied to a reviewer.)</li>
+<li><b>Canonical <code>ai</code>-track terminology (now in the brief):</b> AI→<code>ШІ</code> (Latin "AI" only in vendor proper nouns:
+OpenAI, NIST AI RMF, Vertex AI, Azure AI Foundry); LLM→<code>ВММ</code>; structured output→<code>структуровані вихідні дані</code>;
+production→<code>продакшен</code>; record (db sense)→<code>запис</code> (never <code>облікові дані</code>=credentials); KubeDojo section/track
+names translate (AI Building→Побудова ШІ, AI/ML Engineering→Інженерія ШІ/МН).</li>
+<li><b>Guard upgrade:</b> the hybrid code-switch scan now also catches <b>hyphenated</b> code-switches
+(<code>production-зміна</code>, <code>request-ів</code>) — the old guard only caught glued (<code>tolerувати</code>). It ignores all-caps
+acronym compounds (<code>API-виклик</code>, <code>HR-обговорення</code>). Real catch on 1.1 (<code>pull request-ів</code> ×6).</li>
+<li><b>Validate-first still pays:</b> doing index+1.1 fully before fanning out caught deepseek writing Latin "AI" 37× (vs
+foundations' canonical ШІ) and over-normalization risks — both folded into the brief before the other 3 authored.</li>
+</ul>
+
+<h2>Pipeline mechanics (reproduce next section)</h2>
+<ul>
+<li>Helpers were recreated in <code>scratchpad/</code> (gitignored, gone each session): <code>uk-translate-brief-template.md</code>
+(fidelity brief + canonical terms), <code>uk_dispatch.sh</code> (deepseek author → worktree, <code>--no-skill</code> so the
+curriculum-writer expand-skill doesn't induce padding), <code>uk_guards.sh</code> (corruption + hybrid scan),
+<code>uk_review.sh</code> (per-file agy/codex; <b>codex needs a throwaway <code>--worktree</code></b> — danger mode requires a pinned cwd).
+<code>scratchpad/normalize_ai_to_shi.py</code> does the AI→ШІ pass (protects proper nouns + inline-code).</li>
+<li><code>uk_sync.py translate</code> is hardwired to agy (blocked by #2099) → reconstruct the deepseek path manually.</li>
+<li><b>codex review reliability:</b> first 1.1 codex run hit <code>rc=-9</code> and only recovered a shallow "CLEAN" — re-ran on the
+fixed file and got the real 10-finding review. If a codex review returns a 1-line verdict, suspect a SIGKILL and re-run.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+<li><b>Continue <code>ai</code> track</b> (32 missing): <code>ai/index.md</code> (1) → <b><code>ai-engineering-foundations</code> (13)</b> →
+<code>ai-for-kubernetes-platform-work</code> (5) → <code>ai-native-work</code> (5) → <code>open-models-local-inference</code> (8).
+A 13-file section deserves <b>fresh context</b> — reuse the proven pipeline + the brief (canonical terms baked in).</li>
+<li>Then <code>ai-ml-engineering</code> (142, 0% UK) → platform / cloud.</li>
+<li><b>#2110</b>: corpus-wide <code>production</code>→<code>продакшен</code> normalization (foundations + uk/k8s; grammar-sensitive).
+ai-building now sets the correct target (продакшен with declension) — #2110 reconciles foundations to match.</li>
+<li><b>#2086</b>: encode the multi-reviewer calque_review schema + board done=≥2 families (the workflow this session used).</li>
+</ul>
+
+<h2>Notes / gotchas</h2>
+<ul>
+<li><b>Worktree build needs node_modules.</b> The worktree lacks it; <code>Homepage.astro</code> imports a hardcoded relative
+<code>../../node_modules/@astrojs/starlight/style/layers.css</code> → symlink
+<code>.worktrees/&lt;wt&gt;/node_modules → /…/kubedojo/node_modules</code> (the worktree may pre-create an empty
+<code>node_modules/</code> dir — <code>rm -rf</code> it first or the symlink nests as <code>node_modules/node_modules</code>).</li>
+<li><b>Merge bookkeeping:</b> PR #2117's rebase-merge landed on main (commits 5cfd51ebd…445e0bcd3) but a GitHub <b>502</b>
+stranded the PR-close + branch-delete; closed manually after verifying content on main. If <code>gh pr merge</code> 502s,
+check <code>git log origin/main</code> before retrying — the ref update may have succeeded.</li>
+</ul>
+</body>
+</html>
