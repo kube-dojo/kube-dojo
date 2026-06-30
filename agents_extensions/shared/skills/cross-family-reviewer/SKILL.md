@@ -78,10 +78,12 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 |---|---|---|
 | codex gpt-5.5 | Fabricating GitHub Actions / Dependabot schema claims, fabricating commands ([[feedback_deepseek_hallucinates_on_gh_schemas]]) | Verify CLI schema via `--help` before flagging |
 | composer-2.5 | Verifier-pass ≠ runnability gap; hallucinated paths in findings | Quote exact lines from diff; run the bash |
-| gemini-3.1-pro-preview | Mixing legit findings with cosmetic over-corrections ([[feedback_gemini_review_partial_apply]]) | Be explicit: only flag findings you would defend in a re-review |
+| gemini-3.1-pro-preview | Mixing legit findings with cosmetic over-corrections ([[feedback_gemini_review_partial_apply]]); calling a REAL recent feature "fabricated" because it postdates your cutoff (e.g. Dependabot `cooldown` — it is real; PR #1825, 2026-06-07) | Only flag findings you'd defend in a re-review; never assert a recent schema/feature is fake — mark it unverifiable |
 | deepseek-v4-pro | Rule attribution slippage (shellcheck rule numbers, semver exact, version-specific behavior) | Verify version-specific claims against current docs |
 | agy (Claude tier) | Historically 0 hallucinations on code review — strong default | — |
 | claude headless | Yes-man drift; favoring author's framing | Frame your read independent of the PR description |
+
+**You are sandboxed from fact-check tools.** A review runs with NO web, NO `gh api`, NO MCP (writes are blocked by design). So you CANNOT verify a live commit SHA, a post-cutoff incident/date/CVE, a CNCF maturity level, or a current package/tool version. Do NOT assert such a claim is real OR fabricated from memory — label it `UNVERIFIABLE — orchestrator must check (gh api / web)` and move on. Guessing real/fake is how confident false positives reach the verdict: on PR #1825 (2026-06-07) deepseek called a *real* `actions/checkout` commit "not found" while correctly catching a different *fabricated* SHA, and gemini called the *real* Dependabot `cooldown` schema "hallucinated." For **Ukrainian-translation** reviews you ARE given the RAG MCP (`dispatch.py --mcp` / `dispatch_smart --mcp rag`) — use it to verify lemmas/quotes/Russicisms instead of guessing ([[feedback_reviewers_sandboxed_from_factcheck_tools]]).
 
 ## Anti-patterns to flag (codebase-wide)
 

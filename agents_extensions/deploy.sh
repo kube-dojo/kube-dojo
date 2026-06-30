@@ -1,6 +1,12 @@
 #!/bin/bash
-# Deploy agent extensions from source to per-agent hidden dirs.
-# Usage: ./agents_extensions/deploy.sh [--quiet] [--target claude|codex|cursor|gemini|all]
+# Deploy agent extensions from source (agents_extensions/) to per-agent hidden
+# dirs (.claude/, .codex/, ...). Source is the SSOT — edit there, never the
+# deployed copy, or the next deploy reverts your edit.
+#
+# Usage: ./agents_extensions/deploy.sh [--quiet] [--check] [--target claude|codex|cursor|gemini|all]
+#   --check   Report drift (source != deployed) WITHOUT writing anything; exit 1
+#             if any file would change. Used by the extensions-sync CI gate so a
+#             direct edit to a deployed copy can't silently diverge from source.
 
 set -e
 
@@ -9,12 +15,18 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SOURCE_ROOT="$SCRIPT_DIR"
 
 QUIET=false
+CHECK=false
 TARGET="all"
+DRIFT_TOTAL=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --quiet)
             QUIET=true
+            shift
+            ;;
+        --check)
+            CHECK=true
             shift
             ;;
         --target)
@@ -27,7 +39,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1" >&2
-            echo "Usage: $0 [--quiet] [--target claude|codex|cursor|gemini|all]" >&2
+            echo "Usage: $0 [--quiet] [--check] [--target claude|codex|cursor|gemini|all]" >&2
             exit 1
             ;;
     esac
@@ -59,7 +71,7 @@ deploy_skills() {
     local changed=0
 
     [[ -d "$source_subdir" ]] || { echo 0; return 0; }
-    mkdir -p "$target_subdir"
+    [[ "$CHECK" == "true" ]] || mkdir -p "$target_subdir"
 
     for skill_dir in "$source_subdir"/*/; do
         [[ -d "$skill_dir" ]] || continue
@@ -70,10 +82,16 @@ deploy_skills() {
         local target_file="$target_skill_dir/SKILL.md"
 
         if [[ -f "$source_file" ]]; then
-            mkdir -p "$target_skill_dir"
+            if [[ "$CHECK" == "false" ]]; then
+                mkdir -p "$target_skill_dir"
+            fi
             if [[ ! -f "$target_file" ]] || ! cmp -s "$source_file" "$target_file"; then
-                cp "$source_file" "$target_file"
-                log "   📄 skills/$skill_name/SKILL.md"
+                if [[ "$CHECK" == "true" ]]; then
+                    log "   ✗ DRIFT skills/$skill_name/SKILL.md"
+                else
+                    cp "$source_file" "$target_file"
+                    log "   📄 skills/$skill_name/SKILL.md"
+                fi
                 changed=$((changed + 1))
             fi
         fi
@@ -91,7 +109,7 @@ deploy_flat() {
     local changed=0
 
     [[ -d "$source_subdir" ]] || { echo 0; return 0; }
-    mkdir -p "$target_subdir"
+    [[ "$CHECK" == "true" ]] || mkdir -p "$target_subdir"
 
     for file in "$source_subdir"/$pattern; do
         [[ -f "$file" ]] || continue
@@ -100,11 +118,15 @@ deploy_flat() {
         local target_file="$target_subdir/$filename"
 
         if [[ ! -f "$target_file" ]] || ! cmp -s "$file" "$target_file"; then
-            cp "$file" "$target_file"
-            if [[ "$executable" == "yes" ]]; then
-                chmod +x "$target_file"
+            if [[ "$CHECK" == "true" ]]; then
+                log "   ✗ DRIFT $label/$filename"
+            else
+                cp "$file" "$target_file"
+                if [[ "$executable" == "yes" ]]; then
+                    chmod +x "$target_file"
+                fi
+                log "   📄 $label/$filename"
             fi
-            log "   📄 $label/$filename"
             changed=$((changed + 1))
         fi
     done
@@ -156,7 +178,14 @@ deploy_agent() {
     statusline_changed=$((statusline_changed + n))
 
     local total_changed=$((commands_changed + skills_changed + agents_changed + hooks_changed + statusline_changed))
-    if [[ $total_changed -gt 0 ]]; then
+    DRIFT_TOTAL=$((DRIFT_TOTAL + total_changed))
+    if [[ "$CHECK" == "true" ]]; then
+        if [[ $total_changed -gt 0 ]]; then
+            log "⚠️  $total_changed file(s) drifted for '$agent' (deployed != source)"
+        else
+            log "✅ '$agent' extensions in sync"
+        fi
+    elif [[ $total_changed -gt 0 ]]; then
         log "✅ Deployed $total_changed extension(s)"
     else
         log "✅ Extensions up to date"
@@ -177,3 +206,14 @@ case "$TARGET" in
         exit 1
         ;;
 esac
+
+# --check gate: drift means a deployed copy diverged from its source (edit the
+# SOURCE under agents_extensions/, then redeploy). Exit non-zero so CI fails.
+if [[ "$CHECK" == "true" ]]; then
+    if [[ $DRIFT_TOTAL -gt 0 ]]; then
+        log "❌ deploy --check: $DRIFT_TOTAL file(s) drifted (deployed != source). Fix: edit the source under agents_extensions/, then run 'bash agents_extensions/deploy.sh' and commit the synced deployed copy."
+        exit 1
+    fi
+    log "✅ deploy --check: all extensions in sync with source"
+fi
+exit 0

@@ -1,0 +1,34 @@
+name: Extensions in sync
+
+# Fails if any DEPLOYED agent-extension copy (.claude/**) has diverged from its
+# SOURCE under agents_extensions/** — i.e. someone edited a deployed copy
+# directly instead of the source, so the next `deploy.sh` would silently revert
+# it. Source is the SSOT: edit there, run `bash agents_extensions/deploy.sh`,
+# commit the synced deployed copy.
+#
+# Runs on EVERY PR (no `paths:` filter) so it can serve as a universal required
+# status check — a path-filtered required check never reports on PRs that miss
+# those paths and leaves them permanently blocked (see link-check.yml header /
+# the 2026-06-04 CI autopsy). The check is pure bash (byte compare, no installs),
+# so always-on is cheap. Scopes to --target claude: that is the complete primary
+# runtime; .codex/.cursor/.gemini are intentionally sparse.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  extensions-sync:
+    name: Extensions in sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check deployed extensions match source
+        run: bash agents_extensions/deploy.sh --check --target claude
