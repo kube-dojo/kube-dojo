@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "04c9c5cebd4afbee795f3d83ea7a48b218d80aee"
 en_file: "src/content/docs/ai/ai-building/module-1.1-from-chat-to-ai-systems.md"
+calque_review:
+  reviewed_at: "2026-06-30"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 21
+  content_sha: "7fe90e3fd21f893d0d1518f062d1e7516e2b68ccc3c23809a2c3f1a77838575f"
 ---
 
 > **Складність**: `[QUICK]`
