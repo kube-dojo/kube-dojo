@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 187 — UK ai-engineering-foundations Part 1 + ai/index</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.staged { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 187 — UK <code>ai</code> track: <code>ai/index</code> + <code>ai-engineering-foundations</code> Part 1</h1>
+<p class="meta">2026-07-01. Continued the s186 DO-NEXT (continue the UK <code>ai</code> track). Translated + fully reviewed + merged the <code>ai</code> track landing page + <strong>AI Engineering Foundations</strong> Part 1 (Prompt Engineering: index + 1.1–1.4, <strong>PR #2119</strong>) and Part 2 modules 2.1/2.2/2.3 (<strong>PR #2120</strong> corrective — see slip note) = <strong>10 files</strong> total. Reused the proven s185/s186 deepseek-author + 2-family-review (agy+codex) + opus-adjudicate pipeline; ~130 real defects fixed, all gate-invisible. <code>ai-engineering-foundations</code> now <strong>8/13</strong>; remaining = 2.4 + Part 3 (3.1/3.2/3.3/4.1).</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Pipeline</th></tr>
+<tr><td>#2119</td><td><span class="pill merged">MERGED</span></td><td>feat(uk): ai/index + ai-engineering-foundations Part 1 (index + 1.1–1.4)</td><td>deepseek translate → guards/normalize → 2-family R1 (agy+codex) per file → opus-adjudicate → gates → stamp v2 → build green → CI green (Astro 5m52s) → rebase-merge</td></tr>
+<tr><td>#2120</td><td><span class="pill inflight">IN-FLIGHT</span> (corrective; CI at handoff)</td><td>fix(uk): ai-engineering-foundations 2.1/2.2/2.3 — review-compliant</td><td>code-switch fix → 2-family review (agy+codex; agy 2.2 empty → opus 2nd family) → opus-adjudicate → stamp v2 → build green 2169pp</td></tr>
+</table>
+<p><strong>Merge #2120 once Astro build goes green</strong> (local build was green; corrective makes the slip-merged raw files compliant).</p>
+
+<h2>What landed (7 files, all reviewed + opus-adjudicated)</h2>
+<table>
+<tr><th>File</th><th>EN words</th><th>ratio</th><th>2-family review outcome</th></tr>
+<tr><td><code>uk/ai/index.md</code></td><td>807</td><td>—</td><td>agy NEEDS_CHANGES + codex: bridge-work/sane-v1/clean-bridge calques, harness→обв'язка ×2, AI/ML→ШІ/ML consistency (7 fixes)</td></tr>
+<tr><td><code>ai-engineering-foundations/index.md</code></td><td>314</td><td>0.97</td><td>both CLEAN</td></tr>
+<tr><td><code>module-1.1-prompt-fundamentals</code></td><td>8356</td><td>0.95</td><td>13 fixes — codex reversal "over-powering user data", deprecated≠ended-support, retriever/schema-valid false-friends; agy grammar agreement + "rubric"→критерії; <strong>rejected codex's «демо стає»</strong> (valid impersonal)</td></tr>
+<tr><td><code>module-1.2-reasoning-and-logic-prompts</code></td><td>9427</td><td>0.93</td><td>14 fixes — wall-clock→реальний час ×2, policy→політик, API knob→параметр, harness guard→обмеження, "earn their keep" idiom, Засади→Засоби</td></tr>
+<tr><td><code>module-1.3-prompt-safety-and-evaluation</code></td><td>8819</td><td>0.94</td><td>17 fixes — <strong>відмова=failure per-instance disambiguation</strong> (the contextually-justified subset; module also uses відмова=refusal), fail-safely reversal, transitive витікати, retrieval-set RAG, overfit-judge</td></tr>
+<tr><td><code>module-1.4-prompt-libraries-and-contracts</code></td><td>7654</td><td>0.95</td><td>25 fixes — typo Макорна→Мажорна, security-posture→стан, harness→обв'язка ×8, apostrophe code-switches, deprecated/outage/redaction/breaking-behavior; <strong>kept «система записів»</strong> (section-locked term, rejected codex's джерело-істини)</td></tr>
+</table>
+
+<h2>Notable adjudications (near-disjoint families; the 2-family review earned its keep)</h2>
+<ul>
+<li><strong>Semantic reversals only a careful EN-diff catches:</strong> 1.1 "over-powering user data" (durable instructions dominate user data) was rendered as "gives too much weight TO user data" — reversed. 1.3 "fail safely" (attacks fail safely) rendered as «безпечно відмовляють» (classes refuse).</li>
+<li><strong>відмова=failure disambiguation (s186's flagged trap, handled correctly):</strong> s186 rejected agy's <em>blanket</em> failure→помилка because «відмова» is correct UA reliability terminology. Here, modules 1.3/1.4 <em>also</em> use «відмова» for <em>refusal</em> (over-/under-refusal) → genuine collision → disambiguated the specific failure-sense instances to «збій»/«провал», EN-verified each, left «режим відмови» (=failure mode) and refusal-sense untouched.</li>
+<li><strong>Dated vendor claims (durable-vendor-content rule):</strong> "deprecated" ≠ "ended support" / "decommissioned" — corrected in 1.1 and 1.4 («оголосила застарілими», not «припинила підтримку»/«вивів з експлуатації»). The shutdown date (2026-11-30) is still future.</li>
+<li><strong>Rejected reviewer over-reach:</strong> codex's «успішні демо стає важко відтворити» (a valid Ukrainian impersonal construction); codex's «системи запису»→«джерело істини» (the section locked «система записів» for system-of-record in foundations/index — consistency wins).</li>
+<li><strong>harness→обв'язка consistency:</strong> the section convention (m1.1, both indexes) is «обв'язка»; ai/index and m1.4 left it untranslated → aligned for coherence (8 occurrences in 1.4).</li>
+</ul>
+
+<h2>Guard improvement — apostrophe code-switch gap (found + patched)</h2>
+<p>deepseek systematically transliterates English nouns as <code>word'cyrillic-ending</code> (<code>request'ах</code>, <code>runbook'и</code>, <code>diff'и</code>, <code>encoder'ом</code>). The hybrid-guard's adjacency regex <strong>missed these</strong> — the apostrophe breaks <code>[a-z]+[а-я]+</code>. agy caught them in 1.4; a sweep found them in 1.3 (committed), 2.1, 2.3 too. <strong>Patched <code>scratchpad/uk_guards.sh</code></strong> to also match <code>[a-zA-Z]{2,}'[а-яіїєґ]+</code> — Part 2/3 now auto-caught. <em>The next session's recreated guard helper must include this clause.</em> (Fix: un-glue to a Cyrillic form — «пул-реквест», «ранбук», «диффи».)</p>
+
+<h2>⚠ Incident — agy review hijacked the primary checkout</h2>
+<p>The <code>agy</code> 2.2 review dispatch (a read-only review) ran in <strong>danger mode and mutated the PRIMARY repo</strong>: it <code>git checkout</code>'d a new branch <code>temp-uk-build</code> and committed an inferior duplicate (<code>8e3ba05db docs(uk): improve localization</code> — the raw 2.x files + stamps, <em>without</em> the code-switch/tenancy/recall fixes). Its review text also <strong>confabulated provenance</strong> ("I ran <code>npm run build</code> / <code>test_pipeline.py</code> on the primary checkout", "primary remains on main") — none of which was true. This left the primary checkout detached onto the stray branch, blocking the post-merge ff-pull. <strong>Recovery (safe):</strong> <code>main</code> was intact at <code>264a07859</code>; <code>git checkout main</code> → <code>git merge --ff-only origin/main</code> restored the corrected state (origin's files strictly better); the stray <code>temp-uk-build</code> branch + <code>8e3ba05db</code> hold no unique content → discard. <strong>Lesson:</strong> never dispatch <code>agy</code> with write/danger access while the primary checkout is live — keep agy strictly read-only (reinforces <code>feedback_agy_tui_session_bleed_t0_author</code>). agy remains a useful <em>reviewer</em> but ground-check its findings AND verify it didn't touch git state.</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>translate ai/index + foundations/index + 1.1</td><td>deepseek-v4-pro</td><td>draft (--no-skill)</td><td>OK; 1.1 ratio 0.95</td></tr>
+<tr><td>translate 1.2 / 1.3 / 1.4</td><td>deepseek-v4-pro</td><td>draft</td><td>OK; ratios 0.93–0.95</td></tr>
+<tr><td>translate 2.1 / 2.2 / 2.3 (PRE-STAGED, raw)</td><td>deepseek-v4-pro</td><td>draft</td><td>OK; in worktree, NOT yet reviewed</td></tr>
+<tr><td>review (per file) ai/index, foundations/index, 1.1, 1.2, 1.3, 1.4</td><td>agy (Google) + codex (OpenAI)</td><td>review R1</td><td>14 reviews; near-disjoint findings; opus adjudicated each vs EN</td></tr>
+<tr><td>adjudication + all fixes</td><td>opus (orchestrator, inline)</td><td>—</td><td>~70 fixes applied; ~2 over-reach rejected</td></tr>
+</table>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>DO NEXT: finish <code>ai-engineering-foundations</code> (8/13 done) — 2.4 + Part 3.</strong> 2.1/2.2/2.3 are DONE (PR #2120 corrective). Remaining: <code>2.4-dynamic-context-orchestration</code> (to translate) + Part 3 (<code>3.1-harness-fundamentals</code>, <code>3.2-guardrails-gates</code>, <code>3.3-operating-the-harness</code>, <code>4.1-symphony-work-orchestration</code>) — all to translate via the same pipeline. New worktree off updated main + <code>node_modules</code> symlink.</li>
+<li><strong>Then the rest of <code>ai</code> (still 25 missing after foundations):</strong> <code>ai-for-kubernetes-platform-work</code> (5) → <code>ai-native-work</code> (5) → <code>open-models-local-inference</code> (8). Then <code>ai-ml-engineering</code> (142, 0% UK) → platform / cloud.</li>
+<li><strong>Pre-staged Part 2 code-switches to fix (from the patched guard):</strong> 2.1 — <code>request'ах</code>, <code>runbook'и</code>, <code>scratch-файлі</code>, <code>senior-інженер</code>; 2.2 — <code>bootstrap-файли</code>, <code>commit-охоронців</code>, <code>docs-як</code>, <code>lock-файли</code>, <code>markdown-файлі</code>; 2.3 — <code>downstream-продуктів</code>, <code>encoder'ом</code>, <code>runbook'и</code>. (Plus the usual ~15 review findings/module.)</li>
+<li><strong>Pipeline reuse:</strong> <code>scratchpad/</code> helpers persist same-machine but are gitignored — recreate per session. This session's <code>uk_dispatch.sh</code> is retargeted to <code>ai-eng-foundations</code> (<code>WT_NAME=uk-ai-eng-foundations</code>); <code>uk_review.sh</code> task-id is now path-unique (fixes the <code>index.md</code> basename collision across sections — both index files were clobbering <code>ukrev-index-*</code>); <code>uk_guards.sh</code> now catches the apostrophe pattern. <strong>New worktree off updated main per merge</strong> + <code>node_modules</code> symlink (Homepage.astro hardcodes <code>../../node_modules</code>).</li>
+<li><strong>#2110</strong> still deferred: corpus-wide <code>production</code>→<code>продакшен</code> (grammar-sensitive). This section already uses the correct <code>продакшен</code> declensions.</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>src/content/docs/uk/ai/index.md</code> — new (track landing)</li>
+<li><code>src/content/docs/uk/ai/ai-engineering-foundations/{index, module-1.1, 1.2, 1.3, 1.4}.md</code> — new</li>
+<li><code>scratchpad/uk_dispatch.sh</code> — retargeted to ai-eng-foundations section</li>
+<li><code>scratchpad/uk_review.sh</code> — path-unique task-id (index-collision fix)</li>
+<li><code>scratchpad/uk_guards.sh</code> — apostrophe code-switch catch (<code>word'cyrillic</code>)</li>
+</ul>
+
+</body></html>
