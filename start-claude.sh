@@ -45,11 +45,16 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     fi
 fi
 
-# Deploy Claude skills (always run to ensure up-to-date)
-if [ -f "package.json" ] && grep -q "claude:deploy" package.json 2>/dev/null; then
-    echo "Checking Claude skills..."
-    npm run claude:deploy --silent 2>/dev/null || true
-    echo "Skills deployed"
+# Warn (non-fatally) if any deployed extension has drifted from its source.
+# Was a dead `npm run claude:deploy` block (no such script). We deliberately do
+# NOT auto-deploy on launch: the team edits deployed copies directly often
+# enough that an auto-deploy would silently REVERT those edits. Instead just
+# flag drift so the dev can sync intentionally (source is the SSOT). The
+# `|| true` keeps `set -e` from aborting launch on a non-zero --check exit.
+# The extensions-sync CI gate is the hard backstop.
+if [ -x "$PROJECT_DIR/agents_extensions/deploy.sh" ]; then
+    bash "$PROJECT_DIR/agents_extensions/deploy.sh" --check --target claude --quiet \
+        || echo "⚠️  Extension drift: a .claude/ copy differs from its source. Sync with: bash agents_extensions/deploy.sh --target claude"
 fi
 
 # Show KubeDojo status (dynamically from STATUS.md)

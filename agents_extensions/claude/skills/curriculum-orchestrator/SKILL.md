@@ -86,7 +86,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 | Mechanical / deterministic | cursor or codex (cheap tier) | self-verify | gate/link fixes, batched edits |
 | External primary-source fetch | `mcp__claude-in-chrome__*` | hermes grok-4.3 (x.com only) | Browser BEFORE writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
 
-**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · xAI=cursor(composer)+grok (cursor==grok-composer, can't co-review; grok-4.x is a distinct line).
+**Cross-family map** (by model lineage): OpenAI=codex · Anthropic=opus · Google=agy(gemini-cli retired) · DeepSeek=deepseek · xAI=grok-build+grok-4.* · Cursor/Kimi=cursor(Composer, **Kimi K2.5 base, NOT xAI**; corrected s140). ⚠️ **xAI+Cursor merged into ONE company (2026-06, s167)** → cursor↔grok = soft shared-org caution; `grok-composer-2.5-fast`==cursor Composer = hard same-model exclusion. **Native CLIs:** codex / cursor / grok(grok-build) / agy / opus-inline. **Transports:** hermes(deepseek `--provider deepseek` + grok-4.* `--provider xai-oauth`) / opencode / qwen. So `--agent deepseek`=deepseek-via-hermes; `--agent grok`=grok-build only (#2034); grok-4.*=hermes only. 4 clean independents: OpenAI/Google/Anthropic/DeepSeek.
 
 **During Anthropic throttle window** (2026-05-23/24 instance, recurs):
 - CUT sonnet headless (review/edit/draft/judge1) to preserve shared cap for opus orchestrator.
