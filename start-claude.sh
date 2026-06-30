@@ -143,5 +143,24 @@ unset ANTHROPIC_BASE_URL OPENAI_BASE_URL COPILOT_PROVIDER_BASE_URL
 echo "headroom routing DISABLED -- launching Claude DIRECT (no proxy)"
 # --- end headroom routing ---
 
+# Derive the cold-start handoff identity from the selected `--agent`, so ONE
+# launcher serves multiple lanes: the SessionStart hook keys its orientation +
+# handoff slot off SESSION_HANDOFF_AGENT. The default curriculum lane derives
+# nothing → the hook keeps its existing single-lane behavior byte-for-byte.
+# `--agent infra-orchestrator` → SESSION_HANDOFF_AGENT=claude-infra. An explicit
+# SESSION_HANDOFF_AGENT already in the environment wins. Mapping + argv parsing
+# live in scripts/lib/handoff_identity.sh (mirrors learn-ukrainian, #2113).
+if [ -z "${SESSION_HANDOFF_AGENT:-}" ] && [ -f "$PROJECT_DIR/scripts/lib/handoff_identity.sh" ]; then
+    # shellcheck source=scripts/lib/handoff_identity.sh
+    source "$PROJECT_DIR/scripts/lib/handoff_identity.sh"
+    _selected_agent="$(handoff_agent_from_argv "$@")"
+    _handoff_slot="$(handoff_identity_for_agent "$_selected_agent")"
+    if [ -n "$_handoff_slot" ]; then
+        export SESSION_HANDOFF_AGENT="$_handoff_slot"
+        echo "Handoff identity: $SESSION_HANDOFF_AGENT (from --agent $_selected_agent)"
+    fi
+    unset _selected_agent _handoff_slot
+fi
+
 echo "Launching Claude Code (native build from PATH: $(command -v claude))..."
 exec claude --chrome --permission-mode bypassPermissions "$@"

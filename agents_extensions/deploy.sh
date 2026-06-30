@@ -127,6 +127,7 @@ deploy_agent() {
     local n
     local commands_changed=0
     local skills_changed=0
+    local agents_changed=0
     local hooks_changed=0
     local statusline_changed=0
 
@@ -140,13 +141,21 @@ deploy_agent() {
     n=$(deploy_skills "$agent_dir/skills" "$target_dir/skills")
     skills_changed=$((skills_changed + n))
 
+    # Agent definitions (flat *.md). Selected via `claude --agent <name>`, where
+    # <name> is the `name:` frontmatter field (not the filename). shared/ first,
+    # then per-agent.
+    n=$(deploy_flat "$shared_dir/agents" "$target_dir/agents" "agents" "*.md" "no")
+    agents_changed=$((agents_changed + n))
+    n=$(deploy_flat "$agent_dir/agents" "$target_dir/agents" "agents" "*.md" "no")
+    agents_changed=$((agents_changed + n))
+
     n=$(deploy_flat "$agent_dir/hooks" "$target_dir/hooks" "hooks" "*.sh" "yes")
     hooks_changed=$((hooks_changed + n))
 
     n=$(deploy_flat "$agent_dir/statusline" "$target_dir/statusline" "statusline" "*.sh" "yes")
     statusline_changed=$((statusline_changed + n))
 
-    local total_changed=$((commands_changed + skills_changed + hooks_changed + statusline_changed))
+    local total_changed=$((commands_changed + skills_changed + agents_changed + hooks_changed + statusline_changed))
     if [[ $total_changed -gt 0 ]]; then
         log "✅ Deployed $total_changed extension(s)"
     else
