@@ -6,6 +6,12 @@ sidebar:
   label: "ШІ"
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/index.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 7
+  content_sha: "bcfabce7ee8cada1829a628b041d7162a09d07d3e6ae70a6eedddfc229cf9a3d"
 ---
 
 > **Трек «ШІ»** | 37 модулів | 6 розділів | ~64-95 годин

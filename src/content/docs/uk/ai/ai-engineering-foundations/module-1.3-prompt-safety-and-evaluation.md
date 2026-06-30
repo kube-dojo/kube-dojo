@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 17
+  content_sha: "d595c9d98f1caddcb7c3194034de5c1314768ca968f1e14bccce0eab6c541b7e"
 ---
 
 > **Складність**: [COMPLEX]

@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/ai-engineering-foundations/module-1.4-prompt-libraries-and-contracts.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 25
+  content_sha: "90999d6f054fa91fc4575d6e7a3865a77a9253bdf9c20943f7531eb280367d43"
 ---
 
 > **Складність**: [COMPLEX]
