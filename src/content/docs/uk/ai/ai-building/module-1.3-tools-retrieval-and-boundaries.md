@@ -7,6 +7,12 @@ sidebar:
 revision_pending: false
 en_commit: "d6176359ab5e8f48eca8068cf4912c7037e0b514"
 en_file: "src/content/docs/ai/ai-building/module-1.3-tools-retrieval-and-boundaries.md"
+calque_review:
+  reviewed_at: "2026-06-30"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 26
+  content_sha: "49351f4361dc40e4408e01b676fa51bfa20397bf7b964cf80b96ac94abebac66"
 ---
 
 > **Складність**: `[MEDIUM]`

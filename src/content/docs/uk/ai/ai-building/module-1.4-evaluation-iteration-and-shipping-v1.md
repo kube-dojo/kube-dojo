@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "de358c685760b036ef0d8f0f5e6cb96b6df373d3"
 en_file: "src/content/docs/ai/ai-building/module-1.4-evaluation-iteration-and-shipping-v1.md"
+calque_review:
+  reviewed_at: "2026-06-30"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 14
+  content_sha: "45ed9efa5dc85d71df135e4a4edb94209a24f64124185b132d6454234c31d223"
 ---
 
 > **Побудова ШІ** | Складність: `[MEDIUM]` | Час: 40-55 хв | Передумови: модулі 1.1-1.3 розділу «Побудова ШІ», базове володіння промптами, базовий JSON, базове використання командного рядка

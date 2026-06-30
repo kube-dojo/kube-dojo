@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "3ae1cf6f49fa851697ac71fa973e300e42296ef5"
 en_file: "src/content/docs/ai/ai-building/module-1.2-models-apis-context-structured-output.md"
+calque_review:
+  reviewed_at: "2026-06-30"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 8
+  content_sha: "85f9529dceaab4075c68a7d175da74d301177e48c3c6a7320a8f61e664d8190d"
 ---
 
 > **Побудова ШІ** | Складність: `[MEDIUM]` | Час: 55-70 хв | Передумови: Модуль 1.1, базова грамотність в API та вміння читати JSON
