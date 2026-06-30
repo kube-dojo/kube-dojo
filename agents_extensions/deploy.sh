@@ -4,9 +4,14 @@
 # deployed copy, or the next deploy reverts your edit.
 #
 # Usage: ./agents_extensions/deploy.sh [--quiet] [--check] [--target claude|codex|cursor|gemini|all]
-#   --check   Report drift (source != deployed) WITHOUT writing anything; exit 1
-#             if any file would change. Used by the extensions-sync CI gate so a
-#             direct edit to a deployed copy can't silently diverge from source.
+#   --check   Report drift WITHOUT writing anything; exit 1 if anything is off.
+#             Detects: (a) content drift (deployed != source), (b) executable-bit
+#             drift on hooks/statusline (content matches but deployed lost +x),
+#             (c) ORPHANS — a deployed commands/agents/skills file with no source
+#             (left behind after a source deletion). Orphan detection is scoped to
+#             those content types; the executable dirs (hooks/statusline) legitimately
+#             carry direct-committed files with no source and are not orphan-checked.
+#             Used by the extensions-sync CI gate.
 
 set -e
 
@@ -128,9 +133,64 @@ deploy_flat() {
                 log "   📄 $label/$filename"
             fi
             changed=$((changed + 1))
+        elif [[ "$executable" == "yes" ]] && [[ ! -x "$target_file" ]]; then
+            # Content matches but the deployed copy lost its executable bit — a
+            # hook/statusline that isn't +x silently won't run. Detect (check) or
+            # fix (deploy). Caught codex review of #2115.
+            if [[ "$CHECK" == "true" ]]; then
+                log "   ✗ DRIFT (exec bit) $label/$filename"
+            else
+                chmod +x "$target_file"
+                log "   🔧 chmod +x $label/$filename"
+            fi
+            changed=$((changed + 1))
         fi
     done
     echo "$changed"
+}
+
+# CHECK-mode only: report DEPLOYED files that have NO source (orphaned when a
+# source skill/command/agent is deleted but its deployed copy lingers — the next
+# deploy is additive and won't remove it). Echoes the orphan count.
+#
+# Scoped to CONTENT types (commands/agents/skills): the executable dirs (hooks,
+# statusline) legitimately carry direct-committed operational files with no
+# source (e.g. .claude/hooks/block-*.sh), so flagging deployed-only files there
+# would be a false positive. Caught by codex review of #2115.
+check_orphans_flat() {
+    local target_subdir="$1" pattern="$2" label="$3"; shift 3
+    local source_dirs=("$@")
+    local orphans=0
+    [[ -d "$target_subdir" ]] || { echo 0; return 0; }
+    for dep in "$target_subdir"/$pattern; do
+        [[ -f "$dep" ]] || continue
+        local base found=no sd
+        base=$(basename "$dep")
+        for sd in "${source_dirs[@]}"; do [[ -f "$sd/$base" ]] && { found=yes; break; }; done
+        if [[ "$found" == "no" ]]; then
+            log "   ✗ ORPHAN (no source) $label/$base"
+            orphans=$((orphans + 1))
+        fi
+    done
+    echo "$orphans"
+}
+
+check_orphans_skills() {
+    local target_subdir="$1"; shift
+    local source_dirs=("$@")  # each is a .../skills dir holding <name>/SKILL.md
+    local orphans=0
+    [[ -d "$target_subdir" ]] || { echo 0; return 0; }
+    for dep in "$target_subdir"/*/; do
+        [[ -d "$dep" ]] || continue
+        local base found=no sd
+        base=$(basename "$dep")
+        for sd in "${source_dirs[@]}"; do [[ -f "$sd/$base/SKILL.md" ]] && { found=yes; break; }; done
+        if [[ "$found" == "no" ]]; then
+            log "   ✗ ORPHAN (no source) skills/$base"
+            orphans=$((orphans + 1))
+        fi
+    done
+    echo "$orphans"
 }
 
 deploy_agent() {
@@ -176,6 +236,17 @@ deploy_agent() {
 
     n=$(deploy_flat "$agent_dir/statusline" "$target_dir/statusline" "statusline" "*.sh" "yes")
     statusline_changed=$((statusline_changed + n))
+
+    # Orphan detection (CHECK mode only) for the fully-source-managed content
+    # types — catches a deployed copy left behind after its source was deleted.
+    if [[ "$CHECK" == "true" ]]; then
+        n=$(check_orphans_flat "$target_dir/commands" "*.md" "commands" "$shared_dir/commands" "$agent_dir/commands")
+        commands_changed=$((commands_changed + n))
+        n=$(check_orphans_flat "$target_dir/agents" "*.md" "agents" "$shared_dir/agents" "$agent_dir/agents")
+        agents_changed=$((agents_changed + n))
+        n=$(check_orphans_skills "$target_dir/skills" "$shared_dir/skills" "$agent_dir/skills")
+        skills_changed=$((skills_changed + n))
+    fi
 
     local total_changed=$((commands_changed + skills_changed + agents_changed + hooks_changed + statusline_changed))
     DRIFT_TOTAL=$((DRIFT_TOTAL + total_changed))
