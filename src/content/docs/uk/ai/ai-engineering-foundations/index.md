@@ -6,6 +6,12 @@ sidebar:
   label: "Основи ШІ-інженерії"
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/ai-engineering-foundations/index.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 0
+  content_sha: "64c8eb9d8c05acbbb58415b37544a62fc424e49d186a72e08a58331d8cb785e4"
 ---
 
 > **Основи ШІ-інженерії** | 12 запланованих модулів | промпт, контекст, обв'язка та Симфонія

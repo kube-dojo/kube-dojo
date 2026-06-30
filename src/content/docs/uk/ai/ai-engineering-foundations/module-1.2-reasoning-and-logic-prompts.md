@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/ai-engineering-foundations/module-1.2-reasoning-and-logic-prompts.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 14
+  content_sha: "8eb98fc4ae065b41c0735ae5e301899afcd19ec54c54ba367673a0d3efe5931a"
 ---
 
 > **Основи ШІ-інженерії** | Складність: `[COMPLEX]` | Час: 80-100 хв

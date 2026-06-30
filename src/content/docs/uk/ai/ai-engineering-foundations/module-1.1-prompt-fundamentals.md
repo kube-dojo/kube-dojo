@@ -7,6 +7,12 @@ revision_pending: false
 citations_verified: true
 en_commit: "a37a95191"
 en_file: "src/content/docs/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals.md"
+calque_review:
+  reviewed_at: "2026-07-01"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 16
+  content_sha: "8c8f8f1041caa4833847d847c57c94ed6b483de818f3615edecf4c2308cd83f1"
 ---
 
 > **Складність**: [COMPLEX]
