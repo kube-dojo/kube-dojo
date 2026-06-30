@@ -185,6 +185,39 @@ if [ -z "$ORIENT_BODY" ]; then
   ORIENT_BODY="(cold-start produced no briefing — RUN IT YOURSELF NOW as your first action: bash scripts/cold-start.sh, then act on its DO-NEXT focus item.)"
 fi
 
+# ============================================================================
+# LANE SELECTION — SESSION_HANDOFF_AGENT (exported by start-claude.sh from the
+# selected --agent; see scripts/lib/handoff_identity.sh) routes the orientation
+# identity + handoff slot. cold-start ran ABOVE for BOTH lanes, so the infra
+# lane still orients via the API even on its FIRST session (no handoff file
+# yet). The DEFAULT (curriculum) lane keeps its exact original CONTEXT, byte for
+# byte. Additive only — #2113 (learn-ukrainian parity).
+# ============================================================================
+if [ "${SESSION_HANDOFF_AGENT:-}" = "claude-infra" ]; then
+  INFRA_HANDOFF="$PROJECT_DIR/.agent/claude-infra-thread-handoff.md"
+  if [ -f "$INFRA_HANDOFF" ]; then
+    INFRA_LEAD="PREVIOUS-SESSION INFRA HANDOFF — read this FIRST, as your first action:
+  Read: $INFRA_HANDOFF
+(gitignored local thread state; never committed. Write the next handoff to this same path at session end.)"
+  else
+    INFRA_LEAD="FIRST INFRA SESSION — no infra handoff yet (.agent/claude-infra-thread-handoff.md absent). Orient via the API: this hook already ran cold-start (services-up + fresh briefing); for the full briefing run \`bash scripts/cold-start.sh\` or curl 127.0.0.1:8768/api/briefing/session?compact=1. Write your handoff to that path at session end."
+  fi
+  CONTEXT="INFRA-ORCHESTRATOR SESSION — auto-oriented by the SessionStart hook. You ARE the KubeDojo infra / tooling orchestrator (lane: claude-infra). You own the build/dev tooling, scripts/, .claude/hooks/, the local API (scripts/local_api.py), CI workflows, deploy.sh, and agent-runtime plumbing — NOT curriculum content. Hand curriculum work to the default lane (plain \`./start-claude.sh\`, no --agent).
+
+Load-bearing discipline (do NOT violate):
+  - Branch in .worktrees/ — NEVER branch/switch in the primary dir; never push direct to main.
+  - PR + cross-family adversarial review before every merge.
+  - Lint per edit, test per phase; \`npm run build\` must be 0 errors before push.
+
+$INFRA_LEAD
+
+Live state from the API (situational awareness — the curriculum queue below is NOT the infra lane's task list):
+$ORIENT_BODY
+
+AUTO-ORIENT — before responding to the user's first message: state what the infra lane is picking up (from the handoff above, or from the API briefing on a first session), then proceed unless the user redirects you.
+
+SESSION SETUP CHECK:"
+else
 CONTEXT="ORCHESTRATOR SESSION — auto-oriented by the SessionStart hook. You ARE the KubeDojo curriculum orchestrator: you own the module queue, dispatch authors/reviewers, PR hygiene, and session handoffs. Standalone session = you ARE the main orchestrator; drive the queue, ask only on irreversible or ambiguous actions.
 
 Load-bearing discipline (do NOT violate):
@@ -198,6 +231,8 @@ $ORIENT_BODY
 AUTO-ORIENT — before responding to the user's first message (even if it seems unrelated, trivial, or empty): state the DO-NEXT action above, then proceed with it unless the user's message redirects you. Cold-start has ALREADY run — do NOT wait to be told to orient.
 
 SESSION SETUP CHECK:"
+fi
+# --- end lane selection ---
 
 if [ ${#ISSUES[@]} -gt 0 ]; then
   CONTEXT="$CONTEXT
