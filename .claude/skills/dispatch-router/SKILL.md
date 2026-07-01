@@ -1,7 +1,7 @@
 ---
 name: dispatch-router
 description: Pick the right KubeDojo agent for a task across ALL activities — write / code / review / research / mechanical, not just review. Activity × lane matrix → agent → model → dispatch command. Roster as of 2026-07-01 (cursor, codex, opus/claude-headless, agy[model-selectable, the Google lane — gemini-cli RETIRED], deepseek, grok via grok-CLI/hermes). Use before any dispatch. Triggers on "which agent", "dispatch", "route to", "who should do this".
-last_calibrated: 2026-06-04
+last_calibrated: 2026-07-01
 ---
 
 # Dispatch Router Skill
