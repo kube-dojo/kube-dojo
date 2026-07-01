@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 188 — Author A/B + UK ai-engineering-foundations 13/13</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a;background:#fafafa}
+  h1{font-size:1.7rem;border-bottom:3px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.25rem;margin-top:2rem;color:#1e40af;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+  h3{font-size:1.05rem;margin-top:1.3rem;color:#374151}
+  code{background:#eef2ff;padding:.1rem .35rem;border-radius:4px;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #cbd5e1;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#e0e7ff}
+  .win{color:#15803d;font-weight:600}.lose{color:#b91c1c;font-weight:600}
+  .tldr{background:#eff6ff;border-left:4px solid #2563eb;padding:.8rem 1rem;border-radius:0 6px 6px 0}
+  ul{margin:.4rem 0}li{margin:.2rem 0}
+  .tag{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:4px;padding:0 .4rem;font-size:.8rem}
+</style>
+</head>
+<body>
+<h1>Session 188 — Author A/B → deepseek is the default UK author; ai-engineering-foundations 13/13</h1>
+
+<p class="tldr"><strong>2026-07-01.</strong> Executed the s187b DO-NEXT. Ran the <strong>author A/B</strong> (deepseek vs agy vs codex) on one dense module — decisive result: <strong>deepseek wins and remains the default UK author</strong>, reproducing both known failure modes with hard data. Then shipped the winner's output and completed <strong>ai-engineering-foundations Part 3</strong> with deepseek: <strong>2.4 merged (PR #2127)</strong> and <strong>3.1/3.2/3.3/4.1 (PR #2128)</strong> → the section is <strong>13/13</strong>. The infra <code>require_file_change_on_write</code> guard (shipped by the infra lane before this session) worked perfectly — flagged both agy no-write flakes as <code>OK:False</code>.</p>
+
+<h2>1. Author A/B — the decision this thread converged on</h2>
+<p>Test subject: <code>ai-engineering-foundations/module-2.4-dynamic-context-orchestration</code> (9,173 EN words, [COMPLEX], terminology-dense: compaction / eviction / cache-TTL / just-in-time-vs-just-in-case / attribution ledger). Same module translated three ways through <strong>identical</strong> guards + gates + 2-family cross-review; metric = <strong>gate-invisible real defects</strong> (mistranslation / omission / padding / calque that pass the automated gates).</p>
+
+<table>
+<tr><th>Author</th><th>Reliable write</th><th>Faithful translation</th><th>Fix load</th><th>Verdict</th></tr>
+<tr><td><strong>deepseek-v4-pro</strong></td><td>✅ 1/1</td><td>Full, natural; <strong>perfect structural parity</strong>; ratio 0.987</td><td>~7 gate-invisible (3 P1 idiom-calques) + 5 code-switches</td><td class="win">🏆 WINNER / default</td></tr>
+<tr><td>codex (gpt-5.5, xhigh)</td><td>✅ (1 kill+retry)</td><td>Avoided a few idiom-calques BUT left <strong>~940 core terms in English</strong> (retrieval, cache, eviction, handoff, parent/child, ledger, session…)</td><td>catastrophic — near-total re-translation</td><td class="lose">❌ reject as author</td></tr>
+<tr><td>agy (Gemini 3.1 Pro)</td><td>❌ <strong>0/3</strong> on this large module</td><td>n/a (no file produced)</td><td>n/a</td><td class="lose">❌ great REVIEWER, unusable author</td></tr>
+</table>
+
+<h3>The decisive metric — stray untranslated English in prose</h3>
+<p>Objective counter (<code>scratchpad/stray_english.py</code>, strips code/tags/URLs, excludes tool names): <strong>deepseek ≈142</strong> (mostly <code>&lt;details&gt;/&lt;summary&gt;</code> tags + accepted technical terms) vs <strong>codex ≈976</strong> (439 unique — the module's entire core vocabulary left in English). ~<strong>7× worse</strong>. This exactly reproduces memory <code>feedback_codex_translation_code_switches_on_long_modules</code>: codex writes reliably but code-switches / under-translates on long modules, and these pass <code>uk_calque_v2</code> + <code>check_uk_changed</code> (both blind to code-switch) — only the hybrid guard + a vs-EN human read catch them.</p>
+
+<h3>agy: 0/3 writes on module-2.4 (but a top-tier reviewer)</h3>
+<ul>
+<li>Write attempts: 531s then 2241s (37 min), both <code>OK:False, resp_chars:0, NO FILE</code> — plus the s187b attempt = <strong>0/3 on this exact module</strong>. The <code>require_file_change_on_write</code> guard correctly reported <code>OK:False</code> (no false-success). Fully contained by <code>--worktree</code> (primary HEAD untouched, no stray branches).</li>
+<li>The s187b "5/5 viable author" claim was on a different/smaller scenario; agy's write-completion is <strong>unreliable on large dense modules</strong> — its unique corpus-grounding edge is moot if it can't emit the file. <strong>Re-test on a smaller module before trusting agy as author.</strong></li>
+<li>As a <strong>reviewer</strong> agy was excellent all session: grounded, caught all 3 of deepseek's P1 mistranslations on 2.4, and every finding across 3.1–4.1 (only 5 over-reaches across the whole batch, all rejected via vs-EN adjudication).</li>
+</ul>
+
+<h2>2. Shipped — ai-engineering-foundations 13/13</h2>
+<table>
+<tr><th>Module</th><th>PR</th><th>Fixes</th><th>Notes</th></tr>
+<tr><td>2.4 dynamic context orchestration</td><td><strong>#2127 MERGED</strong></td><td>23</td><td>the A/B winner's output; agy R1 + opus vs-EN</td></tr>
+<tr><td>3.1 harness fundamentals &amp; system of record</td><td rowspan="4"><strong>#2128</strong> (CI running)</td><td>17</td><td><code>проти</code>→targeting, <code>оболонка</code>→<code>межа таймауту</code>, in-scope, <code>існуючий</code>→<code>наявний</code>; 2 over-reaches rejected</td></tr>
+<tr><td>3.2 guardrails, gates &amp; agent-legible apps</td><td>25</td><td>health-*/bash-*/OpenAI-/Python- code-switches, <strong>Ruff mistranslation</strong>, <code>тіло іш'ю</code>→<code>issue</code>, <code>флаки</code>→<code>збої</code>; 2 rejected</td></tr>
+<tr><td>3.3 operating the harness</td><td>21</td><td><code>обоє</code>→<code>обидва</code> ×8, <code>reclaims</code>→<code>вивільняє</code>, <code>cookbook</code>→<code>збірники рецептів</code>, <code>autormerge</code> typo; 1 rejected</td></tr>
+<tr><td>4.1 symphony — work orchestration</td><td>4</td><td>agy <strong>APPROVE, no findings</strong> (excellent); only 4 <code>знаходяться</code> calques</td></tr>
+</table>
+<p>Every module: perfect structural parity vs EN, ratios 0.92–1.00 (no padding), all gates green (hybrid guard + calque_v2 + CI russicism), <code>calque_review</code> stamped reviewed/v2, build green (2169 pages, 0 errors). Every reviewer finding was opus-adjudicated against EN; <strong>5 over-reach/false-positive findings rejected</strong> across the batch (e.g. <code>макет</code>=layout is valid UA, <code>відображається на</code>=standard "maps to", <code>межами</code> already-correct, <code>примусову політику</code> already-correct, <code>проти семантичних</code>=correct "against").</p>
+
+<h2>3. deepseek's recurring failure modes (predictable → catch them cheaply)</h2>
+<p>Across 5 modules deepseek's real defects were consistent and mechanical — worth <strong>baking into the fidelity brief and/or a pre-normalizer</strong> to cut the fix load on the remaining ~160 <code>ai</code>/<code>ai-ml</code> modules:</p>
+<ul>
+<li><strong>Active-participle russicisms:</strong> <code>існуючий</code>→<code>наявний</code>, <code>конфліктуючий</code>→<code>конфліктний</code>.</li>
+<li><strong>"is located" calque:</strong> <code>знаходиться/знаходяться</code>→<code>перебуває/перебувають</code> (but <code>знаходить</code>=finds is correct — context-check).</li>
+<li><strong>"against" = targeting</strong> mistranslated as <code>проти</code> (opposed) → <code>до/над/з/у</code> (but <code>аргумент проти</code>, <code>бар'єри проти</code> = correct "against").</li>
+<li><strong>Grammar:</strong> <code>обоє</code> (people) used for tools/things → <code>обидва</code>.</li>
+<li><strong>False friends:</strong> <code>redact</code>→<code>редагувати</code> (should be <code>маскувати</code>); <code>reclaims</code>→<code>повертає</code> (should be <code>вивільняє</code>); <code>assert</code>(test)→<code>стверджує</code> (should be <code>перевіряє</code>).</li>
+<li><strong>Idiom literal-calques:</strong> mystery-meat, short-circuit(programming), OpenAI "writing", "cookbook" → all rendered literally/wrong. These are the true <em>gate-invisible</em> P1s only a vs-EN read catches.</li>
+<li><strong>Transliterated slang:</strong> <code>флаки</code>, <code>іш'ю</code> → translate properly.</li>
+</ul>
+
+<h2>4. Reusable pipeline (scratchpad/, gitignored — recreate per session)</h2>
+<ul>
+<li><code>p3_translate.sh &lt;module.md&gt;</code> — deepseek author into a shared worktree (fidelity brief, <code>--no-skill</code>).</li>
+<li><code>p3_review.sh &lt;module.md&gt; &lt;reviewer&gt;</code> — cross-family review (path-unique task-ids).</li>
+<li><code>ab_parity.py &lt;en&gt; &lt;uk&gt;</code> — structural parity (fences/tables/lists/headings/words) — catches omission/padding.</li>
+<li><code>stray_english.py &lt;uk&gt;</code> — the decisive under-translation metric.</li>
+<li><code>uk_guards.sh</code> (hybrid code-switch + corruption), <code>normalize_ai_to_shi.py</code>, <code>fix_NN.py</code> pattern (count-asserted string replacements — aborts atomically on drift).</li>
+<li>Gates: <code>scripts/checks/uk_calque_v2.py</code> + <code>scripts/quality/check_uk_changed.py</code> (CI gate) + <code>scripts/quality/calque_review_stamp.py</code>.</li>
+</ul>
+<p><strong>Ops notes:</strong> worktrees auto-created by <code>dispatch_smart --worktree … --new-branch</code> (symlinks node_modules). agy &amp; codex <em>force danger mode</em> and reject an explicit <code>--mode</code>. Concurrent heavy dispatches can get SIGKILLed (resource contention) — codex kill #1 + 4.1 kill both recovered (4.1's file was already complete; verify tail-vs-EN before retrying). Always <code>--worktree</code> for agy write/danger.</p>
+
+<h2>5. NEXT</h2>
+<ul>
+<li><strong>Merge #2128</strong> when the Astro build passes → foundations 13/13 (all gates already green pre-push).</li>
+<li><strong>Continue <code>ai</code> with deepseek:</strong> <code>ai-for-kubernetes-platform-work</code> (5) → <code>ai-native-work</code> (5) → <code>open-models-local-inference</code> (8) → then <code>ai-ml-engineering</code> (142). Pull page lists from <code>/api/uk/board</code>.</li>
+<li><strong>Efficiency lever:</strong> bake the recurring deepseek failure modes (§3) into the fidelity brief + a pre-normalizer so the per-module fix pass shrinks.</li>
+<li><strong>#2110</strong> still deferred: corpus-wide <code>production</code>→<code>продакшен</code> reconciliation.</li>
+<li>Optional: re-test agy-as-author on a <em>small</em> module to see if its write-flake is size-driven; its reviewer role is proven and valuable.</li>
+</ul>
+</body>
+</html>
