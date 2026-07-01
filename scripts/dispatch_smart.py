@@ -100,8 +100,12 @@ RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
 MCP_CONFIG_PATH = PRIMARY_REPO / ".mcp.json"
 # gemini-cli RETIRED 2026-07-01 (no gemini-cli; the Google lane is now agy).
 # agy loads MCP NATIVELY from ~/.gemini/config/mcp_config.json, so it needs no
-# per-dispatch --mcp flag; claude is the only agent that takes --mcp here.
-MCP_SUPPORTED_AGENTS = frozenset({"claude"})
+# per-dispatch --mcp flag. Claude uses repo .mcp.json; Hermes lanes read
+# ~/.hermes/config.yaml natively and only need observability wiring here.
+MCP_SUPPORTED_AGENTS = frozenset({"claude", "deepseek", "grok", "qwen"})
+HERMES_MCP_AGENTS = frozenset({"deepseek", "grok", "qwen"})
+HERMES_MCP_TASK_CLASSES = frozenset({"draft", "edit"})
+CLAUDE_MCP_TASK_CLASSES = frozenset({"review", "search"})
 
 # Skill auto-loading — R2 follow-up to PR #1575 and the agents_extensions/
 # layout introduced there.
@@ -329,15 +333,27 @@ def _import_dispatch_mcp_constants() -> tuple[str, str]:
     return str(MCP_CONFIG_PATH), _load_claude_translation_tools()
 
 
-def _build_mcp_tool_config(agent: str, mcp_server: str) -> dict:
-    """Build adapter ``tool_config`` for read-only MCP tool access."""
+def _build_mcp_tool_config(agent: str, mcp_server: str) -> dict | None:
+    """Build adapter ``tool_config`` for MCP tool access."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    from agent_runtime.tool_config import build_mcp_tool_config
+
     if agent == "claude":
         mcp_config_path, allowed_tools = _import_dispatch_mcp_constants()
-        return {
-            "mcp_config_path": mcp_config_path,
-            "allowed_tools": allowed_tools,
-        }
-    return {}
+        tool_config, _diagnostics = build_mcp_tool_config(
+            agent,
+            mcp_servers=[mcp_server],
+            allowed_tools=allowed_tools,
+            mcp_config_path=Path(mcp_config_path),
+        )
+        return tool_config
+
+    tool_config, _diagnostics = build_mcp_tool_config(
+        agent,
+        mcp_servers=[mcp_server],
+        mcp_config_path=MCP_CONFIG_PATH,
+    )
+    return tool_config
 
 
 def _allowed_tools_count(allowed_tools: str) -> int:
@@ -392,6 +408,15 @@ def _print_dry_run_mcp(agent: str, tool_config: dict) -> None:
                 f"[dry-run] mcp_flags=--mcp-config {mcp_config_path} "
                 f"--allowedTools <{count} tools>"
             )
+        return
+
+    if agent in HERMES_MCP_AGENTS:
+        servers = tool_config.get("hermes_mcp_servers") or []
+        print(f"[dry-run] hermes_mcp_servers={servers}")
+        print(
+            "[dry-run] hermes_config=~/.hermes/config.yaml "
+            "(MCP servers discovered natively by Hermes)"
+        )
 
 
 def ensure_worktree(worktree: Path, new_branch: str | None, base: str = "main") -> None:
@@ -762,10 +787,10 @@ def main() -> int:
         metavar="SERVER",
         default=None,
         help=(
-            "Enable a named MCP server's read tools for this dispatch "
-            "(e.g. --mcp rag for Ukrainian-translation fact-checking). "
-            "Only rag is configured today. Honored for the claude agent "
-            "only (agy loads its MCP servers natively; no flag needed)."
+            "Enable a named MCP server for this dispatch "
+            "(e.g. --mcp sources for Ukrainian corpus verification). "
+            "Claude: review/search task classes. Hermes lanes (deepseek, "
+            "grok, qwen): draft/edit task classes. agy loads MCP natively."
         ),
     )
     args = p.parse_args()
@@ -777,17 +802,27 @@ def main() -> int:
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
 
     if args.mcp is not None:
-        if args.task_class not in {"review", "search"}:
+        if args.agent == "claude":
+            if args.task_class not in CLAUDE_MCP_TASK_CLASSES:
+                p.error(
+                    f"--mcp is only supported for read task classes "
+                    f"({', '.join(sorted(CLAUDE_MCP_TASK_CLASSES))}) on claude; "
+                    f"got task_class={args.task_class!r}. Write classes would "
+                    f"either cripple claude (allowedTools restricted to RAG+Read, "
+                    f"no write) or silently scope-creep; use the write-mode "
+                    f"dispatch.py --mcp path for translation authoring."
+                )
+        elif args.agent in HERMES_MCP_AGENTS:
+            if args.task_class not in HERMES_MCP_TASK_CLASSES:
+                p.error(
+                    f"--mcp for Hermes lanes is only supported for write task "
+                    f"classes ({', '.join(sorted(HERMES_MCP_TASK_CLASSES))}); "
+                    f"got agent={args.agent!r} task_class={args.task_class!r}"
+                )
+        elif args.agent not in MCP_SUPPORTED_AGENTS:
             p.error(
-                f"--mcp is only supported for read task classes (review, search); "
-                f"got task_class={args.task_class!r}. Write classes would either "
-                f"cripple claude (allowedTools restricted to RAG+Read, no write) or "
-                f"silently scope-creep; use the write-mode dispatch.py --mcp path for "
-                f"translation authoring."
-            )
-        if args.agent not in MCP_SUPPORTED_AGENTS:
-            p.error(
-                f"--mcp tool access is only supported for the claude agent "
+                f"--mcp tool access is only supported for agents "
+                f"{', '.join(sorted(MCP_SUPPORTED_AGENTS))} "
                 f"(got agent={args.agent!r}); agy loads MCP natively, no flag needed"
             )
         available = _available_mcp_servers()

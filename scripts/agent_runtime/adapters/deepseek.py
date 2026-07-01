@@ -39,14 +39,20 @@ Status flagged for the user:
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ..result import ParseResult
 from .base import InvocationPlan
+
+_logger = logging.getLogger(__name__)
+_HERMES_CONFIG_PATH = Path.home() / ".hermes" / "config.yaml"
 
 # Rate-limit patterns. DeepSeek follows Hermes transport patterns, including
 # standard 429 signaling.
@@ -83,6 +89,29 @@ _HERMES_BANNER_RE = re.compile(
 _TOOLSETS_READ_ONLY = "web,browser"
 _TOOLSETS_WORKSPACE = "web,browser,file,terminal,code_execution,todo"
 _TOOLSETS_DANGER = "web,browser,file,terminal,code_execution,todo,memory,skills"
+
+
+def _read_hermes_config(path: Path = _HERMES_CONFIG_PATH) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _sources_mcp_registered(config: dict[str, Any]) -> bool:
+    servers = config.get("mcp_servers")
+    if not isinstance(servers, dict):
+        return False
+    sources = servers.get("sources")
+    if not isinstance(sources, dict):
+        return False
+    return bool(sources.get("enabled") is not False and sources.get("url"))
+
+
+def translate_mcp_prefix_for_hermes(prompt: str) -> str:
+    """Rewrite ``mcp__sources__X`` to ``mcp_sources_X`` for Hermes routing."""
+    return prompt.replace("mcp__sources__", "mcp_sources_")
 
 
 class DeepSeekAdapter:
@@ -141,6 +170,16 @@ class DeepSeekAdapter:
         final_prompt = prompt
         if effort and effort != "default":
             final_prompt = f"[Reasoning effort hint: {effort}]\n\n{prompt}"
+
+        hermes_mcp_servers = tc.get("hermes_mcp_servers") or []
+        if "sources" in hermes_mcp_servers:
+            config = _read_hermes_config()
+            if not _sources_mcp_registered(config):
+                _logger.warning(
+                    "Hermes DeepSeek did not find enabled mcp_servers.sources in "
+                    "~/.hermes/config.yaml; MCP tool availability depends on Hermes config"
+                )
+            final_prompt = translate_mcp_prefix_for_hermes(final_prompt)
 
         # Model
         cmd.extend(["-m", model or self.default_model])
