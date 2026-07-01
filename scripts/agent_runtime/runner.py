@@ -95,6 +95,10 @@ def _git_status_porcelain(cwd: Path) -> str | None:
     by the ``require_file_change_on_write`` guard to detect a write-mode run
     that produced no worktree change. Returns None (not "") on git failure so
     the guard can distinguish "couldn't measure" from "measured, empty".
+
+    Uses a 10s timeout (vs ``_git_head_sha``'s 5s) deliberately: ``status
+    -uall`` walks the whole worktree and can be materially slower than a single
+    ``rev-parse`` on a large checkout. A timeout returns None => fail-open.
     """
     try:
         proc = subprocess.run(
