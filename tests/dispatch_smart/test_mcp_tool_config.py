@@ -70,3 +70,33 @@ def test_deepseek_adapter_leaves_prompt_unmodified_without_sources_mcp() -> None
 
     oneshot_arg = next(arg for arg in plan.cmd if arg.startswith("--oneshot="))
     assert oneshot_arg == f"--oneshot={prompt}"
+
+
+def test_mcp_supported_agents_excludes_unwired_hermes_lanes() -> None:
+    """grok/qwen must NOT be advertised as --mcp-capable until their runtime
+    wiring lands (grok bypasses Hermes; qwen lacks the prompt rewrite). Only
+    claude + the deepseek Hermes lane are supported. Regression lock for #2131.
+    """
+    import importlib
+
+    dispatch_smart = importlib.import_module("dispatch_smart")
+
+    assert dispatch_smart.MCP_SUPPORTED_AGENTS == frozenset({"claude", "deepseek"})
+    assert dispatch_smart.HERMES_MCP_AGENTS == frozenset({"deepseek"})
+    assert "grok" not in dispatch_smart.MCP_SUPPORTED_AGENTS
+    assert "qwen" not in dispatch_smart.MCP_SUPPORTED_AGENTS
+
+
+def test_available_hermes_mcp_servers_ignores_missing_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Hermes-lane availability reads ~/.hermes/config.yaml, not .mcp.json, and
+    returns [] cleanly when the config is absent (clean-checkout portability —
+    P1 of the #2131 review). tmp_path has no .hermes/config.yaml.
+    """
+    import importlib
+
+    dispatch_smart = importlib.import_module("dispatch_smart")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    assert dispatch_smart._available_hermes_mcp_servers() == []
