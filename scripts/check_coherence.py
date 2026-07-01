@@ -15,7 +15,7 @@ quiz <details>, and the `## Sources` section.
 
 Usage:
     python scripts/check_coherence.py path/to/module.md
-    python scripts/check_coherence.py path/to/module.md --agent agy
+    python scripts/check_coherence.py path/to/module.md --agent codex
     python scripts/check_coherence.py path/to/module.md --dry-run
     python scripts/check_coherence.py path/to/module.md --text
 """
