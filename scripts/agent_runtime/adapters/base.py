@@ -86,6 +86,18 @@ class AgentAdapter(Protocol):
             doesn't specify one. Example: ``"gpt-5.4"`` for Codex.
         supported_modes: Subset of ``{"read-only", "workspace-write", "danger"}``.
             The runner rejects invocations requesting a mode not in this set.
+
+    Optional class attribute (probed by the runner via ``getattr``, so adapters
+    that don't need it may omit it entirely):
+
+        require_file_change_on_write: If ``True``, the runner treats a
+            write-mode invocation (``mode in {"workspace-write", "danger"}``)
+            that parses ``ok`` but leaves the worktree byte-identical (git HEAD
+            unchanged AND ``git status --porcelain -uall`` identical before/after)
+            as a failure (``outcome="error"``, ``Result.ok=False``) rather than a
+            silent false-success. Set on adapters whose CLI can exit 0 having
+            written nothing — e.g. AgyAdapter, for the intermittent headless
+            no-write flake (#2099). Defaults to ``False`` when unset.
     """
     name: str
     default_model: str

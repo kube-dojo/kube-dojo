@@ -87,6 +87,36 @@ def _git_head_sha(cwd: Path) -> str | None:
     return None
 
 
+def _git_status_porcelain(cwd: Path) -> str | None:
+    """Return ``git status --porcelain -uall`` for ``cwd``, or None on failure.
+
+    ``-uall`` lists every individual untracked file (not just their parent
+    dir), so a fresh authored-but-uncommitted file shows up as a change. Used
+    by the ``require_file_change_on_write`` guard to detect a write-mode run
+    that produced no worktree change. Returns None (not "") on git failure so
+    the guard can distinguish "couldn't measure" from "measured, empty".
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain", "-uall"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        if proc.returncode == 0:
+            return proc.stdout
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return None
+
+
+# Modes in which the agent may mutate the worktree. The
+# ``require_file_change_on_write`` guard only applies to these.
+_WRITE_MODES: frozenset[str] = frozenset({"workspace-write", "danger"})
+
+
 def _load_adapter(name: str) -> AgentAdapter:
     """Import the adapter class for ``name`` and cache the instance.
 
@@ -400,7 +430,21 @@ def invoke(
     env = build_agent_env(provider=agent_name, overrides=plan.env_overrides)
 
     # ---------- 7–9. Run the subprocess with watchdog ----------
-    head_before = _git_head_sha(effective_cwd) if mode == "danger" else None
+    # The file-change guard (require_file_change_on_write) needs a HEAD +
+    # porcelain baseline for any write mode; the push-verify block below needs
+    # a HEAD baseline for danger mode. Snapshot HEAD when either applies.
+    require_file_change = (
+        mode in _WRITE_MODES
+        and bool(getattr(adapter, "require_file_change_on_write", False))
+    )
+    head_before = (
+        _git_head_sha(effective_cwd)
+        if (mode == "danger" or require_file_change)
+        else None
+    )
+    porcelain_before = (
+        _git_status_porcelain(effective_cwd) if require_file_change else None
+    )
     start_time = time.monotonic()
     proc: subprocess.Popen | None = None
     watchdog_state: WatchdogState | None = None
@@ -660,6 +704,41 @@ def invoke(
                 if not push_ok:
                     outcome = "error"
 
+        # File-change guard: adapters that set require_file_change_on_write (agy,
+        # for the #2099 headless no-write flake) must not report a silent
+        # false-success. If a write-mode run parsed ok but left the worktree
+        # byte-identical (HEAD unchanged AND porcelain identical before/after),
+        # downgrade to a retryable error. agy writes files WITHOUT committing, so
+        # the HEAD-only danger guard above passes trivially on an empty run —
+        # this porcelain check is what actually catches it. Gated on parse.ok so
+        # a genuine agent error keeps its own diagnostics.
+        no_file_change_error: str | None = None
+        if require_file_change and parse.ok and push_verify_error is None:
+            head_after = _git_head_sha(effective_cwd)
+            porcelain_after = _git_status_porcelain(effective_cwd)
+            head_unchanged = (
+                head_before is not None
+                and head_after is not None
+                and head_before == head_after
+            )
+            porcelain_unchanged = (
+                porcelain_before is not None
+                and porcelain_after is not None
+                and porcelain_before == porcelain_after
+            )
+            # Only fire when we could actually MEASURE both dimensions and both
+            # show no change. If git failed (None), we can't prove no-write, so
+            # we don't punish the run.
+            if head_unchanged and porcelain_unchanged:
+                no_file_change_error = (
+                    f"{agent_name} reported success but produced no file change "
+                    "in the worktree — likely headless no-write flake (#2099); "
+                    "retry."
+                )
+                outcome = "error"
+
+        verify_error = push_verify_error or no_file_change_error
+
         record = _build_usage_record(
             agent=agent_name,
             entrypoint=entrypoint,
@@ -676,7 +755,7 @@ def invoke(
             outcome=outcome,
             rate_limited=parse.rate_limited,
             stalled=False,
-            stderr_excerpt=push_verify_error or parse.stderr_excerpt,
+            stderr_excerpt=verify_error or parse.stderr_excerpt,
             tokens=parse.tokens,
         )
         write_record(record)
@@ -689,12 +768,12 @@ def invoke(
             )
 
         return Result(
-            ok=parse.ok and push_verify_error is None,
+            ok=parse.ok and verify_error is None,
             agent=agent_name,
             model=effective_model,
             mode=mode,
             response=parse.response,
-            stderr_excerpt=push_verify_error or parse.stderr_excerpt,
+            stderr_excerpt=verify_error or parse.stderr_excerpt,
             duration_s=duration_s,
             stderr=stderr_text,
             session_id=parse.session_id,

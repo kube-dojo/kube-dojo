@@ -106,6 +106,14 @@ class AgyAdapter:
     supported_modes: frozenset[str] = frozenset(
         {"read-only", "workspace-write", "danger"}
     )
+    # agy `-p` can exit 0 having called tools but written NO file (the
+    # intermittent headless no-write flake, #2099). Without this, an empty
+    # authoring run parses ok and passes the runner's HEAD-only danger guard
+    # trivially (agy writes files WITHOUT committing, so HEAD never moves),
+    # producing a silent false-success that an overnight run would trust and
+    # drop the module. Setting this makes the runner flip a write-mode run
+    # that left the worktree byte-identical to outcome=error (retryable).
+    require_file_change_on_write: bool = True
 
     def build_invocation(
         self,
