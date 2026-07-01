@@ -255,7 +255,8 @@ class TestRequireFileChangeGuard(unittest.TestCase):
 
         return FakeWatchdogState()
 
-    def _invoke(self, *, require_flag, head_seq, porcelain_seq):
+    def _invoke(self, *, require_flag, head_seq, porcelain_seq,
+                mode="workspace-write", push_verify=(True, None)):
         from agent_runtime import runner
 
         with patch.object(runner, "_load_adapter",
@@ -268,12 +269,14 @@ class TestRequireFileChangeGuard(unittest.TestCase):
                           return_value=(self._fake_watchdog_state(), [])), \
              patch.object(runner, "stop_watchdog"), \
              patch.object(runner, "write_record"), \
+             patch.object(runner, "verify_current_branch_pushed",
+                          return_value=push_verify), \
              patch.object(runner, "_git_head_sha", side_effect=head_seq), \
              patch.object(runner, "_git_status_porcelain", side_effect=porcelain_seq):
             return runner.invoke(
                 "agy",
                 "write the module",
-                mode="workspace-write",
+                mode=mode,
                 cwd=REPO_ROOT,
                 model="agy-test",
                 skip_headroom_check=True,
@@ -324,6 +327,42 @@ class TestRequireFileChangeGuard(unittest.TestCase):
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.usage_record["outcome"], "ok")
+
+    def test_danger_mode_no_write_marks_error(self):
+        """The production path is danger mode (dispatch_smart forces agy to
+        danger). A no-write danger run must also flip to error, exercising the
+        guard alongside — not instead of — the danger push-verify block."""
+        # HEAD: before, push-verify-after, file-guard-after (all identical, so
+        # push-verify sees no commit and never calls verify_current_branch_pushed).
+        result = self._invoke(
+            require_flag=True,
+            mode="danger",
+            head_seq=["sha0", "sha0", "sha0"],
+            porcelain_seq=["", ""],  # before, file-guard-after
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "error")
+        self.assertIn("#2099", result.stderr_excerpt or "")
+
+    def test_push_verify_error_wins_over_file_guard(self):
+        """When agy DOES commit in danger mode but the push fails, the
+        push-verify error must win: the file guard is short-circuited
+        (push_verify_error is not None) so the excerpt is push-related, never
+        the #2099 no-write note."""
+        # HEAD moves (sha0 -> sha1) => push-verify block fires and, because the
+        # push is stale, sets push_verify_error. The file guard is then skipped,
+        # so no file-guard HEAD/porcelain-after reads happen.
+        result = self._invoke(
+            require_flag=True,
+            mode="danger",
+            head_seq=["sha0", "sha1"],  # before, push-verify-after (changed)
+            porcelain_seq=[""],  # before only; file guard never runs
+            push_verify=(False, "origin stale: expected sha1"),
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "error")
+        self.assertIn("origin stale", result.stderr_excerpt or "")
+        self.assertNotIn("#2099", result.stderr_excerpt or "")
 
 
 # ---------------------------------------------------------------------------

@@ -98,6 +98,13 @@ class AgentAdapter(Protocol):
             silent false-success. Set on adapters whose CLI can exit 0 having
             written nothing — e.g. AgyAdapter, for the intermittent headless
             no-write flake (#2099). Defaults to ``False`` when unset.
+
+            Write-class intent assumed: the flag means "a write-mode run is
+            EXPECTED to change the worktree." It is safe because callers route
+            read-class tasks (review/search) to ``read-only`` — where the guard
+            never runs. Do NOT pass a read-class prompt through
+            ``runner.invoke(mode="danger")`` on a flagged adapter: a review that
+            legitimately writes nothing would false-fire as a no-write error.
     """
     name: str
     default_model: str
