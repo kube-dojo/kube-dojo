@@ -98,7 +98,10 @@ PRIMARY_REPO = _primary_checkout_root(REPO)
 LOG_PATH = PRIMARY_REPO / "logs" / "smart_dispatch.jsonl"
 RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
 MCP_CONFIG_PATH = PRIMARY_REPO / ".mcp.json"
-MCP_SUPPORTED_AGENTS = frozenset({"claude", "gemini"})
+# gemini-cli RETIRED 2026-07-01 (no gemini-cli; the Google lane is now agy).
+# agy loads MCP NATIVELY from ~/.gemini/config/mcp_config.json, so it needs no
+# per-dispatch --mcp flag; claude is the only agent that takes --mcp here.
+MCP_SUPPORTED_AGENTS = frozenset({"claude"})
 
 # Skill auto-loading — R2 follow-up to PR #1575 and the agents_extensions/
 # layout introduced there.
@@ -119,7 +122,8 @@ SUPPORTED_AGENTS = (
     "codex",
     "cursor",
     "deepseek",
-    "gemini",
+    # "gemini" RETIRED 2026-07-01 — no gemini-cli; use "agy" for the Google
+    # lane (agy has its own `--model` display names, e.g. gemini-3.1-pro-high).
     "grok",
     "hermes",
     "opencode",
@@ -149,7 +153,6 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "claude": "claude-haiku-4-5-20251001",
             "codex": "gpt-5.4-mini",
             "deepseek": "deepseek-v4-flash",
-            "gemini": "gemini-3.1-flash-lite-preview",
             "grok": "grok-build",
             "cursor": "composer-2.5-fast",
             "hermes": "qwen-3.6-flash",
@@ -167,7 +170,6 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
-            "gemini": "gemini-3.1-pro-preview",
             "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "grok-4.3",
@@ -185,7 +187,6 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
-            "gemini": "gemini-3.1-pro-preview",
             "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "grok-4.3",
@@ -203,7 +204,6 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
-            "gemini": "gemini-3.1-pro-preview",
             "grok": "grok-build",
             "cursor": "auto",
             "hermes": "claude-sonnet-4-6",
@@ -221,7 +221,6 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "claude": "claude-opus-4-8",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
-            "gemini": "gemini-3.1-pro-preview",
             "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "claude-opus-4-6",
@@ -338,8 +337,6 @@ def _build_mcp_tool_config(agent: str, mcp_server: str) -> dict:
             "mcp_config_path": mcp_config_path,
             "allowed_tools": allowed_tools,
         }
-    if agent == "gemini":
-        return {"mcp_server_names": [mcp_server]}
     return {}
 
 
@@ -382,14 +379,6 @@ def _dry_run_runtime_argv(
 
 def _print_dry_run_mcp(agent: str, tool_config: dict) -> None:
     """Print resolved MCP wiring for ``--dry-run`` verification."""
-    if agent == "gemini":
-        names = tool_config.get("mcp_server_names") or []
-        joined = ",".join(names)
-        print(f"[dry-run] mcp_servers={joined}")
-        if joined:
-            print(f"[dry-run] mcp_flag=--allowed-mcp-server-names {joined}")
-        return
-
     if agent == "claude":
         mcp_config_path = tool_config.get("mcp_config_path")
         allowed_tools = tool_config.get("allowed_tools") or ""
@@ -775,8 +764,8 @@ def main() -> int:
         help=(
             "Enable a named MCP server's read tools for this dispatch "
             "(e.g. --mcp rag for Ukrainian-translation fact-checking). "
-            "Only rag is configured today. Honored for claude and gemini "
-            "agents only."
+            "Only rag is configured today. Honored for the claude agent "
+            "only (agy loads its MCP servers natively; no flag needed)."
         ),
     )
     args = p.parse_args()
@@ -798,8 +787,8 @@ def main() -> int:
             )
         if args.agent not in MCP_SUPPORTED_AGENTS:
             p.error(
-                f"--mcp tool access is only supported for claude and gemini "
-                f"(got agent={args.agent!r})"
+                f"--mcp tool access is only supported for the claude agent "
+                f"(got agent={args.agent!r}); agy loads MCP natively, no flag needed"
             )
         available = _available_mcp_servers()
         if args.mcp not in available:
