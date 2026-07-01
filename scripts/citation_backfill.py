@@ -8,7 +8,7 @@ calibrated on the 4 pilot modules.
 Usage:
     # Research phase — dispatch Codex, validate URLs, write seed JSON.
     python scripts/citation_backfill.py research <module-key>
-    python scripts/citation_backfill.py research --agent gemini <module-key>
+    python scripts/citation_backfill.py research --agent agy <module-key>
     python scripts/citation_backfill.py research --dry-run <module-key>
         # emits the Codex prompt to stdout, no dispatch, no writes
 

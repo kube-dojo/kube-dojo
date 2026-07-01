@@ -1,6 +1,6 @@
 ---
 name: dispatch-router
-description: Pick the right KubeDojo agent for a task across ALL activities — write / code / review / research / mechanical, not just review. Activity × lane matrix → agent → model → dispatch command. Roster as of 2026-06-04 (cursor, codex, opus, agy[model-selectable], gemini, deepseek, grok via hermes). Use before any dispatch. Triggers on "which agent", "dispatch", "route to", "who should do this".
+description: Pick the right KubeDojo agent for a task across ALL activities — write / code / review / research / mechanical, not just review. Activity × lane matrix → agent → model → dispatch command. Roster as of 2026-07-01 (cursor, codex, opus/claude-headless, agy[model-selectable, the Google lane — gemini-cli RETIRED], deepseek, grok via grok-CLI/hermes). Use before any dispatch. Triggers on "which agent", "dispatch", "route to", "who should do this".
 last_calibrated: 2026-06-04
 ---
 
@@ -18,12 +18,12 @@ Pick the row for the activity, then the **primary doer**; for any write/author r
 
 | Activity | Primary doer | Cross-family reviewer(s) | Off-load / candidates |
 |---|---|---|---|
-| **Curriculum content — WRITE** (prose modules, expand-to-floor) | **cursor** `--model auto` ‖ **codex** gpt-5.5 (quality-critical first pass) | opus(≤1/wave) + agy(3.1-pro-high) + gemini + deepseek + grok-4.20-0309-reasoning — pick ≥1 of a different family than the author | agy (2nd writer), deepseek, grok-4.3 |
+| **Curriculum content — WRITE** (prose modules, expand-to-floor) | **cursor** `--model auto` ‖ **codex** gpt-5.5 (quality-critical first pass) | opus(≤1/wave) + agy(3.1-pro-high, the Google lane) + deepseek + grok-4.20-0309-reasoning — pick ≥1 of a different family than the author | agy (2nd writer), deepseek, grok-4.3 |
 | **Curriculum content — REVIEW** | — | **opus** (strongest) / **cursor** / **agy** (the Google lane) / **deepseek** (cheap) / **grok-4.20-0309-reasoning** | mix ≥2 families; ≤2 per OAuth; ground-check ALL. ~~gemini-cli~~ RETIRED ~2026-06-15 → use agy |
 | **Code / tooling — WRITE & FIX** (scripts, adapters, pipeline) | **cursor** `--model auto` (strongest fixer, 3/3) | **codex** (danger+worktree) / **opus** / **grok-build-0.1** / **deepseek** | codex |
 | **Code / tooling — REVIEW** | — | **codex** (danger+worktree) / **opus** (best code-correctness) / **grok-build-0.1** / **deepseek** | feed grok-build COMPLETE diffs |
 | **Code-heavy MODULE content** (extending-k8s, tool certs — modules WITH code that must build) | **codex** gpt-5.5 (factual/version/runnability best) | **opus** (route ≥1 here — caught every extending-k8s P1) + **grok-build-0.1** (code) + **deepseek** | cursor, agy |
-| **Research / gap-analysis / architecture** | **codex** (architect/consult) + **opus** (architect class) | `ab discuss --with claude,codex,gemini` for high-leverage ([[.claude/rules/decision-card]]) | deep-research harness; chrome MCP for source fetch |
+| **Research / gap-analysis / architecture** | **codex** (architect/consult) + **opus** (architect class) | `ab discuss --with claude,codex,agy` for high-leverage ([[.claude/rules/decision-card]]) | deep-research harness; chrome MCP for source fetch |
 | **Mechanical / deterministic** (gate fixes, link fixes, batched edits, search) | **cursor** or **codex** (cheap tier: composer-fast / spark / mini) | self-verify (`verify_module.py`, build, health) | — |
 
 **Cross-family map** (reviewer ≠ author family): OpenAI = codex · Anthropic = claude/opus · Google = **agy** (gemini-cli RETIRED ~2026-06-15, user 2026-06-07) · DeepSeek = deepseek · **Cursor Composer = cursor (composer-2.5, built on Kimi K2.5 / Moonshot — its OWN family, NOT xAI)** · xAI = grok-build / grok-4.x. ⚠️ cursor(composer-2.5) and `grok-composer-2.5` are the SAME model (xAI *serves* Cursor's Composer) — they cannot cross-review each other; grok-build / grok-4.x are a distinct xAI line (OK to review cursor-authored). Soft caution: cursor(Kimi) vs deepseek(DeepSeek) are different labs/bases (a valid pair) but both Chinese-origin → prefer a Western-lab reviewer for top-stakes cursor work. (Corrected s140; VentureBeat 2026 — see `feedback_cursor_composer_base_is_kimi_not_xai`.) ⚠️ **xAI and Cursor are now ONE COMPANY (merged, 2026-06) — user s167.** cursor↔grok therefore also carry a **soft shared-org caution** (prefer a different-org reviewer for top-stakes); the hard same-model exclusion (cursor Composer == `grok-composer-2.5-fast`) is unchanged. **The 4 clean independents: OpenAI / Google / Anthropic / DeepSeek.** Keep BOTH the cursor CLI and the grok CLI supported — unclear which becomes the mainstream CLI at the merged co.
@@ -78,7 +78,7 @@ T0 author primary is **codex-or-cursor** depending on codex weekly-cap state —
 
 ### Architect / consult / decision
 1. `dispatch_smart architect --agent codex` (gpt-5.5).
-2. For high-leverage decisions: `scripts/ab discuss --with claude,codex,gemini` ([[.claude/rules/decision-card]]).
+2. For high-leverage decisions: `scripts/ab discuss --with claude,codex,agy` ([[.claude/rules/decision-card]]).
 3. Consult codex on non-trivial scope decisions ([[feedback_consult_codex_on_decisions]]).
 
 ## Pre-flight checklist (before EVERY dispatch)
