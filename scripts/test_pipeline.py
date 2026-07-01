@@ -204,6 +204,128 @@ class TestCodexPushVerification(unittest.TestCase):
         self.assertEqual(result.usage_record["outcome"], "error")
 
 
+class TestRequireFileChangeGuard(unittest.TestCase):
+    """The require_file_change_on_write guard (#2099 agy no-write flake)."""
+
+    @staticmethod
+    def _fake_adapter(require_flag: bool):
+        from agent_runtime.adapters.base import InvocationPlan
+        from agent_runtime.result import ParseResult
+
+        class FakeAdapter:
+            default_model = "agy-test"
+            supported_modes = frozenset({"workspace-write", "danger"})
+            require_file_change_on_write = require_flag
+
+            def build_invocation(self, **kwargs):
+                return InvocationPlan(cmd=["fake-agy"], cwd=kwargs["cwd"])
+
+            def liveness_signal_paths(self, _plan):
+                return ()
+
+            def parse_response(self, **_kwargs):
+                # CLI exited 0 with output => parses ok, even though the
+                # no-write flake means nothing landed on disk.
+                return ParseResult(ok=True, response="wrote the module")
+
+        return FakeAdapter()
+
+    @staticmethod
+    def _fake_proc():
+        class FakeProc:
+            returncode = 0
+            stdin = None
+
+            def poll(self):
+                return 0
+
+            def kill(self):
+                return None
+
+            def wait(self, timeout=None):
+                return 0
+
+        return FakeProc()
+
+    @staticmethod
+    def _fake_watchdog_state():
+        class FakeWatchdogState:
+            stdout_lines = ["wrote the module"]
+            stderr_lines = []
+
+        return FakeWatchdogState()
+
+    def _invoke(self, *, require_flag, head_seq, porcelain_seq):
+        from agent_runtime import runner
+
+        with patch.object(runner, "_load_adapter",
+                          return_value=self._fake_adapter(require_flag)), \
+             patch.object(runner, "has_headroom", return_value=(True, "")), \
+             patch.object(runner, "build_agent_env", return_value={}), \
+             patch.object(runner.subprocess, "Popen",
+                          return_value=self._fake_proc()), \
+             patch.object(runner, "start_watchdog",
+                          return_value=(self._fake_watchdog_state(), [])), \
+             patch.object(runner, "stop_watchdog"), \
+             patch.object(runner, "write_record"), \
+             patch.object(runner, "_git_head_sha", side_effect=head_seq), \
+             patch.object(runner, "_git_status_porcelain", side_effect=porcelain_seq):
+            return runner.invoke(
+                "agy",
+                "write the module",
+                mode="workspace-write",
+                cwd=REPO_ROOT,
+                model="agy-test",
+                skip_headroom_check=True,
+            )
+
+    def test_no_file_change_marks_error(self):
+        """ok parse + zero worktree change => retryable error."""
+        # before + guard-after HEAD; before + guard-after porcelain.
+        result = self._invoke(
+            require_flag=True,
+            head_seq=["sha0", "sha0"],
+            porcelain_seq=["", ""],
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "error")
+        self.assertIn("no file change", (result.stderr_excerpt or "").lower())
+        self.assertIn("#2099", result.stderr_excerpt or "")
+
+    def test_file_change_present_stays_ok(self):
+        """A real porcelain change clears the guard."""
+        result = self._invoke(
+            require_flag=True,
+            head_seq=["sha0", "sha0"],
+            porcelain_seq=["", "?? uk/new-module.md\n"],
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "ok")
+
+    def test_guard_off_when_adapter_opts_out(self):
+        """No flag => empty worktree is NOT downgraded (legacy behavior)."""
+        # With the flag off in workspace-write mode, neither HEAD nor porcelain
+        # is snapshotted (danger path is not taken either), so both mocks see
+        # zero calls; the extra seq item is just an unused cushion.
+        result = self._invoke(
+            require_flag=False,
+            head_seq=["sha0"],
+            porcelain_seq=[],
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "ok")
+
+    def test_git_unmeasurable_does_not_punish(self):
+        """If git status can't be read (None), the guard must not fire."""
+        result = self._invoke(
+            require_flag=True,
+            head_seq=["sha0", "sha0"],
+            porcelain_seq=[None, None],
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.usage_record["outcome"], "ok")
+
+
 # ---------------------------------------------------------------------------
 # Fixtures: known-good and known-bad module content
 # ---------------------------------------------------------------------------

@@ -219,3 +219,14 @@ def test_parse_response_detects_rate_limit() -> None:
     assert result.rate_limited is True
     assert result.ok is False
     assert result.response == ""
+
+
+def test_adapter_requires_file_change_on_write() -> None:
+    """AgyAdapter opts into the runner's file-change guard.
+
+    agy `-p` can exit 0 having written no file (the #2099 headless no-write
+    flake). The capability flag tells the runner to treat a write-mode run
+    that left the worktree byte-identical as a retryable error instead of a
+    silent false-success.
+    """
+    assert AgyAdapter.require_file_change_on_write is True
