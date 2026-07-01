@@ -100,10 +100,14 @@ RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
 MCP_CONFIG_PATH = PRIMARY_REPO / ".mcp.json"
 # gemini-cli RETIRED 2026-07-01 (no gemini-cli; the Google lane is now agy).
 # agy loads MCP NATIVELY from ~/.gemini/config/mcp_config.json, so it needs no
-# per-dispatch --mcp flag. Claude uses repo .mcp.json; Hermes lanes read
-# ~/.hermes/config.yaml natively and only need observability wiring here.
-MCP_SUPPORTED_AGENTS = frozenset({"claude", "deepseek", "grok", "qwen"})
-HERMES_MCP_AGENTS = frozenset({"deepseek", "grok", "qwen"})
+# per-dispatch --mcp flag. Claude gates on repo .mcp.json; the deepseek Hermes
+# lane gates on ~/.hermes/config.yaml (which it reads natively at runtime).
+# grok/qwen Hermes MCP is DEFERRED (#2131 follow-up): grok routes through the
+# native grok CLI (not Hermes), and qwen's adapter lacks the mcp__sources__ ->
+# mcp_sources_ prompt rewrite — advertising them would let a dry-run claim MCP
+# is on while no MCP path fires. Re-add each once its runtime wiring lands.
+MCP_SUPPORTED_AGENTS = frozenset({"claude", "deepseek"})
+HERMES_MCP_AGENTS = frozenset({"deepseek"})
 HERMES_MCP_TASK_CLASSES = frozenset({"draft", "edit"})
 CLAUDE_MCP_TASK_CLASSES = frozenset({"review", "search"})
 
@@ -310,6 +314,39 @@ def _available_mcp_servers() -> list[str]:
     if not isinstance(servers, dict):
         return []
     return sorted(servers.keys())
+
+
+def _available_hermes_mcp_servers() -> list[str]:
+    """Return MCP server names the Hermes lanes can reach.
+
+    Hermes discovers MCP servers from ``~/.hermes/config.yaml`` at runtime, NOT
+    from the repo ``.mcp.json`` (which is gitignored and absent on clean
+    checkouts). Gating the deepseek ``--mcp`` path on ``.mcp.json`` would reject
+    a valid request on any machine/CI that lacks that local file — so Hermes
+    lanes gate here instead. Returns only servers that are enabled and have a
+    reachable endpoint.
+    """
+    hermes_config = Path.home() / ".hermes" / "config.yaml"
+    if not hermes_config.is_file():
+        return []
+    try:
+        import yaml  # hermes/deepseek adapters already depend on PyYAML
+    except ImportError:
+        return []
+    try:
+        data = yaml.safe_load(hermes_config.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    servers = (data or {}).get("mcp_servers")
+    if not isinstance(servers, dict):
+        return []
+    return sorted(
+        name
+        for name, cfg in servers.items()
+        if isinstance(cfg, dict)
+        and cfg.get("enabled") is not False
+        and (cfg.get("url") or cfg.get("command"))
+    )
 
 
 def _load_claude_translation_tools() -> str:
@@ -789,8 +826,8 @@ def main() -> int:
         help=(
             "Enable a named MCP server for this dispatch "
             "(e.g. --mcp sources for Ukrainian corpus verification). "
-            "Claude: review/search task classes. Hermes lanes (deepseek, "
-            "grok, qwen): draft/edit task classes. agy loads MCP natively."
+            "Claude: review/search task classes. Hermes lane (deepseek): "
+            "draft/edit task classes. agy loads MCP natively."
         ),
     )
     args = p.parse_args()
@@ -825,11 +862,20 @@ def main() -> int:
                 f"{', '.join(sorted(MCP_SUPPORTED_AGENTS))} "
                 f"(got agent={args.agent!r}); agy loads MCP natively, no flag needed"
             )
-        available = _available_mcp_servers()
+        available = (
+            _available_hermes_mcp_servers()
+            if args.agent in HERMES_MCP_AGENTS
+            else _available_mcp_servers()
+        )
         if args.mcp not in available:
+            source = (
+                "~/.hermes/config.yaml"
+                if args.agent in HERMES_MCP_AGENTS
+                else ".mcp.json"
+            )
             p.error(
-                f"unknown MCP server {args.mcp!r}; "
-                f"available: {', '.join(available) or '(none)'}"
+                f"unknown MCP server {args.mcp!r} for agent {args.agent!r}; "
+                f"available in {source}: {', '.join(available) or '(none)'}"
             )
 
     tool_config = (
