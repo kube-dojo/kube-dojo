@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 190 — UK "AI for Kubernetes & Platform Work" via Sonnet-5+MCP (PR #2136)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 190 — UK "AI for Kubernetes &amp; Platform Work" translated (5 files) via the Sonnet-5+MCP default lane</h1>
+<p class="meta">2026-07-02. First <strong>production run</strong> of the s189b-resolved default UK author lane: <strong>Sonnet-5 + <code>sources</code> MCP at high effort</strong>. Translated the whole <code>ai/ai-for-kubernetes-platform-work</code> section — <code>index.md</code> + modules 1.1–1.4 — corpus-grounded (11–24 dictionary calls/file), then cross-family reviewed across three families in two rounds. The review earned its keep: it caught real, gate-invisible defects on 4/5 files (a Russian calque, redact false-friends, an apostrophe-style outlier, drain terminology, mistranslations). All fixed + MCP-verified. <strong>PR #2136 merged, 12/12 CI green.</strong> The lane works in production.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#2136</td><td><span class="pill merged">MERGED</span></td><td>docs(uk): translate "AI for Kubernetes &amp; Platform Work" section (5 files)</td><td>5 Sonnet+MCP authors → deterministic gates → 6 cross-family reviews (2 rounds) → 3 fix-passes → build → rebase-merge; 12/12 CI green incl. Astro build + Ukrainian Russicism</td></tr>
+</table>
+<p>Section is now <strong>UK-complete 5/5</strong>. Files live under <code>src/content/docs/uk/ai/ai-for-kubernetes-platform-work/</code>. Local main synced to merge commit <code>997411aeb</code>; work + review worktrees removed.</p>
+
+<h2>The lane in production — what worked</h2>
+<p>The decision (<code>docs/decisions/2026-07-02-uk-default-translation-author.md</code>) chose Sonnet-5+MCP because it fully translates on both light and jargon-dense modules, uses the corpus, and near-zero code-switches. This session confirmed it end-to-end:</p>
+<ul>
+<li><strong>Author lane = a Claude subagent (Agent tool, model sonnet)</strong> reading a canonical brief (<code>scratchpad/uk-author-brief-s190.md</code>) — because <code>dispatch_smart draft --agent claude --mcp</code> is gated off. High effort was triggered by a <strong>prompt-level extended-thinking directive</strong> (the claude adapter has no effort flag).</li>
+<li><strong>Every author actually used the corpus MCP</strong>: 15 (1.3), 15 (1.1), 20+ (1.2), 24 (1.4), 11 (index) verification calls against VESUM / SUM-20 / frazeolohichnyi / style-guide / EN↔UK dictionaries. The index author caught two of its own errors mid-draft (рев'ю gender; invented «тріажування» → verified «тріаж»). The 1.1 fix-pass declined a literal suggestion because «аліас» is absent from VESUM, using the attested «псевдонім» instead.</li>
+<li><strong>Structural parity was exact on every file</strong> (headings, code fences, tables, lists, blockquotes all match; word ratios 91–96% — faithful, no padding).</li>
+<li>Idiom guidance baked into the brief worked: scavenger hunt→<code>хаотичний пошук</code>, bear the pager→<code>чергувати</code>, bridge call→<code>конференц-дзвінок</code>, command "against"→<code>до/на</code>.</li>
+</ul>
+
+<h2>What cross-family review caught (all gate-invisible; deterministic gates passed them)</h2>
+<table>
+<tr><th>File</th><th>Reviewer</th><th>Defect → fix</th></tr>
+<tr><td>1.4</td><td>deepseek R1</td><td><strong>Russian calque</strong> <code>викатка</code>/<code>викочуй</code> ×14 → <code>розгортання</code>/<code>розгортай</code>. deepseek was sandboxed w/o MCP and asked me to verify — I did: <code>викатка</code> is <strong>NOT in VESUM</strong>; corpus uses <code>розгортання</code> 2852× vs <code>викатка</code> 3×. Confirmed real.</td></tr>
+<tr><td>1.2</td><td>agy R1 + codex R2</td><td><strong>Apostrophe-declension outlier</strong>: 1.2 had 33 <code>taint'и</code>/<code>Deployment'а</code> tokens; the other 4 files had 0. (Corpus-valid — 5174 occ / 157 files — but a lone section outlier.) Normalized to sibling style. Plus <strong>redact false-friend</strong> <code>редагування</code>→<code>маскування</code> (6 occ), «валять DNS» slang→«зазнають збоїв DNS», «інвестигаційний»→«план розслідування», <code>worker-вузла</code>→<code>робочого вузла</code>, «мітки taint» (label confusion)→<code>taint-и</code>.</td></tr>
+<tr><td>1.3</td><td>codex R1 + agy R2</td><td>Garbled "bear the pager / customer impact / audit trail" tri-clause; two duplicate «перегляду/перегляду» (lost "review <em>and revise</em>"); <strong>redact false-friend</strong> «редагуйте/нередаговані секрети»→«маскуйте/незамасковані» (incl. a 3rd table-cell sibling agy caught that R1 missed — the class-A "fix ALL siblings" lesson); <strong>5 hands-on <code>rg</code> commands grepping English keywords</strong> while translated prompts ask for Ukrainian output → Ukrainian stems; <code>kubectl drain</code> «спорожнити»→«вивести/дренувати вузол» ×3; "summarize away" calque.</td></tr>
+<tr><td>1.1</td><td>deepseek R1</td><td>«вправному»(skillful)→«плавному» for "fluent"; «вигаданими»(fabricated)→«припущеними» for "assumed"; «на нодах»→«на вузлах». Also normalized <code>продакшн</code>→<code>продакшен</code> (18×, glossary-canonical) inline before review.</td></tr>
+<tr><td>index</td><td>agy R1</td><td>«відмінний фактор» calque + «розділ…розділу» tautology→«ключовою відмінністю для треку»; accusative-animacy «недовіреного оператора»; «автопілотоване»/«гостріше» calques; «Мета — це:»→«Метою є:».</td></tr>
+</table>
+
+<h2>Review lessons (worth remembering)</h2>
+<ul>
+<li><strong>Verify reviewer flags — both ways.</strong> deepseek's <code>викатка</code> flag was <em>real</em> (MCP-confirmed) but its <code>продакшн</code>-is-better nit was <em>wrong</em> (contradicts glossary + #2110). agy's grammar flag <code>відповідєю</code> was a <strong>false positive</strong> — the actual file text is the correct <code>відповіддю</code> (caught by grepping the file). Never act on a sandboxed reviewer's claim without checking the source.</li>
+<li><strong>Class-A "fix ALL siblings."</strong> Giving the first fix-pass only codex's 2 listed redact lines left a 3rd (table cell) that agy's re-review caught. The final fix-pass, told to grep for all siblings, found <strong>6</strong> redact instances in 1.2, not 3. Always instruct fix-passes to fix every occurrence.</li>
+<li><strong>Converge after two rounds.</strong> R1→fix→R2 caught real defects; a hypothetical R3 would only surface stylistic nits indefinitely. Ship on confirmed P1/P2 + clean deterministic gates, not endless polish.</li>
+<li><strong>Apostrophe-declension is corpus-valid but was a section outlier.</strong> The decision to normalize 1.2 was about intra-section consistency (4/5 files + brief rule #5), not correctness. A corpus-wide normalization is a separate 157-file call — <em>not</em> made unilaterally.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>module-1.3 author</td><td>claude/sonnet subagent + sources MCP</td><td>draft (high-effort)</td><td>93.7% ratio, 15 MCP calls, idioms fixed</td></tr>
+<tr><td>module-1.1 author</td><td>claude/sonnet + MCP</td><td>draft</td><td>91.5% ratio, 15 MCP calls</td></tr>
+<tr><td>module-1.2 author</td><td>claude/sonnet + MCP</td><td>draft</td><td>95.9% ratio, 20+ MCP calls</td></tr>
+<tr><td>module-1.4 author</td><td>claude/sonnet + MCP</td><td>draft</td><td>94.3% ratio, 24 MCP calls</td></tr>
+<tr><td>index author</td><td>claude/sonnet + MCP</td><td>draft</td><td>333 words, 11 MCP calls, self-caught 2 errors</td></tr>
+<tr><td>review 1.3 (R1)</td><td>codex gpt-5.5</td><td>review</td><td>failed 1st (no scratch worktree) → retried; 10 P2</td></tr>
+<tr><td>review 1.2 (R1)</td><td>agy gemini-3.1-pro</td><td>review</td><td>NEEDS_CHANGES (apostrophe, slang, calque)</td></tr>
+<tr><td>review 1.1 (R1)</td><td>deepseek-v4-pro</td><td>review</td><td>APPROVE_WITH_NITS (3 P2)</td></tr>
+<tr><td>review 1.4 (R1)</td><td>deepseek-v4-pro</td><td>review</td><td>NEEDS_CHANGES (викатка Russicism)</td></tr>
+<tr><td>review index (R1)</td><td>agy gemini-3.1-pro</td><td>review</td><td>NEEDS_CHANGES (4 P1 + 1 P2)</td></tr>
+<tr><td>review 1.2 (R2 post-fix)</td><td>codex gpt-5.5</td><td>review</td><td>4 P2 (redact sibling, worker-node, taint/topology)</td></tr>
+<tr><td>review 1.3 (R2 post-fix)</td><td>agy gemini-3.1-pro</td><td>review</td><td>1 P1 (missed redact table cell) + 3 P2</td></tr>
+<tr><td>fix-pass #1</td><td>claude/sonnet + MCP</td><td>edit</td><td>1.1 (3) + 1.2 (apostrophe 33→0 + 2)</td></tr>
+<tr><td>fix-pass #2</td><td>claude/sonnet + MCP</td><td>edit</td><td>1.3 (10) + 1.4 (14) + index (5)</td></tr>
+<tr><td>fix-pass #3 (final)</td><td>claude/sonnet + MCP</td><td>edit</td><td>1.2 (9, incl. 6 redact) + 1.3 (6)</td></tr>
+</table>
+<p>Deterministic gates run inline each round: <code>ab_parity.py</code> (structural), <code>check_uk_changed.py</code> (CI russicism gate — clean/exit 0 on all 5), <code>uk_calque_v2.py</code> (0 findings), <code>uk_guards.sh</code> (hybrid/corruption), and <code>npm run build</code> (0 errors, 2169 pages, 5/5 UK pages rendered).</p>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>Top priority (s191): continue the UK <code>ai</code> volume with the same Sonnet-5+MCP lane</strong> — <code>ai-native-work</code> (5) → <code>open-models-local-inference</code> (8) → <code>ai-ml-engineering</code> (142, 0% UK). Reuse the <code>scratchpad/</code> pipeline (<code>uk-author-brief-s190.md</code>, <code>ab_parity.py</code>, <code>stray_english.py</code>, <code>uk_guards.sh</code>, <code>uk_review.sh</code>) — gitignored, recreate per session. <strong>codex needs a <code>.worktrees/uk-review-scratch</code> worktree to review</strong> (create it once at session start, or add <code>--new-branch</code>).</li>
+<li><strong>#2134</strong> — wire a clean <code>dispatch_smart</code> Sonnet-5 + sources-MCP author lane (+ effort plumbing) so authoring doesn't depend on the Agent-tool subagent workaround.</li>
+<li><strong>#2086</strong> — encode "translation done = ≥2–3-family cross-family review" + wire reviewer MCP (deepseek reviews are sandboxed w/o the corpus → I must MCP-adjudicate their flags manually, as this session did for <code>викатка</code>).</li>
+<li><strong>GLM</strong> pending user <code>ZAI_API_KEY</code> → wires via the hermes <code>zai</code> provider + the deepseek mcp-rewrite template (recipe known; qwen wiring was reverted as too expensive).</li>
+<li><strong>#2110</strong> — corpus-wide <code>production</code> Latin→<code>продакшен</code> Cyrillic normalization (this session normalized it within the new section; the wider sweep remains).</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>src/content/docs/uk/ai/ai-for-kubernetes-platform-work/index.md</code> — new UK index (merged #2136)</li>
+<li><code>.../module-1.1-ai-for-yaml-manifests-config-review.md</code> — new UK translation</li>
+<li><code>.../module-1.2-ai-for-kubernetes-troubleshooting-and-triage.md</code> — new UK translation</li>
+<li><code>.../module-1.3-ai-for-platform-and-sre-workflows.md</code> — new UK translation</li>
+<li><code>.../module-1.4-trust-boundaries-for-infrastructure-ai-use.md</code> — new UK translation</li>
+<li><code>docs/session-state/2026-07-02-session-190-*.html</code> + <code>STATUS.md</code> — this handoff (this commit)</li>
+</ul>
+
+</body></html>
