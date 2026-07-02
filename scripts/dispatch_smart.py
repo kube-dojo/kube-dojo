@@ -811,22 +811,52 @@ def fire(
         else:
             sys.path.insert(0, str(REPO / "scripts"))
             from agent_runtime.runner import invoke
-
-            result = invoke(
-                agent,
-                prompt,
-                mode=mode,
-                cwd=worktree,
-                model=model,
-                task_id=task_id,
-                tool_config=tool_config,
-                entrypoint="delegate",
-                hard_timeout=timeout_s,
+            from agent_runtime.errors import (
+                AgentStalledError,
+                AgentTimeoutError,
+                AgentUnavailableError,
+                RateLimitedError,
             )
-            ok = bool(result.ok)
-            response = result.response or ""
-            session_id = result.session_id
-            stderr_excerpt = result.stderr_excerpt or ""
+
+            max_retries = 3 if agent == "agy" else 1
+            base_delay = 10
+            
+            for attempt in range(max_retries):
+                try:
+                    result = invoke(
+                        agent,
+                        prompt,
+                        mode=mode,
+                        cwd=worktree,
+                        model=model,
+                        task_id=task_id,
+                        tool_config=tool_config,
+                        entrypoint="delegate",
+                        hard_timeout=timeout_s,
+                    )
+                    ok = bool(result.ok)
+                    response = result.response or ""
+                    session_id = result.session_id
+                    stderr_excerpt = result.stderr_excerpt or ""
+                    
+                    if ok:
+                        break
+                        
+                    if attempt < max_retries - 1:
+                        err_text = stderr_excerpt or "no final message"
+                        print(f"⚠️  {agent} failed ({err_text}), retrying {attempt+1}/{max_retries}...")
+                        time.sleep(base_delay * (2 ** attempt))
+                        continue
+                        
+                except (RateLimitedError, AgentStalledError, AgentTimeoutError, AgentUnavailableError) as exc:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️  {agent} error ({exc}), retrying {attempt+1}/{max_retries}...")
+                        time.sleep(base_delay * (2 ** attempt))
+                        continue
+                    ok = False
+                    response = ""
+                    session_id = None
+                    stderr_excerpt = f"{type(exc).__name__}: {exc}"
     except Exception as exc:  # surface the failure but still log it
         ok = False
         response = ""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from agent_runtime import runner as agent_runner
 from agent_runtime.errors import (
@@ -109,45 +110,69 @@ def process_for_agy(
     else:
         print(f"   Hard timeout: {timeout_val}s")
 
-    try:
-        result = agent_runner.invoke(
-            _AGENT_NAME,
-            prompt,
-            mode="read-only",
-            cwd=REPO_ROOT,
-            model=model,
-            task_id=msg["task_id"],
-            session_id=None,
-            tool_config=None,
-            entrypoint="bridge",
-            hard_timeout=timeout_val,
-            stall_timeout=min(600, timeout_val),
-        )
-    except RateLimitedError as exc:
-        _handle_error(msg, message_id, f"{_AGENT_TITLE} rate limited: {exc}")
-        return
-    except AgentStalledError as exc:
-        _handle_error(msg, message_id, f"{_AGENT_TITLE} stalled: {exc}")
-        return
-    except AgentTimeoutError as exc:
-        _handle_error(msg, message_id, f"{_AGENT_TITLE} hard timeout: {exc}")
-        return
-    except AgentUnavailableError as exc:
-        _handle_error(msg, message_id, f"{_AGENT_TITLE} unavailable: {exc}")
-        return
+    max_retries = 3
+    base_delay = 10
+    
+    for attempt in range(max_retries):
+        try:
+            result = agent_runner.invoke(
+                _AGENT_NAME,
+                prompt,
+                mode="read-only",
+                cwd=REPO_ROOT,
+                model=model,
+                task_id=msg["task_id"],
+                session_id=None,
+                tool_config=None,
+                entrypoint="bridge",
+                hard_timeout=timeout_val,
+                stall_timeout=min(600, timeout_val),
+            )
+        except RateLimitedError as exc:
+            if attempt < max_retries - 1:
+                print(f"⚠️  {_AGENT_TITLE} rate limited ({exc}), retrying {attempt+1}/{max_retries}...")
+                time.sleep(base_delay * (2 ** attempt))
+                continue
+            _handle_error(msg, message_id, f"{_AGENT_TITLE} rate limited: {exc}")
+            return
+        except AgentStalledError as exc:
+            if attempt < max_retries - 1:
+                print(f"⚠️  {_AGENT_TITLE} stalled ({exc}), retrying {attempt+1}/{max_retries}...")
+                time.sleep(base_delay * (2 ** attempt))
+                continue
+            _handle_error(msg, message_id, f"{_AGENT_TITLE} stalled: {exc}")
+            return
+        except AgentTimeoutError as exc:
+            if attempt < max_retries - 1:
+                print(f"⚠️  {_AGENT_TITLE} hard timeout ({exc}), retrying {attempt+1}/{max_retries}...")
+                time.sleep(base_delay * (2 ** attempt))
+                continue
+            _handle_error(msg, message_id, f"{_AGENT_TITLE} hard timeout: {exc}")
+            return
+        except AgentUnavailableError as exc:
+            if attempt < max_retries - 1:
+                print(f"⚠️  {_AGENT_TITLE} unavailable ({exc}), retrying {attempt+1}/{max_retries}...")
+                time.sleep(base_delay * (2 ** attempt))
+                continue
+            _handle_error(msg, message_id, f"{_AGENT_TITLE} unavailable: {exc}")
+            return
 
-    if not result.ok:
-        _handle_error(
-            msg,
-            message_id,
-            result.stderr_excerpt or f"{_AGENT_TITLE} returned no final message",
-        )
-        return
+        if not result.ok or not result.response:
+            err_text = result.stderr_excerpt or f"{_AGENT_TITLE} returned no final message"
+            if attempt < max_retries - 1:
+                print(f"⚠️  {_AGENT_TITLE} failed ({err_text}), retrying {attempt+1}/{max_retries}...")
+                time.sleep(base_delay * (2 ** attempt))
+                continue
+            _handle_error(
+                msg,
+                message_id,
+                err_text,
+            )
+            return
+            
+        break
 
     response = result.response
-    if not response:
-        _handle_error(msg, message_id, f"{_AGENT_TITLE} returned no final message")
-        return
 
     print(f"\n✅ {_AGENT_TITLE} finished ({len(response)} chars)")
     reply_id = send_message(

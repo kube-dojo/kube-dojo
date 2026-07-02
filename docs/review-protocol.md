@@ -42,6 +42,7 @@ REVIEW RULES:
 3. "Missing" claims require proof of absence. If you cannot quote the file or show a search proving absence, delete the finding or demote it to a question.
 4. Do not invent line numbers. Every cited line must exist on the reviewed branch.
 5. Self-check before submit: if the code might exist outside the diff, read/search the file before reporting.
+6. cite verify_word output before asserting word/form-existence claims or spelling/declension rules. Stylistic and naturalness judgments (e.g., 'reads as translationese' or 'awkward') do not require verification.
 
 OUTPUT:
 1. Verdict: APPROVE / NEEDS CHANGES / REJECT
