@@ -455,4 +455,4 @@ Success criteria:
 
 ## Next Module
 
-Continue to [AI-Native Work](../../ai-native-work/) to examine how workflows, tools, and team practices change when AI becomes a regular part of engineering delivery.
+Continue to [AI Engineering Foundations](../../ai-engineering-foundations/) to learn the prompt, context, safety, and workflow foundations that bridge AI literacy into disciplined AI-supported engineering work.

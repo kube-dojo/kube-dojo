@@ -36,4 +36,4 @@ By the end of this section, you should be able to:
 
 ## Next Section
 
-Continue to [AI-Native Work](../ai-native-work/).
+Continue to [AI Engineering Foundations](../ai-engineering-foundations/).
