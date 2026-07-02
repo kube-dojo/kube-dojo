@@ -32,7 +32,7 @@ By the end of this track, you'll be able to:
 - Know what "the cloud" actually means (spoiler: it's not magic)
 - **Deploy a real website using nothing but the terminal**
 
-This track leads to **two paths**: Linux Deep Dive (systems internals) and Cloud Native (containers, Kubernetes). Most senior engineers know both.
+This track leads into the main prerequisites route — **Cloud Native 101** and then **Kubernetes Basics** — with **Linux Deep Dive** as an optional systems-internals fork you can take anytime. Most senior engineers eventually know both.
 
 ---
 
