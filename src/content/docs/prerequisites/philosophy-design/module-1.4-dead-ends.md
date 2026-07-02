@@ -449,4 +449,4 @@ A strong plan identifies Swarm as the production orchestration risk because it l
 
 ## Next Module
 
-[Cloud Native 101](/prerequisites/cloud-native-101/module-1.1-what-are-containers/) continues with the container fundamentals behind the platform choices you just evaluated.
+[Git Deep Dive: Git Internals](/prerequisites/git-deep-dive/module-1-git-internals/) continues the prerequisites path with professional Git workflows—the foundation for IaC, GitOps, and team delivery in the next section.

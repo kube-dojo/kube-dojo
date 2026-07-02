@@ -6,7 +6,7 @@ sidebar:
 
 The practices and tools that define modern software delivery. Modern DevOps is more than just combining development and operations; it is a cultural and technical shift towards automation, collaboration, and continuous improvement. In this section, we explore the foundational practices that enable teams to deliver software rapidly, reliably, and securely.
 
-Understanding these concepts is critical before diving into container orchestration and cloud-native architecture. Kubernetes and cloud platforms are built to support and accelerate these exact patterns. By mastering the principles of declarative infrastructure, automated pipelines, and comprehensive observability, you will be better equipped to design and manage resilient systems.
+This capstone section consolidates delivery patterns you have already met in Kubernetes—declarative desired state, Git-driven change, automated rollouts, and production feedback loops—and names the wider DevOps practices that surround them. By connecting IaC, GitOps, CI/CD, observability, platform engineering, and DevSecOps to the cluster work you have done, you will be better equipped to design and manage resilient systems end to end.
 
 The modules in this section cover the spectrum of modern delivery, from provisioning infrastructure with code to securing the entire software lifecycle.
 

@@ -613,4 +613,4 @@ If the output matches your expectations, your directory structure is mathematica
 
 ## Next Module
 
-[Philosophy and Design course](../../philosophy-design/) — Dive deeper into the architectural principles that govern robust, resilient platform engineering.
+[Modern DevOps: Infrastructure as Code](/prerequisites/modern-devops/module-1.1-infrastructure-as-code/) — Apply the Git-as-source-of-truth habits from this course to declarative infrastructure, automated pipelines, and production delivery.
