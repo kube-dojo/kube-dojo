@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 189b — full-field author A/B WITH MCP → Sonnet-5+MCP chosen</title>
+<style>
+ body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:960px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+ h1{font-size:1.45rem;border-bottom:3px solid #2b6cb0;padding-bottom:.3rem}
+ h2{font-size:1.15rem;margin-top:1.8rem;color:#2b6cb0;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+ code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9em}
+ th,td{border:1px solid #cbd5e0;padding:.4rem .6rem;text-align:left;vertical-align:top}
+ th{background:#edf2f7}.win{background:#f0fff4}.lose{background:#fff5f5}
+ .tl{background:#ebf8ff;border-left:4px solid #2b6cb0;padding:.8rem 1rem;margin:1rem 0}
+</style>
+</head>
+<body>
+<h1>Session 189b — full-field author A/B WITH MCP → default author = Sonnet-5 + MCP</h1>
+<p><strong>2026-07-02.</strong> User pushback on s189: "test ALL models with mcp… don't be lazy." s189 had only tested deepseek+MCP vs Sonnet-5-no-MCP and (wrongly) recommended keeping deepseek. Redone properly: every author lane corpus-grounded via the <code>sources</code> MCP.</p>
+
+<div class="tl"><strong>Outcome:</strong> the full field flipped the conclusion. <strong>Sonnet-5+MCP is the default UK author</strong> (user: "i say we use sonnet… i prefer quality"). deepseek — the s188/round-1 "winner" — is the <em>weakest</em> capable model on semantic fidelity and barely uses the MCP. Decision: <code>docs/decisions/2026-07-02-uk-default-translation-author.md</code>.</div>
+
+<h2>MCP wiring per lane (what the "test all" required)</h2>
+<ul>
+<li><strong>Native MCP</strong> (read own config, no dispatch flag): <code>agy</code> ✓, <code>codex</code> ✓, <code>grok</code> (config OK but dispatch-time "not connected"), <code>cursor</code> (needs <code>.cursor/mcp.json</code>). Verified each fires the real VESUM tool live.</li>
+<li><strong>Hermes rewrite</strong> (<code>mcp__sources__X</code>→<code>mcp_sources_X</code>): <code>deepseek</code> ✓ (#2131). qwen was wired+verified then <strong>reverted</strong> (user: too expensive) — it's the GLM template.</li>
+<li><strong>claude/Sonnet-5</strong>: <code>claude draft --mcp</code> is gated off → ran via a Claude <strong>subagent</strong> (inherits <code>sources</code> MCP). Clean lane = issue <strong>#2134</strong>.</li>
+</ul>
+
+<h2>Scoreboard — module-1.3 (light) + Sonnet-5 confirm on module-2.4 (dense jargon)</h2>
+<table>
+<tr><th>model</th><th>ratio</th><th>code-switch</th><th>stray-Eng</th><th>K8s terms</th><th>uses MCP?</th><th>verdict</th></tr>
+<tr class="win"><td><strong>Sonnet-5+MCP</strong></td><td>0.94</td><td>~0–5</td><td>156 / <b>139 on dense 2.4</b></td><td>✓✓✓</td><td><b>yes (12 calls + glossary)</b></td><td><b>WINNER</b> — full translation on light AND dense, correct terms</td></tr>
+<tr><td>codex+MCP</td><td>0.92</td><td>8</td><td>137 (light) / <span class="lose">~976 on dense</span></td><td>✓✓✓ (light)</td><td>native (unconf.)</td><td>under-translates dense jargon → risky for ai-ml</td></tr>
+<tr class="lose"><td>deepseek+MCP</td><td>0.94</td><td>1</td><td>113</td><td>✗✗✗ (`зараження`/`завислі`/`вигорання`)</td><td>~2 calls (ignores)</td><td>false-friends + won't call tools → OUT</td></tr>
+<tr><td>agy+MCP</td><td>0.99</td><td>1</td><td>128</td><td>✓✓</td><td>native</td><td>strong but <b>write-flaky</b> (sandbox-write; rescued)</td></tr>
+<tr><td>grok+MCP</td><td>0.93</td><td>0</td><td>148</td><td>~translit (`тейнти`)</td><td>dispatch-flaky</td><td>SLO-burn ✗; heavy transliteration</td></tr>
+<tr><td>cursor+MCP</td><td>0.92</td><td>8</td><td>231</td><td>✓ (by NOT translating)</td><td>native</td><td>worst under-translation</td></tr>
+</table>
+<p><strong>Key confound caught:</strong> module-1.3 has ~6 jargon terms vs 2.4's ~351 (~60×). codex looked good on 1.3 only because its under-translation failure mode wasn't exercised — on dense 2.4 it leaves ~976 English. Sonnet-5+MCP on the same dense 2.4 kept only 139 stray-English (translated retrieval→пошук, eviction→витіснення[verified not-a-calque], handoff→передача, ledger→журнал, transcript→транскрипт), 0 code-switch, perfect parity.</p>
+
+<h2>Corrections I owe (user caught both)</h2>
+<ul>
+<li><strong>Cost:</strong> codex and Sonnet BOTH run on subscriptions already paid (no marginal per-token cost); only deepseek is per-token API. "codex is cheaper than Sonnet" was a false distinction.</li>
+<li><strong>Effort:</strong> the A/B Sonnet arm ran at <em>default</em> effort (Agent tool has no effort knob; claude adapter has no effort flag) — not the "Sonnet-5-high" the plan called for. High effort → prompt-level thinking directive (immediate) or effort plumbing (#2134).</li>
+</ul>
+
+<h2>DO-NEXT (s190)</h2>
+<p>Resume ai volume with <strong>Sonnet-5+MCP at high effort</strong> (prompt-level thinking directive), idiom guidance baked into the brief (scavenger hunt→<code>хаотичний пошук</code>, bear the pager→<code>чергувати</code>, bridge call→<code>конференц-дзвінок</code>), keep-English K8s terms (<code>taint</code>, <code>Pod→Под</code> prose). <code>ai-for-kubernetes-platform-work</code> (1.3 Sonnet-drafted in <code>scratchpad/ab_sonnet5mcp_module-1.3.md</code>, needs idiom fix + high-effort re-run before shipping) → ai-native-work → open-models-local-inference → ai-ml-engineering (142). GLM pending user <code>ZAI_API_KEY</code> (hermes <code>zai</code> provider + deepseek rewrite template). Clean Sonnet lane = #2134.</p>
+</body>
+</html>
