@@ -9,7 +9,7 @@ revision_pending: false
 >
 > **Time to Complete**: 45-55 minutes
 >
-> **Prerequisites**: None - this is where everyone starts
+> **Prerequisites**: [Cloud Native 101](/prerequisites/cloud-native-101/) and [Kubernetes Basics](/prerequisites/kubernetes-basics/) — you should already understand containers, orchestration at a high level, and hands-on `kubectl` workflows before examining why Kubernetes won and how its design shapes operations.
 
 ---
 

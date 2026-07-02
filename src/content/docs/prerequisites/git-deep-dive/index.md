@@ -37,6 +37,6 @@ Every module uses Kubernetes manifests, Helm charts, and real infrastructure fil
 ## After This Course
 
 You're ready for:
-- [Philosophy & Design](../philosophy-design/) — declarative thinking pairs with git workflows
-- [Modern DevOps](../modern-devops/) — CI/CD and GitOps build directly on this course
+- [Modern DevOps](../modern-devops/) — the next step on the prerequisites route; CI/CD and GitOps build directly on this course
 - [CKA Certification](../../k8s/cka/) — git skills used throughout exam prep
+- [Linux](../linux/) — optional deeper systems knowledge if you skipped the Linux fork earlier

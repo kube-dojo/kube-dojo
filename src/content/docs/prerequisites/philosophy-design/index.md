@@ -4,7 +4,7 @@ sidebar:
   order: 0
 ---
 
-Before diving into the technical mechanics of Kubernetes, it is crucial to understand why it exists and the fundamental shift in thinking it requires. This section explores the historical context of container orchestration and the specific architectural choices that propelled Kubernetes to become the undisputed industry standard. 
+After hands-on work in Cloud Native 101 and Kubernetes Basics, this section steps back to explain why Kubernetes works the way it does and which legacy patterns are not worth your time. It explores the historical context of container orchestration and the architectural choices that propelled Kubernetes to become the undisputed industry standard. 
 
 We will examine the core philosophy of declarative system management over imperative commands, which is the foundation of Kubernetes' resilience, automation, and scalability. By understanding this paradigm shift, you will be better equipped to design, operate, and troubleshoot modern cloud-native applications without fighting the platform's natural design.
 

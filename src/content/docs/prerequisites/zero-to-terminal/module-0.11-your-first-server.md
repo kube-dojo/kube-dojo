@@ -537,18 +537,18 @@ The success criteria are intentionally broader than "the page loaded once." A fi
 
 ## Next Module
 
-You have finished **Zero to Terminal**. From here, choose [Linux Fundamentals](/linux/) if you want to go deeper into operating systems, or start [Cloud Native 101](/prerequisites/cloud-native-101/module-1.1-what-are-containers/) if you want to turn this first server into a foundation for containers and Kubernetes.
+You have finished **Zero to Terminal**. On the suggested prerequisites route, continue into **[Cloud Native 101](/prerequisites/cloud-native-101/module-1.1-what-are-containers/)** and then **[Kubernetes Basics](/prerequisites/kubernetes-basics/module-1.1-first-cluster/)** to turn this first-server capstone into containers and hands-on cluster work.
+
+**Optional:** [Linux Fundamentals](/linux/) deepens kernel, process, networking, and security knowledge if you want a systems fork—not required before Cloud Native 101.
 
 ```mermaid
 graph TD
-    Current(["YOU ARE HERE<br/>Module 0.11 (Capstone)"]) --> PathA["Path A<br/>Linux Deep Dive"]
-    Current --> PathB["Path B<br/>Cloud Native 101"]
+    Current(["YOU ARE HERE<br/>Module 0.11 (Capstone)"]) --> Default["Suggested route<br/>Cloud Native 101"]
+    Default --> K8s["Kubernetes Basics"]
+    Current -.-> Optional["Optional fork<br/>Linux Deep Dive"]
 
-    PathA --> L1["Kernel, processes<br/>Networking internals<br/>Security, hardening"]
-    PathB --> C1["Containers, Docker<br/>Kubernetes basics<br/>CKA certification"]
-
-    L1 --> PE["Platform Engineering<br/>(SRE, GitOps, DevSecOps)"]
-    C1 --> PE
+    K8s --> Route["Philosophy & Design → Git Deep Dive → Modern DevOps"]
+    Optional -.-> LinuxDepth["Kernel, processes<br/>Networking internals<br/>Security, hardening"]
 ```
 
-Both paths build on the same request-response model you practiced here. Linux deepens your understanding of processes, filesystems, permissions, and networking internals, while Cloud Native 101 shows how containers and orchestration turn single-server lessons into repeatable deployment patterns. Pick the path that makes you want to open a terminal again, and keep the habit this module taught: trace the system before you change it.
+Cloud Native 101 shows how containers and orchestration turn single-server lessons into repeatable deployment patterns. Linux deepens the same request-response model at the operating-system layer. If you are following the hub route, start with Cloud Native 101 and treat Linux as a parallel option you can pick up anytime.

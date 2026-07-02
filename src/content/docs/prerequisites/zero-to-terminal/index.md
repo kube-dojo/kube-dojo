@@ -85,36 +85,26 @@ This analogy will carry you all the way from here to Kubernetes, where you'll ma
 
 ## What's Next?
 
-After completing Zero to Terminal, the road forks into two paths:
+On the **suggested prerequisites route**, continue straight into Cloud Native 101 and then Kubernetes Basics—the linear spine from terminal skills to hands-on cluster work.
 
-### Path A: Linux Deep Dive
+**Default next step:** [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/) — containers, Docker, and the cloud-native ecosystem.
 
-You loved the terminal? Go deeper into how Linux actually works -- the kernel, processes, networking internals, permissions, and security. This is the knowledge that makes you dangerous.
+**Optional fork:** [Linux Fundamentals](../../linux/) if you want deeper operating-system knowledge before operations-heavy work. Linux is not required for the main route; you can return to it anytime.
 
-> Start here: [Linux Fundamentals](../../linux/)
-
-### Path B: Cloud Native
-
-You want to build and deploy apps at scale? Learn containers, Docker, and Kubernetes. This is where the industry is heading.
-
-> Start here: [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/)
-
-### Path C: Both
-
-Most senior engineers know both. Start with whichever excites you more -- the other path will be here when you're ready. Both paths converge at **Platform Engineering** (SRE, GitOps, DevSecOps, MLOps).
+Most senior engineers eventually know both Linux depth and cloud-native delivery. If you are unsure where to go, start with Cloud Native 101 and keep the Linux path as a parallel option rather than an equal first choice.
 
 ```text
                Zero to Terminal
                      |
               Module 0.11 (Capstone)
                      |
-          +----------+----------+
-          |                     |
-     Linux Deep Dive      Cloud Native 101
-          |                     |
-          +----------+----------+
+          Cloud Native 101  (default — suggested route)
                      |
-            Platform Engineering
+            Kubernetes Basics
+                     |
+                     ...
+          
+          Linux Deep Dive  (optional fork — anytime)
 ```
 
 ---
