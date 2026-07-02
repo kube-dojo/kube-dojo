@@ -39,4 +39,4 @@ Every module uses Kubernetes manifests, Helm charts, and real infrastructure fil
 You're ready for:
 - [Modern DevOps](../modern-devops/) — the next step on the prerequisites route; CI/CD and GitOps build directly on this course
 - [CKA Certification](../../k8s/cka/) — git skills used throughout exam prep
-- [Linux](../linux/) — optional deeper systems knowledge if you skipped the Linux fork earlier
+- [Linux](/linux/) — optional deeper systems knowledge if you skipped the Linux fork earlier
