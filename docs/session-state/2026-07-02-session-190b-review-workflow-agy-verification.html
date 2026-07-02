@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 190b — optimized UK review workflow agreed + agy reliability fix verified (PR #2149)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 190b — optimized UK review workflow AGREED + agy reliability fix VERIFIED</h1>
+<p class="meta">2026-07-02 (cont. of s190). After shipping s190's translations, the user pushed on <strong>workflow optimization before more volume</strong>. Outcome: (1) rejected double-translation on evidence; (2) ran a 2-round <code>ab discuss</code> → an <strong>agreed single-translation structured-review workflow</strong> (decision doc); (3) diagnosed agy's chronic flakiness (harness, not model); (4) verified agy's own fix through <strong>three rounds under cross-family scrutiny</strong> → <strong>PR #2149 verified-ready</strong> (retry recovery proven by a fault-injection test). <strong>Translation volume is PAUSED (user).</strong> Next session: read GLM-5.2's review findings — a NEW, unproven reviewer, to be taken with a grain of salt.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>What</th></tr>
+<tr><td>#2136</td><td><span class="pill merged">MERGED</span></td><td>(s190) UK ai-for-kubernetes-platform-work — 5 files, Sonnet-5+MCP</td></tr>
+<tr><td>#2137</td><td><span class="pill merged">MERGED</span></td><td>(s190) handoff + STATUS index</td></tr>
+<tr><td>#2149</td><td><span class="pill inflight">OPEN — infra-lane to merge</span></td><td>fix(agy): headless-dispatch retry + MCP-grounding rule (#2099). <strong>Verified-ready</strong> (see below). Agent-runtime plumbing → infra lane gates + merges.</td></tr>
+</table>
+
+<h2>Decision locked — optimized UK review workflow (single translation)</h2>
+<p>Durable record: <code>docs/decisions/2026-07-02-uk-review-workflow.md</code>. Method: <code>ab discuss uk-review-workflow --with claude,codex,agy --max-rounds 2</code> → <strong>claude ⟂ codex converged (both [AGREE])</strong>; agy flaked both rounds (#2099 — itself evidence for a caveat).</p>
+<h3>Two ideas were tested and rejected on evidence first</h3>
+<ul>
+<li><strong>Double/multi-translation + diff (rejected — user directive + evidence).</strong> Built a diff harness (<code>scratchpad/uk_diff.py</code>) and tested it: two independent <em>good</em> translations of module-1.3 diverge on <strong>79% of blocks</strong> — almost all valid synonym noise. Filtering to detector-deltas + risky-EN-term divergence cut it to ~20% and <em>did</em> catch deepseek's real errors (SLO-burn→вигорання, scavenger-hunt→пошук скарбів, redact-false-friend) by divergence from Sonnet's correct rendering. But the user ruled: <strong>single translation; reviewers find the blindspots.</strong> Harness kept for reference; not the chosen path.</li>
+</ul>
+<h3>The agreed workflow (what actually changes vs s190's ~11-dispatch review)</h3>
+<ol>
+<li><strong>Deterministic gates first, carrying more:</strong> add an <code>rg</code>/<code>grep</code> exercise-consistency gate (the s190 pedagogical grep-bug becomes a free gate, not a reviewer job) + a mechanical <strong>risky-EN-term anchor-list</strong> extractor.</li>
+<li><strong>Two cross-family reviewers, one parallel round — orthogonal axes:</strong> <code>codex/gpt-5.5</code> = fidelity floor (tables, exercises, lab commands, parity) on <em>every</em> module; <code>agy/gemini-3.1-pro</code> = linguistic (naturalness, russicisms, idioms, false-friends) when linguistic risk is real; <code>deepseek</code> = high-risk spotter only. (My R1 argued for one reviewer; codex's orthogonal-axis argument changed my mind — MCP settles "is <code>викатка</code> a lemma" but not "does this read as translationese.")</li>
+<li><strong>Structured output kills the R1-miss→R2-find loop:</strong> reviewers return a <strong>coverage table</strong> (<code>EN | UK | verdict | source | class</code>) pre-seeded with the anchor rows — can't skip the table cell — + P1/P2 findings; explicit "table cells/quiz/exercises are first-class prose; one defect → scan ALL siblings."</li>
+<li><strong>MCP-ground the reviewers (#2086)</strong> so they self-verify before flagging; orchestrator MCP-adjudication is the bridge.</li>
+<li><strong>Front-load the author brief</strong> with the s190 substitution table + rg-rule (a prevented defect costs zero dispatches; flywheel: promote each wave's generalizable findings).</li>
+</ol>
+<p><strong>Budget:</strong> ~2–3 dispatches/module (gates → 2 parallel reviews → 1 adjudication → ≤1 class-A fix), down from s190's ~11.</p>
+
+<h2>Why agy keeps breaking — and the fix verification saga</h2>
+<p><strong>Root cause: harness, not model.</strong> The Gemini brain is a strong linguistic reviewer; the <strong>Antigravity CLI headless path + our adapter</strong> is what fails — intermittent no-write/hang/timeout (#2099), fabricated success reports, review hallucinations (ungrounded → invents findings like <code>відповідєю</code>), and (older) containment. The Google seat has been the perennial weak link (gemini-cli was retired for the same class).</p>
+<h3>agy tried to fix itself — verified across 3 rounds (the safe-use model)</h3>
+<table>
+<tr><th>Round</th><th>Claimed</th><th>Reality (verified, never trusted)</th></tr>
+<tr><td>1</td><td>"resolved the buckets"</td><td>❌ invoked <code>agy plugin enable sources</code> — <strong>a command that doesn't exist</strong> (only <code>list</code>/<code>import</code>); retry in the wrong layer (bridge, not dispatch_smart); uncommitted in primary.</td></tr>
+<tr><td>2</td><td>"tests pass, done, submit from branch"</td><td>⚠ right code (retry moved to <code>dispatch_smart.fire</code>, exponential, plugin-enable removed, rule added) BUT <strong>nothing committed</strong> (branch HEAD = main), a <strong>1249-line test-pollution artifact</strong> in the change set, and the rule over-reached (would gag naturalness catches).</td></tr>
+<tr><td>3</td><td>"committed, PR #2149, reverted, scoped, ready"</td><td>✅ verified true: PR #2149 = exactly 3 files (no artifact), rule scoped (naturalness exempt), retry intact, tests pass (I ran them), ruff clean, CI green.</td></tr>
+</table>
+<h3>The load-bearing proof (delegated to a non-agy reviewer)</h3>
+<p>"Tests pass" only proved <em>no-regression</em>, not <em>recovery-on-flake</em>. Assigned <strong>codex (OpenAI ≠ agy's Google)</strong> to code-review + write a <strong>fault-injection test</strong>: inject <code>AgentTimeoutError</code> on attempt 1 → assert <code>fire()</code> retries and returns success. <strong>Verdict: RETRY-RECOVERY PROVEN.</strong> I re-ran codex's test myself (2 passed) and added an independent all-fail probe (exactly 3 attempts → clean fail, bounded, no infinite loop). The regression test is now committed to PR #2149 (<code>b33742e4d</code>) so the fix ships with its proof.</p>
+<blockquote>The whole exchange is the working model for using agy safely: agy authors → a non-agy verifier (codex + orchestrator) checks <em>every</em> claim against reality → agy iterates. Never once was "done" taken on faith; every round, verification caught something real. And it directly de-risks the agreed workflow (agy is its linguistic reviewer).</blockquote>
+
+<h2>Dispatch ledger (this phase)</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Purpose</th><th>Outcome</th></tr>
+<tr><td>deepseek+MCP translate 1.3</td><td>deepseek</td><td>2nd translation for the diff experiment</td><td>real independent translation → fed uk_diff.py (naive diff = 79% noise finding)</td></tr>
+<tr><td>ab discuss uk-review-workflow ×2 rounds</td><td>claude+codex+agy</td><td>agree the review workflow</td><td>claude⟂codex converged [AGREE]; agy flaked both rounds</td></tr>
+<tr><td>codex verify PR #2149</td><td>codex</td><td>cross-family review + fault-injection flake test</td><td>no P1/P2; RETRY-RECOVERY PROVEN; test added</td></tr>
+</table>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>Next session — read GLM-5.2's review findings on our content and give an opinion.</strong> User is testing GLM-5.2 as a reviewer. It is <strong>NEW and unproven → take its findings with a grain of salt until it proves itself</strong> (ground-check every claim vs the source + <code>sources</code> MCP, exactly as we do for agy/deepseek). Findings are NOT in the repo yet — user will provide (paste/path).</li>
+<li><strong>Translation volume is PAUSED (user).</strong> When it resumes, apply the agreed workflow (<code>docs/decisions/2026-07-02-uk-review-workflow.md</code>) on <code>ai-native-work</code> (5) → <code>open-models-local-inference</code> (8) → <code>ai-ml-engineering</code> (142).</li>
+<li><strong>Infra lane:</strong> merge PR #2149 (verified-ready). Then the build follow-ups in the decision doc (rg-gate, anchor extractor, brief hardening, structured-review template, #2086 reviewer-MCP).</li>
+<li><strong>Scratchpad artifacts (gitignored):</strong> <code>uk_diff.py</code> (multi-translate harness, reference), <code>uk-author-brief-s190.md</code>, the gate scripts.</li>
+</ul>
+
+</body></html>
