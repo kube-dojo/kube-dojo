@@ -46,5 +46,5 @@ After completing this section, you'll understand:
 ## Related Sections
 
 - **Previous**: [Networking](../../foundations/networking/)
-- **Next**: [Operations/Performance](../../operations/performance/)
+- **Next**: [System Administration](../../operations/module-8.1-storage-management/)
 - **CKS**: Directly tested in System Hardening domain

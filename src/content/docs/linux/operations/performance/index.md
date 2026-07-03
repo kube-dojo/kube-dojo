@@ -45,6 +45,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [Security Hardening](../../security/hardening/)
+- **Previous**: [System Administration](../module-8.4-scheduling-backups/)
 - **Next**: [Troubleshooting](../troubleshooting/)
 - **CKA/CKAD**: Resource management, pod scheduling

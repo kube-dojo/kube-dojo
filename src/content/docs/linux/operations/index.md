@@ -10,10 +10,13 @@ In this section, you will explore the critical day-to-day operations required to
 
 You will also find advanced sub-sections dedicated to performance analysis, systematic troubleshooting, and automation through shell scripting. Together, these topics ensure you can diagnose issues quickly, optimize resource utilization, and automate repetitive tasks at scale.
 
+After [Security and Hardening](/linux/security/hardening/), follow the modules in this order: **System Administration** (8.x) → **Performance** → **Troubleshooting** → **Shell Scripting**.
+
 ## Sections
 
 | Section | Description |
 |---------|-------------|
+| [System Administration](module-8.1-storage-management/) | Storage, network, package, user, scheduling, and backup administration |
 | [Performance](performance/) | USE method, CPU scheduling, memory management, and I/O performance |
 | [Troubleshooting](troubleshooting/) | Systematic troubleshooting, log analysis, process and network debugging |
 | [Shell Scripting](shell-scripting/) | Bash fundamentals, text processing, practical scripts, and DevOps automation |

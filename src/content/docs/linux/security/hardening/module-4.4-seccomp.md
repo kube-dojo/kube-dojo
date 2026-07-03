@@ -753,7 +753,7 @@ The broken profile allows only `exit_group`, so even a simple `echo` cannot perf
 
 ## Next Module
 
-You have completed the Security and Hardening sequence: kernel hardening, AppArmor, SELinux, and seccomp now fit together as layered Linux controls. Next, continue to [Operations and Performance](/linux/operations/) to analyze how hardened systems behave under real workload pressure.
+You have completed the Security and Hardening sequence: kernel hardening, AppArmor, SELinux, and seccomp now fit together as layered Linux controls. Next, continue to [Module 8.1: Storage Management](/linux/operations/module-8.1-storage-management/) to apply those hardened foundations to day-to-day system administration.
 
 ## Sources
 
