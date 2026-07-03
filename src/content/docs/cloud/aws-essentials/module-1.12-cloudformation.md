@@ -2,7 +2,7 @@
 title: "Module 1.12: Infrastructure as Code on AWS"
 slug: cloud/aws-essentials/module-1.12-cloudformation
 sidebar:
-  order: 12
+  order: 13
 ---
 ## Prerequisites
 
