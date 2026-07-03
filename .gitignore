@@ -159,3 +159,6 @@ logs/
 .clawpatch/locks/
 .clawpatch/patches/
 calibration/v1/verifier-snapshots/
+
+# Local orchestrator brief/prompt staging (ephemeral; not curriculum content)
+scratchpad/
