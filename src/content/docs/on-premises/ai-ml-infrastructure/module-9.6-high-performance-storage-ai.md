@@ -568,4 +568,4 @@ If a pod fails to mount the PVC, ensure the `csi-nodeplugin-fluid` DaemonSet is 
 
 ## Next Module
 
-Ready to move from storage architectures to advanced scheduling? Continue with [GPU Scheduling](/platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling/), where you will coordinate placement, queueing, and accelerator-aware scheduling patterns for large AI workloads.
+This is the final module of the On-Premises track — you've gone from planning and bare-metal provisioning through networking, storage, multi-cluster, security, day-2 operations, resilience, and AI/ML infrastructure on bare metal. To go deeper on accelerator-aware placement and queueing, see [GPU Scheduling](/platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling/) in the Platform Engineering track.

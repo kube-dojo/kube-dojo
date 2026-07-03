@@ -678,7 +678,7 @@ Before closing the module, confirm you can explain—in your own words—how tra
 
 ## Next Module
 
-Return to the [Networking track overview](../) to review the full bare-metal networking sequence from datacenter design through cross-cluster connectivity and mesh operations.
+Next, continue to [Module 6.1: Physical Security & Air-Gapped Environments](../security/module-6.1-air-gapped/) to begin the Security & Compliance section — the networking, storage, and multi-cluster branches all converge here. (To review this branch first, see the [Networking track overview](../).)
 
 ---
 
