@@ -611,7 +611,6 @@ Write one final paragraph using this format: "For the next stage, I will choose 
 
 - [Reproducible Python, CUDA, and ROCm Environments](./module-1.3-reproducible-python-cuda-rocm-environments/)
 - [Notebooks, Scripts, and Project Layouts](./module-1.4-notebooks-scripts-project-layouts/)
-- [Local Models for AI Coding](../ai-native-development/module-1.2-local-models-for-ai-coding/)
 
 ## Sources
 

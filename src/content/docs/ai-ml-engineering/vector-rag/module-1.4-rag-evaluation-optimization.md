@@ -5,6 +5,10 @@ sidebar:
   order: 405
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 4-5 hours
+>
+> **Prerequisites**: RAG architecture from modules 1.2–1.3, Python, labeled evaluation datasets, and basic information-retrieval metrics (recall, precision, ranking).
+
 ## What You'll Be Able to Do
 
 By the end of this module, you will be able to evaluate and improve Retrieval-Augmented Generation systems with the same discipline you would apply to search, reliability, and production software changes. These outcomes focus on measurement, diagnosis, and controlled iteration rather than on adding more retrieval patterns by instinct.

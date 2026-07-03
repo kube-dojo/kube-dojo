@@ -5,6 +5,10 @@ sidebar:
   order: 307
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[ADVANCED]` | Time: 4-5 hours
+>
+> **Prerequisites**: Prior generative AI modules on model APIs and prompting, production LLM integration experience, and comfort reading token-usage and latency metrics.
+
 ## Learning Outcomes
 
 By the end of this module, you will be able to:

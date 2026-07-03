@@ -1050,9 +1050,11 @@ After completing the exercise, compare your result with the worked example in th
 
 ## Next Module
 
+- [AI-Native Development](../ai-native-development/) — the next phase in the default route: bring local models and AI-assisted coding into your daily workflow.
+
+Optional later-phase deep-dives (after you complete Phases 1–4):
 - [Home-Scale RAG Systems](../vector-rag/module-1.6-home-scale-rag-systems/)
 - [Notebooks to Production for ML/LLMs](../mlops/module-1.11-notebooks-to-production-for-ml-llms/)
-- [Experiment Tracking](../mlops/module-1.6-experiment-tracking/)
 
 ## Sources
 

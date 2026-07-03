@@ -5,6 +5,10 @@ sidebar:
   order: 404
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[ADVANCED]` | Time: 4-5 hours
+>
+> **Prerequisites**: A working RAG pipeline from module 1.2, embeddings and hybrid retrieval basics, Python, and familiarity with BM25 and cross-encoder reranking concepts.
+
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
