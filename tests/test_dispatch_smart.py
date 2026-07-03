@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -73,6 +74,84 @@ def test_hermes_router_argv_handles_flag_like_prompt() -> None:
     argv = _router_command("hermes", "qwen-3.6-flash", "--provider")
     assert "--oneshot=--provider" in argv
     assert "-z" not in argv
+
+
+def test_opencode_router_argv_uses_json_format() -> None:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from dispatch_smart import _router_command
+
+    cmd = _router_command("opencode", "zai-coding-plan/glm-5.2", "hello")
+    assert cmd[1:4] == ["run", "--format", "json"]
+    assert cmd[-3:] == ["-m", "zai-coding-plan/glm-5.2", "-"]
+
+
+def test_parse_opencode_json_events_extracts_final_assistant_text() -> None:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from dispatch_smart import _parse_opencode_json_events
+
+    ndjson = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "step_start",
+                    "part": {"messageID": "msg_tool", "type": "step-start"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "tool_use",
+                    "part": {"messageID": "msg_tool", "type": "tool", "tool": "bash"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "step_finish",
+                    "part": {
+                        "messageID": "msg_tool",
+                        "reason": "tool-calls",
+                        "type": "step-finish",
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "step_start",
+                    "part": {"messageID": "msg_final", "type": "step-start"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "text",
+                    "part": {
+                        "messageID": "msg_final",
+                        "type": "text",
+                        "text": "VERDICT: ",
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "text",
+                    "part": {
+                        "messageID": "msg_final",
+                        "type": "text",
+                        "text": "APPROVE",
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "step_finish",
+                    "part": {
+                        "messageID": "msg_final",
+                        "reason": "stop",
+                        "type": "step-finish",
+                    },
+                }
+            ),
+        ]
+    )
+    assert _parse_opencode_json_events(ndjson) == "VERDICT: APPROVE"
 
 
 def test_codex_draft_default_is_gpt_5_5() -> None:
