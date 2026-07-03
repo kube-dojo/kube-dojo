@@ -33,7 +33,7 @@ By the end of this module, you will:
 
 ## Introduction: The Scientific Python Ecosystem
 
-You've spent earlier modules building AI applications using APIs, frameworks, and high-level tools. Now we're going deeper. **Phase 6** is about understanding how neural networks actually work—not just using them, but building them from scratch.
+You've spent earlier modules building AI applications using APIs, frameworks, and high-level tools. Now we're going deeper. **Phase 10** is about understanding how neural networks actually work—not just using them, but building them from scratch.
 
 But before we can build neural networks, we need the right tools. Imagine trying to build a house with your bare hands versus having power tools. NumPy, pandas, and matplotlib are your power tools for machine learning.
 

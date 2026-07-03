@@ -7,7 +7,7 @@ sidebar:
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours  
-> **Prerequisites**: Phase 9 complete
+> **Prerequisites**: Phase 4 complete (Frameworks & Agents)
 
 ## Learning Outcomes
 

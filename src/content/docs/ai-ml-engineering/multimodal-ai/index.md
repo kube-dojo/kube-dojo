@@ -5,7 +5,7 @@ sidebar:
   label: "Multimodal AI"
 ---
 
-> **AI/ML Engineering Track** | Phase 8
+> **AI/ML Engineering Track** | Phase 9
 
 ## Modules
 

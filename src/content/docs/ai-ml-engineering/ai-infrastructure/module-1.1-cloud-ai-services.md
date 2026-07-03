@@ -6,7 +6,7 @@ sidebar:
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6 hours
-**Prerequisites**: Phase 10 complete (DevOps & MLOps)
+**Prerequisites**: Phase 5 complete (MLOps & LLMOps)
 
 ## Learning Outcomes
 

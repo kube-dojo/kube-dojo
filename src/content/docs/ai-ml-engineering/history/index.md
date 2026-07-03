@@ -5,7 +5,7 @@ sidebar:
   label: "Appendix A: History of AI/ML"
 ---
 
-> **AI/ML Engineering Track** | Phase 11
+> **AI/ML Engineering Track** | Appendix
 
 ## Modules
 

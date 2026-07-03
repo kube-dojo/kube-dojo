@@ -7,7 +7,7 @@ sidebar:
   label: "Deep Learning Foundations"
 ---
 
-> **AI/ML Engineering Track** | Phase 9 · 27 modules · ~70–110 hours
+> **AI/ML Engineering Track** | Phase 10 · 27 modules · ~70–110 hours
 
 ## Overview
 
