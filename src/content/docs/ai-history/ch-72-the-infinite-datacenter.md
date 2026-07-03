@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The model became a construction project. By 2025, frontier AI announcements were no longer just about architectures, benchmarks, or APIs; they were about power, land, financing, construction, cooling, transmission, and named campuses. Stargate, Richland Parish, Hyperion, El Paso, and AWS Project Rainier turned compute into industrial coordination. The closing chapter argues that intelligence, once mechanized, became infrastructure.
+The model became a construction project. By 2025, frontier AI announcements were no longer just about architectures, benchmarks, or APIs; they were about power, land, financing, construction, cooling, transmission, and named campuses. Stargate, Richland Parish, Hyperion, El Paso, and AWS Project Rainier turned compute into industrial coordination. This chapter closes the book's main infrastructure arc by arguing that intelligence, once mechanized, became infrastructure.
 :::
 
 <details>
@@ -64,7 +64,7 @@ timeline
 
 The model became a construction project.
 
-That is the final reversal in this book. For decades, artificial intelligence was described through ideas: logic, search, symbols, gradients, features, attention, scaling laws, alignment, agents. Even when the field became industrial, the visible artifacts were still software artifacts: papers, checkpoints, APIs, demos, benchmarks, leaderboards, and product launches. The machine room was always there, but it sat behind the story.
+That is the final reversal in the book's main arc. For decades, artificial intelligence was described through ideas: logic, search, symbols, gradients, features, attention, scaling laws, alignment, agents. Even when the field became industrial, the visible artifacts were still software artifacts: papers, checkpoints, APIs, demos, benchmarks, leaderboards, and product launches. The machine room was always there, but it sat behind the story.
 
 By the mid-2020s, the machine room moved to the front.
 
@@ -218,11 +218,11 @@ The "infinite datacenter" is the dream that every bottleneck can be overcome by 
 
 But each abstraction rests on a material base. The AI factory is not floating above the world. It is built into it.
 
-This is why the final chapter belongs after chips and power rather than before them. A datacenter campus is the place where the previous constraints converge. It cannot exist without chips, but chips alone do not make it useful. It cannot exist without electricity, but electricity alone does not make it a cluster. It cannot exist without capital, but capital alone does not cool a rack. It cannot exist without a community, but local approval alone does not train a model. The campus is the intersection point.
+This is why the infrastructure close belongs after chips and power rather than before them. A datacenter campus is the place where the previous constraints converge. It cannot exist without chips, but chips alone do not make it useful. It cannot exist without electricity, but electricity alone does not make it a cluster. It cannot exist without capital, but capital alone does not cool a rack. It cannot exist without a community, but local approval alone does not train a model. The campus is the intersection point.
 
 It is also the place where AI stops being easy to separate from the rest of the economy. A training run pulls on semiconductor supply chains, utility planning, water accounting, construction labor, local politics, debt markets, and cloud contracts. The model may appear to users as an answer in a browser or an assistant in a phone. Behind that answer is a chain of industrial commitments that cannot be reduced to software.
 
-That is the closing lesson. Artificial intelligence began in this book as a question about thought. Could reasoning be formalized? Could a machine manipulate symbols? Could a neuron be abstracted? Could a universal machine imitate intelligence? The early field was poor in compute but rich in ambition. It imagined minds before it had the machines to sustain them.
+That is the main arc's closing lesson. Artificial intelligence began in this book as a question about thought. Could reasoning be formalized? Could a machine manipulate symbols? Could a neuron be abstracted? Could a universal machine imitate intelligence? The early field was poor in compute but rich in ambition. It imagined minds before it had the machines to sustain them.
 
 Then the field learned its constraints. The first winter exposed brittle optimism. Expert systems found the knowledge bottleneck. The statistical turn found that data could outperform hand-built rules. Deep learning found that old ideas became new when data and GPUs arrived. Transformers found that attention, scale, and self-supervision could turn the web into a training substrate. Product AI found that a model could become an interface. Agents found that a model could call tools. Benchmarks became politics. Copyright became a supply-chain fight. Inference became economics. Energy became a grid issue. Chips became statecraft.
 
@@ -232,10 +232,10 @@ That does not mean ideas stopped mattering. It means ideas alone were no longer 
 
 The history of AI is often told as a history of minds. That is only half true. It is also a history of machines becoming large enough to host the ambitions projected onto them. The universal machine was a conceptual breakthrough. The stored-program computer made it practical. The GPU made learning at scale possible. The hyperscale datacenter made foundation models deployable. The AI megacampus made frontier AI an industrial sector.
 
-The ending is not that the physical world defeated AI. The ending is that AI became powerful enough to need the physical world at full scale. Its limits became the limits of industrial coordination: how fast societies can build, finance, power, cool, govern, and legitimize the factories of computation. That is a more serious story than hype or backlash. It says that intelligence, once mechanized, became infrastructure.
+The main arc does not end with the physical world defeating AI. It ends with AI becoming powerful enough to need the physical world at full scale. Its limits became the limits of industrial coordination: how fast societies can build, finance, power, cool, govern, and legitimize the factories of computation. That is a more serious story than hype or backlash. It says that intelligence, once mechanized, became infrastructure.
 
 :::note[Why this still matters today]
-When you read about a frontier model launch in the late 2020s, the campus is now part of the news. A site in Texas or Louisiana, a transmission line, a closed-loop cooling system, a private-credit financing of long-lived infrastructure, a hyperscaler's named cluster, and a community's bargain over jobs, water, and grid load all sit beneath the model card. The vocabulary of AI extended outward until it included electricians, pipefitters, utility planners, county officials, lease accountants, and bond investors. That extension is the book's closing claim: intelligence, once mechanized, became infrastructure. Every announced gigawatt is also a question — about what was actually built, who paid, who hosts, and who lives next to the answer.
+When you read about a frontier model launch in the late 2020s, the campus is now part of the news. A site in Texas or Louisiana, a transmission line, a closed-loop cooling system, a private-credit financing of long-lived infrastructure, a hyperscaler's named cluster, and a community's bargain over jobs, water, and grid load all sit beneath the model card. The vocabulary of AI extended outward until it included electricians, pipefitters, utility planners, county officials, lease accountants, and bond investors. That extension is the main arc's closing claim: intelligence, once mechanized, became infrastructure. Every announced gigawatt is also a question — about what was actually built, who paid, who hosts, and who lives next to the answer.
 :::
 
 At the start, intelligence looked like a theorem.
@@ -247,3 +247,5 @@ Then it looked like data.
 Then it looked like a model.
 
 By the end of this arc, it also looked like a construction site.
+
+One technical coda remains. [Chapter 73: The Algorithmic Response](./ch-73-the-algorithmic-response/) follows the same export-control and memory-scarcity pressures inward to the attention layer, where KV-cache bottlenecks and Multi-head Latent Attention show infrastructure pressure turning back into model architecture.
