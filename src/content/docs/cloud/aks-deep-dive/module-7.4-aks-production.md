@@ -1516,7 +1516,7 @@ echo "az group delete --name rg-aks-prod --yes --no-wait"
 
 ## Next Module
 
-This is the final module in the AKS Deep Dive series. You now have the knowledge to architect, secure, network, observe, and scale production AKS clusters using industry-standard features from Kubernetes v1.35. Carry forward the habit of validating storage IOPS, log ingestion, and scaler thresholds in staging with the same observability stack you run in production — gates pass in CI only when those signals exist before traffic arrives. 
+Continue to [AKS Fleet Manager](../module-7.5-aks-fleet-manager/) to manage multiple AKS clusters as a fleet. You now have the knowledge to architect, secure, network, observe, and scale production AKS clusters using industry-standard features from Kubernetes v1.35. Carry forward the habit of validating storage IOPS, log ingestion, and scaler thresholds in staging with the same observability stack you run in production — gates pass in CI only when those signals exist before traffic arrives. 
 
 For further learning, explore the [Platform Engineering Track](/platform/) to deepen your understanding of continuous deployment configurations, advanced SRE resilience strategies, and cutting-edge DevSecOps pipelines that continue to build on this powerful infrastructure foundation.
 

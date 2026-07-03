@@ -515,4 +515,4 @@ Before you call the exercise complete, write one "first five minutes" incident n
 
 ## Next Module
 
-This closes the Azure Essentials application-hosting decision path: App Service for slot-centered web apps, Container Apps for revision-centered container services and workers, and AKS for Kubernetes platforms. Next, carry these decisions into enterprise and hybrid cloud governance, where plan isolation, private endpoints, managed identities, diagnostics, and policy controls become reusable platform guardrails.
+This closes the Azure Essentials application-hosting decision path: App Service for slot-centered web apps, Container Apps for revision-centered container services and workers, and AKS for Kubernetes platforms. Continue to [Event Hubs & Event Grid](../module-3.15-event-hub-event-grid/) to add event-driven and streaming service boundaries to your Azure toolkit.

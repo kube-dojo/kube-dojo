@@ -27,11 +27,12 @@ Before diving into EKS, GKE, or AKS, you need to understand the architectural de
 
 - [Cloud Native 101](../../prerequisites/cloud-native-101/) -- containers, Docker basics
 - Basic Kubernetes knowledge (Pods, Deployments, Services)
+- At least one provider path first -- a Provider Essentials section plus its managed-Kubernetes deep dive ([AWS Essentials](../aws-essentials/) -> [EKS](../eks-deep-dive/), [GCP Essentials](../gcp-essentials/) -> [GKE](../gke-deep-dive/), or [Azure Essentials](../azure-essentials/) -> [AKS](../aks-deep-dive/)). Architecture & Enterprise reasons about cross-provider tradeoffs and assumes you already understand one provider's primitives.
 
 ## What's Next
 
-After Architecture Patterns, pick your cloud provider deep dive:
+Continue along the Architecture & Enterprise route:
 
-- [AWS EKS Deep Dive](../eks-deep-dive/)
-- [GCP GKE Deep Dive](../gke-deep-dive/)
-- [Azure AKS Deep Dive](../aks-deep-dive/)
+- [Advanced Operations](../advanced-operations/) -- multi-account strategies, transit hubs, cross-cluster networking, DR, and active-active at enterprise scale
+
+(The provider deep dives -- [EKS](../eks-deep-dive/), [GKE](../gke-deep-dive/), [AKS](../aks-deep-dive/) -- come *before* this section, not after: they produce the provider primitives Architecture & Enterprise assumes.)
