@@ -2218,7 +2218,4 @@ aws s3api delete-bucket --bucket "$BUCKET_NAME" --region "$AWS_REGION"
 
 ## Next Module
 
-Continue to
-[Cloud Deep Dive: AWS EKS Mastery](../) to
-apply AWS platform foundations to production
-Kubernetes on AWS.
+Continue to [AWS EKS Deep Dive](../eks-deep-dive/) to apply AWS platform foundations to production Kubernetes on AWS.

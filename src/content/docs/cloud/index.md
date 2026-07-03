@@ -15,13 +15,13 @@ Kubernetes doesn't exist in a vacuum. It runs on AWS, GCP, or Azure — and you 
 Rosetta Stone (cross-provider concepts)
         │
         ├─── AWS ──────────────────────────┐
-        │    Essentials (12) → EKS (5)     │
+        │    Essentials (13) → EKS (5)     │
         │                                  │
         ├─── Google Cloud ─────────────────┤
         │    Essentials (12) → GKE (5)     │
         │                                  │
         └─── Azure ────────────────────────┤
-             Essentials (12) → AKS (4)     │
+             Essentials (17) → AKS (5)     │
                                            │
                     ┌──────────────────────-┘
                     ▼
@@ -29,7 +29,7 @@ Rosetta Stone (cross-provider concepts)
         ├── Architecture Patterns (4)
         ├── Advanced Operations (10)
         ├── Managed Services (10)
-        └── Enterprise & Hybrid (10)
+        └── Enterprise & Hybrid (11)
 ```
 
 **Pick one provider deeply first** — you do not need all three. Learn the essentials for the cloud you actually use, then go deep on its managed Kubernetes offering before you spend time comparing clouds.
@@ -86,11 +86,11 @@ Equivalent depth means this:
 
 ## Sections
 
-### AWS (17 modules)
+### AWS (18 modules)
 
 | Section | Modules | Description |
 |---------|---------|-------------|
-| [AWS Essentials](aws-essentials/) | 12 | IAM, VPC, EC2, S3, Route53, ECR, ECS, Lambda, Secrets, CloudWatch, CI/CD, CloudFormation |
+| [AWS Essentials](aws-essentials/) | 13 | IAM, VPC, EC2, S3, Route53, ECR, ECS, Lambda, Secrets, CloudWatch, CI/CD, CloudFormation |
 | [EKS Deep Dive](eks-deep-dive/) | 5 | EKS architecture, networking, identity, autoscaling, production |
 
 ### Google Cloud (17 modules)
@@ -100,14 +100,14 @@ Equivalent depth means this:
 | [GCP Essentials](gcp-essentials/) | 12 | IAM, VPC, Compute, Cloud Storage, DNS, Artifact Registry, Cloud Run, Functions, Secret Manager, Monitoring, Cloud Build, Deployment Manager |
 | [GKE Deep Dive](gke-deep-dive/) | 5 | GKE architecture, networking, Workload Identity, Autopilot, Fleet |
 
-### Azure (16 modules)
+### Azure (22 modules)
 
 | Section | Modules | Description |
 |---------|---------|-------------|
-| [Azure Essentials](azure-essentials/) | 12 | Entra ID, VNet, VMs, Blob Storage, Azure DNS, ACR, ACI, Functions, Key Vault, Monitor, DevOps, Bicep |
-| [AKS Deep Dive](aks-deep-dive/) | 4 | AKS architecture, networking, identity, production |
+| [Azure Essentials](azure-essentials/) | 17 | Entra ID, VNet, VMs, Blob Storage, Azure DNS, ACR, ACI, Functions, Key Vault, Monitor, DevOps, Bicep |
+| [AKS Deep Dive](aks-deep-dive/) | 5 | AKS architecture, networking, identity, production |
 
-### Architecture & Enterprise (34 modules)
+### Architecture & Enterprise (36 modules)
 
 | Section | Modules | Description |
 |---------|---------|-------------|
@@ -115,9 +115,9 @@ Equivalent depth means this:
 | [Architecture Patterns](architecture-patterns/) | 4 | Managed vs self-managed, multi-cluster, cloud IAM, VPC topologies |
 | [Advanced Operations](advanced-operations/) | 10 | Multi-account, transit hubs, cross-cluster networking, DR, active-active |
 | [Managed Services](managed-services/) | 10 | Databases, caching, messaging, ML services, analytics |
-| [Enterprise & Hybrid](enterprise-hybrid/) | 10 | Landing zones, hybrid connectivity, compliance, migration, fleet management |
+| [Enterprise & Hybrid](enterprise-hybrid/) | 11 | Landing zones, hybrid connectivity, compliance, migration, fleet management |
 
-**84 modules total.** Not everything goes into Kubernetes — the essentials tracks cover standalone containers, serverless, and when K8s is overkill.
+**93 teachable units total** (92 modules + Hyperscaler Rosetta Stone). Not everything goes into Kubernetes — the essentials tracks cover standalone containers, serverless, and when K8s is overkill.
 
 ---
 
