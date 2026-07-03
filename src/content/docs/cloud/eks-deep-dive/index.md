@@ -26,7 +26,7 @@ EKS is the most widely deployed managed Kubernetes service. This track covers th
 ## Prerequisites
 
 - [AWS DevOps Essentials](../aws-essentials/) -- IAM, VPC, EC2, S3 fundamentals
-- [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, IAM integration
+- *Recommended companion (not required first):* [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, and IAM integration; helpful for deeper cross-cloud tradeoffs after this section
 
 ## What's Next
 

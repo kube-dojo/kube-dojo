@@ -26,7 +26,7 @@ GKE is the most opinionated managed Kubernetes service, with features like Autop
 ## Prerequisites
 
 - [GCP DevOps Essentials](../gcp-essentials/) -- IAM, VPC, Compute Engine fundamentals
-- [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, IAM integration
+- *Recommended companion (not required first):* [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, and IAM integration; helpful for deeper cross-cloud tradeoffs after this section
 
 ## What's Next
 

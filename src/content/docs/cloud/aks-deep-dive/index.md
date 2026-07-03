@@ -26,7 +26,7 @@ AKS is the fastest-growing managed Kubernetes service, tightly integrated with t
 ## Prerequisites
 
 - [Azure DevOps Essentials](../azure-essentials/) -- Entra ID, VNets, VMs, Storage fundamentals
-- [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, IAM integration
+- *Recommended companion (not required first):* [Cloud Architecture Patterns](../architecture-patterns/) -- managed K8s trade-offs, multi-cluster, and IAM integration; helpful for deeper cross-cloud tradeoffs after this section
 
 ## What's Next
 
