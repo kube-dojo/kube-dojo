@@ -153,6 +153,14 @@ Module 8.3: Local Kubernetes
      │  Local cluster options
      │  kind, minikube comparison
      ▼
+Module 8.4: DevPod
+     │
+     │  Provider-agnostic devcontainer workspaces
+     ▼
+Module 8.5: Gitpod & Codespaces
+     │
+     │  Prebuilt cloud development environments
+     ▼
 [Toolkit Complete] → Apply to daily work!
 ```
 
@@ -257,6 +265,8 @@ CI pipeline:
 | k9s & CLI | Install k9s, navigate cluster, set up aliases |
 | Telepresence & Tilt | Intercept service, create Tiltfile |
 | Local Kubernetes | Create kind cluster, load local images |
+| DevPod | Launch a devcontainer workspace on Docker or Kubernetes |
+| Gitpod & Codespaces | Configure prebuilds and compare hosted workspace trade-offs |
 
 ## Tool Comparison
 

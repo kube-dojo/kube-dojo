@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Distributed Systems"
 ---
-> **Foundation Track** | 4 Modules | ~2.5 hours total
+> **Foundation Track** | 5 Modules | ~3.5 hours total
 
 The fundamentals of building systems that run across multiple machines. Understanding why distributed systems are hard, and the patterns that make them work.
 

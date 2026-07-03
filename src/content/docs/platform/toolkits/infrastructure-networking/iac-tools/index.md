@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "IaC Tools"
 ---
-> **Toolkit Track** | 13 Modules | ~13 hours total
+> **Toolkit Track** | 17 Modules | ~13 hours total
 
 ## Overview
 
@@ -62,7 +62,7 @@ After completing this toolkit, you will be able to:
 14. **Operate Ansible Operators in production** — Status conditions, finalizer safety, idempotency at scale, CRD upgrade strategies, leader election, OLM bundles, and operator observability
 15. **Master advanced watches.yaml patterns** — Multi-CRD operators, namespace scoping, cluster-scoped RBAC, watchDependentResources + blacklist filtering, finalizer mapping, selector filters, and worker concurrency tuning via ANSIBLE_WORKERS
 16. **Test Ansible Operators** — Design a layered test strategy using Molecule (role-level unit and integration), Kuttl (end-to-end CRD reconciliation), and operator-sdk scorecard (OLM bundle validation)
-13. **Operate centralized Ansible automation** — Deploy AWX Operator, configure job templates, credentials, and dynamic Kubernetes inventory; wire Event-Driven Ansible rulebooks to react to cluster events via AWX webhooks
+17. **Operate centralized Ansible automation** — Deploy AWX Operator, configure job templates, credentials, and dynamic Kubernetes inventory; wire Event-Driven Ansible rulebooks to react to cluster events via AWX webhooks
 
 ## Tool Selection Guide
 

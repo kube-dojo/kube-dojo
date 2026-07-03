@@ -129,6 +129,34 @@ Module 1.5: Distributed Tracing
      │
      │  Jaeger, Tempo, correlation
      ▼
+Module 1.6: Pixie
+     │
+     │  Zero-instrumentation eBPF debugging
+     ▼
+Module 1.7: Hubble
+     │
+     │  Cilium flow visibility and policy verdicts
+     ▼
+Module 1.8: Coroot
+     │
+     │  Auto-discovered service maps, SLOs, profiling
+     ▼
+Module 1.9: Continuous Profiling
+     │
+     │  Code-level resource analysis
+     ▼
+Module 1.10: SLO Tooling
+     │
+     │  Error-budget rules and dashboards
+     ▼
+Module 1.11: eBPF Tracing Tools
+     │
+     │  Ad-hoc kernel and workload probes
+     ▼
+Module 1.12: OpenTelemetry Collector at Production Scale
+     │
+     │  Fleet pipelines, sampling, cardinality control
+     ▼
 [Toolkit Complete] → GitOps & Deployments Toolkit
 ```
 

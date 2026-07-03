@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Platforms"
 ---
-> **Toolkit Track** | 3 Modules | ~2.5 hours total
+> **Toolkit Track** | 6 Modules | ~2.5 hours total
 
 ## Overview
 

@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Security Tools"
 ---
-> **Toolkit Track** | 6 Modules | ~5 hours total
+> **Toolkit Track** | 8 Modules | ~5 hours total
 
 ## Overview
 
@@ -43,6 +43,8 @@ After completing this toolkit, you will be able to:
 4. **Secure the supply chain** — Signing, SBOMs, vulnerability scanning
 5. **Prevent attacks with Tetragon** — eBPF-based kernel-level enforcement
 6. **Implement least privilege with KubeArmor** — Allow-listing for containers
+7. **Enforce policies with Kyverno** — Validation, mutation, generation, and image verification policies
+8. **Issue workload identities with SPIFFE/SPIRE** — Short-lived SVIDs, workload attestation, and mTLS authorization
 
 ## Tool Selection Guide
 
@@ -228,6 +230,8 @@ Each module includes practical exercises:
 | OPA/Gatekeeper | Write policy to block privileged pods |
 | Falco | Detect shell execution in container |
 | Supply Chain | Sign image, generate SBOM, scan vulns |
+| Kyverno | Write audit-mode validation and image verification policies |
+| SPIFFE/SPIRE | Issue workload identities and test mTLS between services |
 
 ## Related Tracks
 
