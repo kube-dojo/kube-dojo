@@ -19,10 +19,10 @@ These 5 modules bridge the gap between "I can use a terminal" and "I understand 
 | 0.1 | [The CLI Power User (Search & Streams)](module-0.1-cli-power-user/) | 45 min | Wildcards, pipes, redirects, find, grep |
 | 0.2 | [Environment & Permissions (Who You Are & Where You Are)](module-0.2-environment-permissions/) | 45 min | $PATH, .bashrc, chmod, chown, sudo |
 | 0.3 | [Process & Resource Survival Guide](module-0.3-processes-resources/) | 40 min | ps, top, kill, background jobs, disk usage |
-| 0.4 | [Services & Logs Demystified](module-0.4-services-logs/) | 40 min | systemctl, journalctl, daemons |
+| 0.4 | [Services & Logs Demystified](module-0.4-services-logs/) | 45-50 min | systemctl, journalctl, daemons |
 | 0.5 | [Everyday Networking Tools](module-0.5-networking-tools/) | 45 min | ping, curl, ss, dig, traceroute |
 
-**Total time**: ~3.5 hours
+**Total time**: 3 hr 40-45 min
 
 ---
 

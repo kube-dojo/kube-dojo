@@ -35,11 +35,11 @@ If your goal is:
 
 | # | Module | Time |
 |---|--------|------|
-| 0.1 | [The CLI Power User](/linux/foundations/everyday-use/module-0.1-cli-power-user/) | 30 min |
-| 0.2 | [Environment & Permissions](/linux/foundations/everyday-use/module-0.2-environment-permissions/) | 30 min |
-| 0.3 | [Process & Resource Survival Guide](/linux/foundations/everyday-use/module-0.3-processes-resources/) | 30 min |
-| 0.4 | [Services & Logs Demystified](/linux/foundations/everyday-use/module-0.4-services-logs/) | 30 min |
-| 0.5 | [Everyday Networking Tools](/linux/foundations/everyday-use/module-0.5-networking-tools/) | 30 min |
+| 0.1 | [The CLI Power User](/linux/foundations/everyday-use/module-0.1-cli-power-user/) | 45 min |
+| 0.2 | [Environment & Permissions](/linux/foundations/everyday-use/module-0.2-environment-permissions/) | 45 min |
+| 0.3 | [Process & Resource Survival Guide](/linux/foundations/everyday-use/module-0.3-processes-resources/) | 40 min |
+| 0.4 | [Services & Logs Demystified](/linux/foundations/everyday-use/module-0.4-services-logs/) | 45-50 min |
+| 0.5 | [Everyday Networking Tools](/linux/foundations/everyday-use/module-0.5-networking-tools/) | 45 min |
 
 ### [System Essentials](/linux/foundations/system-essentials/) — 4 modules
 *Kernel, processes, filesystem, permissions — the foundation of everything.*
@@ -56,10 +56,10 @@ If your goal is:
 
 | # | Module | Time |
 |---|--------|------|
-| 2.1 | [Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/) | 30-35 min |
+| 2.1 | [Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/) | 35-45 min |
 | 2.2 | [Control Groups (cgroups)](/linux/foundations/container-primitives/module-2.2-cgroups/) | 30-35 min |
-| 2.3 | [Capabilities & Linux Security Modules](/linux/foundations/container-primitives/module-2.3-capabilities-lsms/) | 25-30 min |
-| 2.4 | [Union Filesystems](/linux/foundations/container-primitives/module-2.4-union-filesystems/) | 25-30 min |
+| 2.3 | [Capabilities & Linux Security Modules](/linux/foundations/container-primitives/module-2.3-capabilities-lsms/) | 35-45 min |
+| 2.4 | [Union Filesystems](/linux/foundations/container-primitives/module-2.4-union-filesystems/) | 45-60 min |
 
 ### [Networking](/linux/foundations/networking/) — 4 modules
 *TCP/IP, DNS, network namespaces, iptables — the network stack that Kubernetes builds on.*
@@ -88,17 +88,17 @@ If your goal is:
 
 | # | Module | Time |
 |---|--------|------|
-| 8.1 | [Storage Management](/linux/operations/module-8.1-storage-management/) | 30-35 min |
-| 8.2 | [Network Administration](/linux/operations/module-8.2-network-administration/) | 30-35 min |
-| 8.3 | [Package & User Management](/linux/operations/module-8.3-package-user-management/) | 25-30 min |
-| 8.4 | [Scheduling & Backups](/linux/operations/module-8.4-scheduling-backups/) | 25-30 min |
+| 8.1 | [Storage Management](/linux/operations/module-8.1-storage-management/) | 35 min |
+| 8.2 | [Network Administration](/linux/operations/module-8.2-network-administration/) | 45-55 min |
+| 8.3 | [Package & User Management](/linux/operations/module-8.3-package-user-management/) | 40-50 min |
+| 8.4 | [Scheduling & Backups](/linux/operations/module-8.4-scheduling-backups/) | 45-55 min |
 
 #### [Performance](/linux/operations/performance/) — 4 modules
 
 | # | Module | Time |
 |---|--------|------|
 | 5.1 | [The USE Method](/linux/operations/performance/module-5.1-use-method/) | 25-30 min |
-| 5.2 | [CPU & Scheduling](/linux/operations/performance/module-5.2-cpu-scheduling/) | 30-35 min |
+| 5.2 | [CPU & Scheduling](/linux/operations/performance/module-5.2-cpu-scheduling/) | 40-55 min |
 | 5.3 | [Memory Management](/linux/operations/performance/module-5.3-memory-management/) | 30-35 min |
 | 5.4 | [I/O Performance](/linux/operations/performance/module-5.4-io-performance/) | 25-30 min |
 

@@ -4,10 +4,16 @@ title: "Module 2.1: Linux Namespaces"
 slug: linux/foundations/container-primitives/module-2.1-namespaces
 sidebar:
   order: 2
+lab:
+  id: "linux-2.1-namespaces"
+  url: "https://killercoda.com/kubedojo/scenario/linux-2.1-namespaces"
+  duration: "35-45 min"
+  difficulty: "intermediate"
+  environment: "ubuntu"
 revision_pending: false
 ---
 
-This Linux Foundations module is a `[MEDIUM]` lesson designed for a 35-45 minute study session, with lab time focused on inspecting real namespace boundaries instead of memorizing container vocabulary.
+> **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 35-45 min. This medium-depth lesson focuses on inspecting real namespace boundaries instead of memorizing container vocabulary.
 
 ## Prerequisites
 

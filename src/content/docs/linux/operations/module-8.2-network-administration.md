@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: linux-8.2-network-administration
   url: https://killercoda.com/kubedojo/scenario/linux-8.2-network-administration
-  duration: "35 min"
+  duration: "45-55 min"
   difficulty: intermediate
   environment: ubuntu
 ---

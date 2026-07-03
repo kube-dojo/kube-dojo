@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-0.5-networking-tools"
   url: "https://killercoda.com/kubedojo/scenario/linux-0.5-networking-tools"
-  duration: "35 min"
+  duration: "45 min"
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
