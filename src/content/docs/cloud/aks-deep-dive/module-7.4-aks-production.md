@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.4-aks-production
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/).
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/).
 This module is focused on production-ready AKS operations where storage reliability, observability signal quality, and scaling behavior must be treated as one coupled reliability system rather than independent checkboxes.
 
 ## What You'll Be Able to Do

@@ -8,7 +8,7 @@ revision_pending: false
 ---
 
 > **CGOA Track** | Practice questions | Set 1  
-> **Complexity:** Beginner to intermediate  
+> **Complexity:** `[MEDIUM]`  
 > **Estimated time:** 45-60 minutes  
 > **Prerequisites:** Basic Kubernetes objects, Git pull requests, YAML manifests, and the CGOA introduction modules
 

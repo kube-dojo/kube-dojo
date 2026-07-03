@@ -7,7 +7,7 @@ sidebar:
 ---
 
 > **CGOA Track** | Practice questions | Set 2
-> **Complexity:** Beginner to intermediate
+> **Complexity:** `[MEDIUM]`
 > **Estimated time:** 60-75 minutes
 > **Prerequisites:** CGOA modules 1.1 through 1.4, basic Kubernetes objects, Git pull requests, YAML manifests, and the idea that controllers reconcile desired state
 

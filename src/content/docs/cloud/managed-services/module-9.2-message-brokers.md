@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.2-message-brokers
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.1 (Relational Database Integration), Kubernetes Deployments and Services
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.1 (Relational Database Integration), Kubernetes Deployments and Services
 
 ## What You'll Be Able to Do
 

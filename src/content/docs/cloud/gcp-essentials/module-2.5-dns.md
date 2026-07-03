@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.5-dns
 sidebar:
   order: 6
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.2 (VPC Networking)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.2 (VPC Networking)
 
 ## What You'll Be Able to Do
 

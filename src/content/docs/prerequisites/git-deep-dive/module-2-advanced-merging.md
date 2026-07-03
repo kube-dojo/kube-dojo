@@ -4,13 +4,12 @@ sidebar:
   order: 2
 description: "Mastering Git merge strategies, conflict resolution, and branching models for Kubernetes infrastructure."
 timeToComplete: "75 minutes"
-complexity: "MEDIUM"
 prerequisites: ["Module 1 (Git Internals)"]
 nextModule: "[Module 3: History as a Choice](../module-3-interactive-rebasing/)"
 revision_pending: false
 ---
 
-> **Complexity**: MEDIUM
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 75 minutes
 >

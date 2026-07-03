@@ -5,7 +5,7 @@ slug: platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.3-ser
 sidebar:
   order: 4
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 40-45 minutes
 
 ---

@@ -5,7 +5,7 @@ slug: platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.4-vit
 sidebar:
   order: 5
 ---
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 ## Time to Complete: 50-55 minutes
 
 ---

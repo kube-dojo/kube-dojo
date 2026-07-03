@@ -4,7 +4,7 @@ slug: platform/disciplines/delivery-automation/iac/module-6.6-iac-cost-managemen
 sidebar:
   order: 7
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 45 minutes
 
 ---

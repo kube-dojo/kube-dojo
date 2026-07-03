@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.8-cloud-functions
 sidebar:
   order: 9
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 2.4 (GCS), Module 2.7 (Cloud Run). This module assumes you can create buckets and deploy Cloud Run services from Module 2.7, because Cloud Run functions share that execution plane.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 2.4 (GCS), Module 2.7 (Cloud Run). This module assumes you can create buckets and deploy Cloud Run services from Module 2.7, because Cloud Run functions share that execution plane.
 
 ## What You'll Be Able to Do
 

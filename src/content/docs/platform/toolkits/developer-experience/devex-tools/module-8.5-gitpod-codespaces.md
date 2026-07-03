@@ -5,7 +5,7 @@ slug: platform/toolkits/developer-experience/devex-tools/module-8.5-gitpod-codes
 sidebar:
   order: 6
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 45-50 minutes
 
 ---

@@ -4,7 +4,7 @@ slug: ai-ml-engineering/synthesis-apps/module-3.1-llm-native-stack-k8s
 sidebar:
   order: 1
 ---
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 90-120 min
 >

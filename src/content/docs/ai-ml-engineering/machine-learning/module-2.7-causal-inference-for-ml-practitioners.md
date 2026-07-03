@@ -6,7 +6,7 @@ sidebar:
   order: 27
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 95-115 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 95-115 minutes
 > Prerequisites: [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 2.2: Interpretability and Failure Slicing](../module-2.2-interpretability-and-failure-slicing/), and [Module 2.6: Fairness & Bias Auditing](../module-2.6-fairness-and-bias-auditing/). This is the last Tier-2 module of the Machine Learning track. The next conceptual move is Reinforcement Learning Module 2.1, Offline RL & Imitation Learning, which is forthcoming under issue #677. The forward reference is plain text rather than a link because the destination module has not landed yet.
 
 The on-call message arrives in the form of a question that sounds reasonable. A stakeholder reads the SHAP report from [Module 2.2](../module-2.2-interpretability-and-failure-slicing/), notices that `last_month_revenue` is the top driver of churn predictions, and asks the obvious follow-up. If the team intervenes by giving discounts that lower `last_month_revenue`, will customer churn drop in the same proportion that the SHAP value suggests? The honest answer is that the SHAP plot cannot answer that question. SHAP describes how the trained model uses the feature it was given. It does not establish that changing the feature in the world would change the outcome in the world. The question on the table is causal, not predictive, and the predictive model was never asked to answer it.

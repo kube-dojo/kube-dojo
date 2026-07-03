@@ -4,7 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.8-enterprise-gitops
 sidebar:
   order: 9
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: GitOps Basics (ArgoCD/Flux), Kubernetes RBAC, Multi-Cloud Fleet Management (Module 10.5)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: GitOps Basics (ArgoCD/Flux), Kubernetes RBAC, Multi-Cloud Fleet Management (Module 10.5)
 
 ## What You'll Be Able to Do
 

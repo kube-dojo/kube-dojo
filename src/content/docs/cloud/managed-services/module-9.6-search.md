@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.6-search
 sidebar:
   order: 7
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes logging concepts, JSON/HTTP API basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes logging concepts, JSON/HTTP API basics
 
 ## What You'll Be Able to Do
 

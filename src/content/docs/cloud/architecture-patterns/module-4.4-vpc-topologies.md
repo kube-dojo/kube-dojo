@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 3-4 hours
 >

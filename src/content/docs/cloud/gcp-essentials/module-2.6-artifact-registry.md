@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.6-artifact-registry
 sidebar:
   order: 7
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
 This module sits at the intersection of security, developer experience, and cost management because every container deployment depends on a registry that teams often treat as invisible infrastructure until it breaks a build, blocks a deploy, or leaks an artifact.
 

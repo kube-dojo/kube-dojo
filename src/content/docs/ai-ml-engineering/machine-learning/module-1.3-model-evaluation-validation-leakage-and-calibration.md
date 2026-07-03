@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-> **AI/ML Engineering Track** | Complexity: Intermediate | Time: 5-6 hours
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6 hours
 > **Prerequisites**: Module 1.1, `Pipeline`, `ColumnTransformer`, `cross_validate`, `train_test_split`, and comfortable NumPy/pandas.
 
 ## Learning Outcomes

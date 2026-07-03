@@ -4,7 +4,7 @@ slug: ai-ml-engineering/synthesis-apps/module-3.4-agent-observability-otel
 sidebar:
   order: 4
 ---
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 90-120 min
 >

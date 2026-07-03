@@ -4,7 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.9-zero-trust
 sidebar:
   order: 10
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Kubernetes Networking, Identity & Access Management, Service Mesh Basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Kubernetes Networking, Identity & Access Management, Service Mesh Basics
 
 In a hybrid cloud portfolio, zero trust is not a single feature you switch on after the fact; it is a design discipline that affects service boundaries, identity, policy evaluation, and operational workflows. In practice, the strongest teams apply these constraints before introducing new services, and the result is fewer emergency exceptions and clearer responsibility between platform, security, and application owners.
 

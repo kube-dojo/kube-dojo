@@ -2,7 +2,6 @@
 revision_pending: false
 title: "Module 1.9: Continuous Profiling - The 4th Pillar of Observability"
 slug: platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling
-complexity: "[MEDIUM]"
 time_to_complete: "60-75 minutes"
 prerequisites: "Module 1.1: Prometheus; Module 1.2: OpenTelemetry; Module 1.5: Distributed Tracing; Basic Kubernetes 1.35 workload operations"
 sidebar:

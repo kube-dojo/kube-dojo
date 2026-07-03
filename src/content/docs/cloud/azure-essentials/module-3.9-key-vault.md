@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.9-key-vault
 sidebar:
   order: 10
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
 
 ## What You'll Be Able to Do
 

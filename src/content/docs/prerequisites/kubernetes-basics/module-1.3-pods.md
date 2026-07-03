@@ -11,7 +11,7 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
-> **Complexity**: [MEDIUM]
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 60-75 minutes
 >

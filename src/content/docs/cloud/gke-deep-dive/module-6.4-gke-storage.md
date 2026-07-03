@@ -4,7 +4,7 @@ slug: cloud/gke-deep-dive/module-6.4-gke-storage
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 6.1 (GKE Architecture)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
 ## What You'll Be Able to Do
 

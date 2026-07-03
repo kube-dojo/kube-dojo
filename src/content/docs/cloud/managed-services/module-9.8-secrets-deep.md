@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.8-secrets-deep
 sidebar:
   order: 9
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes RBAC, cloud IAM basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes RBAC, cloud IAM basics
 
 ## What You'll Be Able to Do
 

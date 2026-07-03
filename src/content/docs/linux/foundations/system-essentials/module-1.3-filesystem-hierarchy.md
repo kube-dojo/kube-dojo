@@ -12,7 +12,7 @@ lab:
   environment: "ubuntu"
 ---
 
-**Complexity**: Intermediate<br>
+**Complexity**: `[MEDIUM]`<br>
 **Time to complete**: 45 minutes<br>
 **Prerequisites**: [Module 1.1: Kernel & Architecture](../module-1.1-kernel-architecture/) and [Module 1.2: Processes & systemd](../module-1.2-processes-systemd/)
 

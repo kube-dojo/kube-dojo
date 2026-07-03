@@ -4,7 +4,7 @@ slug: ai-ml-engineering/synthesis-apps/module-3.3-llm-evals-in-ci
 sidebar:
   order: 3
 ---
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 90-120 min
 >

@@ -14,6 +14,39 @@ Minimum requirements:
 
 This gate applies before the 7-dimension score is considered valid.
 
+---
+
+## Complexity Marker Convention (locked)
+
+Every module carries exactly one **complexity marker** in its top-of-module banner.
+The canonical form is a **backticked bracketed tier** inside the body blockquote:
+
+```
+> **Complexity**: `[MEDIUM]`
+```
+
+- **Controlled vocabulary — five tiers only:** `[QUICK]`, `[MEDIUM]`, `[COMPLEX]`,
+  `[ADVANCED]`, `[EXPERT]`. Do not invent tiers or use bare words
+  ("Intermediate", "Advanced"), bare brackets (`[MEDIUM]` without backticks), or
+  a `complexity:` frontmatter key. The **body marker is the single source of truth**;
+  the legacy `complexity:` frontmatter key is dropped.
+- **`[ADVANCED]` is sanctioned** as the tier between `[COMPLEX]` and `[EXPERT]`
+  (production engineering at senior scale) — see Dimension 8, which scores
+  `[COMPLEX]`/`[ADVANCED]`/`[EXPERT]` on the same practitioner-depth band.
+- **`[BEGINNER]` is not a tier.** It maps to `[QUICK]` (the introductory band).
+- Non-canonical spellings map deterministically: `Intermediate`/`[INTERMEDIATE]` →
+  `[MEDIUM]`, `Advanced` → `[ADVANCED]`, `Complex` → `[COMPLEX]`; a range maps to
+  its **ceiling** ("Beginner to intermediate" → `[MEDIUM]`, "Intermediate to
+  Advanced" → `[ADVANCED]`).
+- The banner blockquote format is specified in `.claude/rules/module-quality.md`.
+
+**Enforcement:** `scripts/normalize_complexity_markers.py` rewrites any drifted
+marker token to canonical form and drops the `complexity:` frontmatter key
+(`--check` reports drift, `--write` fixes it). This normalizer is **format-only** —
+it never re-levels a module based on content judgement; a genuinely mislabeled tier
+(e.g. a `[QUICK]` module whose content is medior) is tracked as a separate content
+follow-up, not silently re-tiered. Locked via #2141 / #2146 / #2181 / #2187 / #2195.
+
 > **Pipeline note (v2 quality pipeline)**: the v2 cross-family review (`scripts/quality/prompts.py::review_prompt`) deliberately **suspends** the Citation Gate during the rewrite/review phase because citation insertion is owned by a separate downstream stage (`scripts/citation_backfill.py`). The writer is instructed to preserve any pre-existing `## Sources` section verbatim and not to add a new one. After v2 reaches `COMMITTED`, run `python -m scripts.quality.pipeline backfill-pending` (or invoke `scripts/citation_backfill.py research/inject` per slug) to satisfy the gate. A v2-rewritten module that has not yet been backfilled is **expected** to score low on this rubric until backfill runs — that is not a v2 bug, it is the seam between the two pipelines.
 
 ---

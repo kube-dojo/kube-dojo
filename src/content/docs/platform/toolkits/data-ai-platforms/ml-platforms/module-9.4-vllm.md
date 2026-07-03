@@ -6,7 +6,7 @@ sidebar:
   order: 5
 ---
 
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 
 **Time to Complete**: 90 minutes  
 **Prerequisites**: Module 9.1 (Kubeflow basics), Kubernetes GPU scheduling basics, transformer inference basics, and comfort reading Prometheus metrics  

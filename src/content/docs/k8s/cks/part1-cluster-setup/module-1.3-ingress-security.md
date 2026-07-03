@@ -12,7 +12,7 @@ lab:
   environment: kubernetes
 ---
 
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 35 min
 >

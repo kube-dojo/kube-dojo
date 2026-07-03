@@ -6,7 +6,7 @@ sidebar:
   order: 25
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.2: Linear and Logistic Regression with Regularization](../module-1.2-linear-and-logistic-regression-with-regularization/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), and [Module 2.3: Probabilistic & Bayesian ML with PyMC](../module-2.3-probabilistic-and-bayesian-ml-with-pymc/). This module also sets up a plain-text forward reference to Module 2.6, fairness and bias auditing.
 
 The on-call story for conformal prediction usually begins with a team that believes it already has uncertainty. A regression or classification model is in production. The dashboard includes a confidence column. The

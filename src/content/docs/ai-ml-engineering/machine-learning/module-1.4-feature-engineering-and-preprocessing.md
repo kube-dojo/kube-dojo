@@ -6,7 +6,7 @@ sidebar:
   order: 4
 ---
 
-> **AI/ML Engineering Track** | Complexity: Intermediate | Time: 5-6 hours
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6 hours
 > **Prerequisites**: [Module 1.1](../module-1.1-scikit-learn-api-and-pipelines/) (Pipeline, ColumnTransformer, custom transformers) and [Module 1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/) (CV-aware fitting, leakage taxonomy). Comfortable NumPy and pandas.
 
 ## Learning Outcomes

@@ -8,7 +8,7 @@ sidebar:
 revision_pending: false
 ---
 
-> **Complexity**: Complex
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 3-4 hours
 >

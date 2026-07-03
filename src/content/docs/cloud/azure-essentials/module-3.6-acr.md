@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.3 (Virtual Machines), Module 3.1 (Microsoft Entra ID)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 3.3 (Virtual Machines), Module 3.1 (Microsoft Entra ID)
 
 ## What You'll Be Able to Do
 

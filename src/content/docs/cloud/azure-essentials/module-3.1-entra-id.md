@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.1-entra-id
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Cloud Native 101. You will use this module after you can already read and create resources in Azure, because the module assumes comfort with role and identity fundamentals.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Cloud Native 101. You will use this module after you can already read and create resources in Azure, because the module assumes comfort with role and identity fundamentals.
 
 ## What You'll Be Able to Do
 

@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.14-app-service
 sidebar:
   order: 15
 ---
-**Complexity**: [COMPLEX] | **Time:** 90-120 min | **Prerequisites**: [3.7-aci-aca](../module-3.7-aci-aca/) (Container Apps), [3.8-functions](../module-3.8-functions/), [3.9-key-vault](../module-3.9-key-vault/), [3.10-monitor](../module-3.10-monitor/)
+**Complexity**: `[COMPLEX]` | **Time:** 90-120 min | **Prerequisites**: [3.7-aci-aca](../module-3.7-aci-aca/) (Container Apps), [3.8-functions](../module-3.8-functions/), [3.9-key-vault](../module-3.9-key-vault/), [3.10-monitor](../module-3.10-monitor/)
 
 ## What You'll Be Able to Do
 

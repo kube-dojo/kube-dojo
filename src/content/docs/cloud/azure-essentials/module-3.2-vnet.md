@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.2-vnet
 sidebar:
   order: 3
 ---
-> **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
+> **Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
 
 ## What You'll Be Able to Do
 

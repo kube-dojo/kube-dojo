@@ -6,7 +6,7 @@ sidebar:
   order: 6
 ---
 
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 
 **Time to Complete**: 90 minutes  
 **Prerequisites**: Module 9.4 (vLLM), Basic Python, Kubernetes workload fundamentals, familiarity with CPU and GPU resource requests

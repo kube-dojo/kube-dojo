@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.4-blob
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.1 (Entra ID & RBAC). You should be comfortable assigning Entra ID RBAC roles and running `az` commands with `--auth-mode login` before starting.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 3.1 (Entra ID & RBAC). You should be comfortable assigning Entra ID RBAC roles and running `az` commands with `--auth-mode login` before starting.
 
 ## What You'll Be Able to Do
 

@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.4-s3
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.1. This module assumes you already know object-level IAM basics and now focuses on secure storage design, lifecycle discipline, and controlled data sharing patterns.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.1. This module assumes you already know object-level IAM basics and now focuses on secure storage design, lifecycle discipline, and controlled data sharing patterns.
 
 ## What You'll Be Able to Do
 

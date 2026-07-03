@@ -6,7 +6,7 @@ sidebar:
   order: 1010
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-120 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-120 minutes
 > Prerequisites: [Module 1.3.1: Initialization & Signal Propagation](module-1.3.1-initialization-signal-propagation/), [Module 1.4.4: The Transformer Block from Scratch](module-1.4.4-transformer-block-from-scratch/), and [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/).
 
 Graph neural networks, usually shortened to GNNs, are the part of deep learning

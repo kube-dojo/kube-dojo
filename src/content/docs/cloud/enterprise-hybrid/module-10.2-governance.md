@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Enterprise Landing Zones (Module 10.1), Kubernetes RBAC basics, YAML/JSON fundamentals
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Enterprise Landing Zones (Module 10.1), Kubernetes RBAC basics, YAML/JSON fundamentals
 
 ## What You'll Be Able to Do
 

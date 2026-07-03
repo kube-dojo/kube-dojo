@@ -6,7 +6,7 @@ sidebar:
   order: 26
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 2.2: Interpretability and Failure Slicing](../module-2.2-interpretability-and-failure-slicing/), and [Module 2.5: Conformal Prediction and Uncertainty Quantification](../module-2.5-conformal-prediction-and-uncertainty-quantification/). This module also sets up a plain-text forward reference to Module 2.7, causal inference for ML practitioners.
 
 The on-call incident starts with a chart that nobody expected to matter. The model is live. The overall accuracy is acceptable. The calibration plot from [Module

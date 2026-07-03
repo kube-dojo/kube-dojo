@@ -5,7 +5,7 @@ slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.6-bicep
 sidebar:
   order: 7
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 75 minutes
 
 ---

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-> **On-Premises Multi-Cluster** | Complexity: `[INTERMEDIATE]` | Time: 45-55 min | Covers OpenStack, VMware, CloudStack, oVirt, Kubernetes integration, and operational dependencies for private cloud platforms.
+> **On-Premises Multi-Cluster** | Complexity: `[MEDIUM]` | Time: 45-55 min | Covers OpenStack, VMware, CloudStack, oVirt, Kubernetes integration, and operational dependencies for private cloud platforms.
 
 ## Prerequisites
 

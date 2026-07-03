@@ -6,7 +6,7 @@ sidebar:
   order: 21
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate-to-Advanced | Time: 100-120 minutes
+> Track: AI/ML Engineering | Complexity: `[ADVANCED]` | Time: 100-120 minutes
 > Prerequisites: [Module 1.1: RL Practitioner Foundations](./module-1.1-rl-practitioner-foundations/), [Module 2.7: Causal Inference for ML Practitioners](../../machine-learning/module-2.7-causal-inference-for-ml-practitioners/), and comfort with supervised validation, sequential data, and Python experiment logs.
 
 The most tempting reinforcement-learning demo is also the least available production workflow. Let an agent explore.

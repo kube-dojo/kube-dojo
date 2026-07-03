@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.3-ec2
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.2. After completing this module, you will be able to:
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.2. After completing this module, you will be able to:
 
 ## What You'll Be Able to Do
 

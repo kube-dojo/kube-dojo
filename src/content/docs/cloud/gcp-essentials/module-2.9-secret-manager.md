@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.9-secret-manager
 sidebar:
   order: 10
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy) — you should be comfortable creating service accounts, granting IAM roles, and enabling GCP APIs before storing production credentials in Secret Manager.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy) — you should be comfortable creating service accounts, granting IAM roles, and enabling GCP APIs before storing production credentials in Secret Manager.
 
 ## What You'll Be Able to Do
 

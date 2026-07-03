@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.3-compute
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.2 (VPC Networking). This module assumes a networking baseline and is designed to move you from “single instances” into controlled, production-like compute operations with predictable behavior.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.2 (VPC Networking). This module assumes a networking baseline and is designed to move you from “single instances” into controlled, production-like compute operations with predictable behavior.
 
 ## What You'll Be Able to Do
 

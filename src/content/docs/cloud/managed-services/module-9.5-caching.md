@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.5-caching
 sidebar:
   order: 6
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Module 9.4 (Object Storage), Redis fundamentals, and basic Kubernetes Service networking
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Module 9.4 (Object Storage), Redis fundamentals, and basic Kubernetes Service networking
 
 ## What You'll Be Able to Do
 

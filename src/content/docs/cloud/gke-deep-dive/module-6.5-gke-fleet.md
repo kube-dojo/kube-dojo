@@ -4,7 +4,7 @@ slug: cloud/gke-deep-dive/module-6.5-gke-fleet
 sidebar:
   order: 6
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
 ## What You'll Be Able to Do
 

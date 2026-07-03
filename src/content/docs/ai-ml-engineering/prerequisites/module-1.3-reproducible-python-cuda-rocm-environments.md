@@ -5,7 +5,7 @@ slug: ai-ml-engineering/prerequisites/module-1.3-reproducible-python-cuda-rocm-e
 sidebar:
   order: 103
 ---
-> **Complexity**: Intermediate
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 2-3 hours
 >

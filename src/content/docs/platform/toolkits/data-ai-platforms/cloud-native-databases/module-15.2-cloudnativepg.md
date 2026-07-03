@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 
 ## Time to Complete: 50-60 minutes
 

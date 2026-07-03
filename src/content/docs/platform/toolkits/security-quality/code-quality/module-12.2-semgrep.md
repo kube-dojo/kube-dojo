@@ -5,7 +5,7 @@ slug: platform/toolkits/security-quality/code-quality/module-12.2-semgrep
 sidebar:
   order: 3
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 60-75 minutes
 
 ---

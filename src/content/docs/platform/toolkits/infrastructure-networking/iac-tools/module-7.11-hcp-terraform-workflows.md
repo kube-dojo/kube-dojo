@@ -5,7 +5,7 @@ slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.11-hcp-terr
 sidebar:
   order: 12
 ---
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 60-70 min
 >

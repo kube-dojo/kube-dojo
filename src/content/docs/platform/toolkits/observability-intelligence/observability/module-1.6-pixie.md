@@ -6,7 +6,7 @@ sidebar:
   order: 7
 ---
 
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 
 **Time to Complete**: 90 minutes
 

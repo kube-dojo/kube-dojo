@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.10-analytics
 sidebar:
   order: 11
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.4 (Object Storage), Module 9.7 (Streaming Pipelines), SQL basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.4 (Object Storage), Module 9.7 (Streaming Pipelines), SQL basics
 
 ## What You'll Be Able to Do
 

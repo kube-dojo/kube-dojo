@@ -6,7 +6,7 @@ sidebar:
   order: 7
 ---
 
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 
 ## Time to Complete: 55-60 minutes
 

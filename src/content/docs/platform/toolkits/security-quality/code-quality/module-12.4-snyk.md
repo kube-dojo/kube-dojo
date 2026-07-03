@@ -5,7 +5,7 @@ slug: platform/toolkits/security-quality/code-quality/module-12.4-snyk
 sidebar:
   order: 5
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 45-50 minutes
 
 ---

@@ -5,7 +5,7 @@ sidebar:
   order: 14
 ---
 
-> **Complexity:** [COMPLEX]  
+> **Complexity:** `[COMPLEX]`  
 > **Time:** 60-90 min  
 > **Prereqs:** [3.2-vnet](../module-3.2-vnet/), [3.5-dns](../module-3.5-dns/), [3.10-monitor](../module-3.10-monitor/)  
 > Start this module by naming who controls each control boundary, because governance is the operational shortcut that prevents ownership disputes during incidents.

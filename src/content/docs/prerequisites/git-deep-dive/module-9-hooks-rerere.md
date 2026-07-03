@@ -7,7 +7,7 @@ sidebar:
   order: 9
 ---
 
-> **Complexity**: [MEDIUM]
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 75 minutes
 >

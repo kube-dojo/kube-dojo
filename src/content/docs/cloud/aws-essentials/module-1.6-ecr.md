@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.6-ecr
 sidebar:
   order: 7
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 1 hour
 
 ---

@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Multi-Cloud Fleet Management (Module 10.5), Kubernetes Custom Resources, Infrastructure as Code Basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Multi-Cloud Fleet Management (Module 10.5), Kubernetes Custom Resources, Infrastructure as Code Basics
 
 ## What You'll Be Able to Do
 

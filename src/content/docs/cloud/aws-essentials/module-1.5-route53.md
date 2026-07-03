@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.5-route53
 sidebar:
   order: 6
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 1.5 hours
 
 ---

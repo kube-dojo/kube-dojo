@@ -5,7 +5,7 @@ sidebar:
   order: 15
 ---
 
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: ~120 minutes
 >

@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.3-serverless
 sidebar:
   order: 4
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes Services and Ingress basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes Services and Ingress basics
 
 ## What You'll Be Able to Do
 

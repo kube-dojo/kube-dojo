@@ -6,7 +6,7 @@ sidebar:
   order: 2
 ---
 
-> **AI/ML Engineering Track** | Complexity: Intermediate | Time: 5-6 hours
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6 hours
 > **Prerequisites**: [Module 1.1](../module-1.1-scikit-learn-api-and-pipelines/) — sklearn estimator/transformer/Pipeline contract. Comfortable NumPy and pandas.
 
 ## Learning Outcomes

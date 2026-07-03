@@ -1,6 +1,5 @@
 ---
 title: "Module 5: Multi-Tasking Mastery - Worktrees and Stashing"
-complexity: MEDIUM
 time_to_complete: "60 minutes"
 prerequisites: "Module 4 of Git Deep Dive"
 next_module: "[Module 6: The Digital Detective](../module-6-troubleshooting/)"
@@ -9,7 +8,7 @@ sidebar:
   order: 5
 ---
 
-> **Complexity**: [MEDIUM]
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 60 minutes
 >

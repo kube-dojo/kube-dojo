@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.11-cloud-build
 sidebar:
   order: 12
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.6 (Artifact Registry), Module 2.7 (Cloud Run)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.6 (Artifact Registry), Module 2.7 (Cloud Run)
 
 ## What You'll Be Able to Do
 

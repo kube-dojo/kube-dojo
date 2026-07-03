@@ -1,7 +1,6 @@
 ---
 title: "Module 10: Bridge to GitOps — The Infrastructure Source"
 description: "Transitioning from manual infrastructure management to declarative, Git-driven continuous reconciliation."
-complexity: "MEDIUM"
 timeToComplete: "60 minutes"
 revision_pending: false
 sidebar:

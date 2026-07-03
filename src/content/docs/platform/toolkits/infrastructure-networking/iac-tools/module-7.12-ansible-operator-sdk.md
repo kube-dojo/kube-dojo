@@ -4,7 +4,7 @@ slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.12-ansible-
 sidebar:
   order: 13
 ---
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: ~90 minutes
 >

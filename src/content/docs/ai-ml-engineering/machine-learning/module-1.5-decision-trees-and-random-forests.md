@@ -6,7 +6,7 @@ sidebar:
   order: 5
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 75-90 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), and [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/).
 
 ## Learning Outcomes

@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.10-monitor
 sidebar:
   order: 11
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 3.3 (VMs), Module 3.1 (Entra ID). This module balances practical incident-readiness with conceptual grounding so you can configure monitoring both quickly and correctly under pressure.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 3.3 (VMs), Module 3.1 (Entra ID). This module balances practical incident-readiness with conceptual grounding so you can configure monitoring both quickly and correctly under pressure.
 
 ## What You'll Be Able to Do
 

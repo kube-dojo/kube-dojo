@@ -6,7 +6,7 @@ sidebar:
   order: 1
 ---
 
-> **AI/ML Engineering Track** | Complexity: Intermediate | Time: 4-5 hours
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5 hours
 > **Prerequisites**: Comfortable Python, NumPy, pandas. No prior ML library experience required.
 
 ## Learning Outcomes

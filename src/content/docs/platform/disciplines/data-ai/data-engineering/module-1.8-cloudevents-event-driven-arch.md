@@ -5,7 +5,7 @@ sidebar:
   order: 9
 revision_pending: false
 ---
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 3.5 hours
 >
