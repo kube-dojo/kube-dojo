@@ -838,7 +838,7 @@ Success criteria:
 
 ## Next Module
 
-Continue to [Module 1.6: Memory Bandwidth Math](../ai-infrastructure/module-1.6-memory-bandwidth-math/) to complete the bandwidth budget for these architecture decisions before tuning production inference engines.
+Continue to [Machine Learning](../machine-learning/) to apply these foundations to tabular ML — the sklearn API, regression, trees, and evaluation.
 
 ## Sources
 

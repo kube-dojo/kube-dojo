@@ -5,7 +5,7 @@ sidebar:
   label: "Advanced GenAI & Safety"
 ---
 
-> **AI/ML Engineering Track** | Phase 7
+> **AI/ML Engineering Track** | Phase 8
 
 **Best for:** learners who want deeper adaptation, evaluation, alignment, and local fine-tuning workflows after they already understand the basics.
 
