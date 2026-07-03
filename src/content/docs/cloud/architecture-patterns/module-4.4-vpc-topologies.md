@@ -483,7 +483,7 @@ k logs -n kube-system -l k8s-app=aws-node --tail=100
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Advanced Operations](../../advanced-operations/) to scale these architectural decisions beyond a single cluster — multi-account strategies, transit-hub networking, cross-cluster service discovery, and disaster recovery at enterprise scale.
 
 ## Sources
 

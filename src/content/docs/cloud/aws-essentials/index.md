@@ -39,4 +39,4 @@ Not everything goes into Kubernetes. This track covers the core AWS services eve
 
 ## What's Next
 
-After AWS Essentials, continue to [Cloud Deep Dive: AWS EKS Mastery](../) for production Kubernetes on AWS.
+After AWS Essentials, continue to [AWS EKS Deep Dive](../eks-deep-dive/) for production Kubernetes on AWS.
