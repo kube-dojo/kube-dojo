@@ -4,6 +4,13 @@ slug: k8s/cks/part5-supply-chain-security/module-5.3-static-analysis
 sidebar:
   order: 3
 ---
+> **Complexity**: `[MEDIUM]` - Critical CKS skill
+>
+> **Time to Complete**: 45 minutes
+>
+> **Prerequisites**: Module 5.2 (Image Scanning) and Kubernetes manifests
+
+---
 
 ## What You'll Be Able to Do
 
