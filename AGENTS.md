@@ -5,6 +5,19 @@
 
 ---
 
+## Global Codex Operating Rules
+
+- Start every task at the repository root and run `git status --short --branch` before editing.
+- Preserve user and unrelated changes; do not revert, delete, or clean up work outside the task.
+- Use multi-agent delegation for non-trivial work that can run in parallel without shared-file contention.
+- Keep worker scopes disjoint, and explicitly tell agents not to revert or overwrite others' changes.
+- Use `apply_patch` for manual edits.
+- Keep changes scoped to the requested files and behavior.
+- Run relevant verification before finalizing, or state why verification was not run.
+- Final reports must include changed files, verification performed, and final `git status --short --branch`.
+
+---
+
 ## Cold start (first call on a fresh session)
 
 **Do not start with `git log` or a grep sweep.** Issue-driven sessions: read the GitHub issue verbatim first, then run:
