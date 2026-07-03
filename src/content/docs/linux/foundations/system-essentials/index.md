@@ -29,7 +29,7 @@ Every single thing you do on Linux touches these concepts:
 
 ## Prerequisites
 
-None. This is where you start.
+- [Everyday Use](../everyday-use/) — Shell commands, navigation, process tools, and daily workflows
 
 ## Key Takeaways
 
