@@ -1053,7 +1053,7 @@ DVC can record the validation artifact and decide what must rerun. Meanwhile, gr
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Module 5.8: Great Expectations Data Quality](../module-5.8-great-expectations-data-quality/) to define data-quality contracts and gate pipeline stages on validation results.
 ## Sources
 
 - [DVC command reference: `init`](https://dvc.org/doc/command-reference/init) - Official behavior for initializing a DVC project and creating `.dvc/` configuration and cache structure.

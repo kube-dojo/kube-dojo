@@ -11,7 +11,7 @@ revision_pending: false
 
 Before starting this module:
 - **Required**: [Kubernetes Basics](/prerequisites/kubernetes-basics/) — Core cluster concepts and workloads
-- **Required**: [Release Engineering](/platform/disciplines/core-platform/sre/) — Understanding deployment pipelines and rollbacks
+- **Required**: [Release Engineering](/platform/disciplines/delivery-automation/release-engineering/) — Understanding deployment pipelines and rollbacks
 - **Recommended**: Experience operating at least one production system
 - **Recommended**: Familiarity with monitoring concepts (Prometheus, Grafana)
 

@@ -1498,4 +1498,4 @@ The exact batch metric may differ in your BentoML version, so the first success 
 
 ## Next Module
 
-Next: bare-metal MLOps recipe (Module 9.11)
+Next: [Module 9.11 — Bare-Metal MLOps](../module-9.11-bare-metal-mlops/): Building a Production ML Platform Without Managed Cloud

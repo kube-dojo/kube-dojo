@@ -955,7 +955,7 @@ rm -f kind-longhorn-config.yaml longhorn-test-pvc.yaml
 
 ## Next Module
 
-*Next module coming soon.*
+You have completed the Storage toolkit. Return to the [Storage toolkit overview](../) to review the module sequence or explore other infrastructure toolkits.
 
 ## Sources
 

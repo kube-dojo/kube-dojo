@@ -787,7 +787,7 @@ sudo bpftrace -e 'tracepoint:ipv6:ipv6_deliver { @[comm] = count(); } interval:s
 
 ## Next Module
 
-The canonical follow-on is the planned [Dual-stack K8s Setup module in issue #1523](https://github.com/kube-dojo/kube-dojo.github.io/issues/1523), which will layer Kubernetes-specific Services, Pod CIDRs, and cluster rollout mechanics on top of these foundations. Until that lands, use the upstream [Kubernetes dual-stack networking overview](https://kubernetes.io/docs/concepts/services-networking/dual-stack/) as a reference, not as this module’s main teaching path.
+Continue to [Module 1.8: Dual-Stack Kubernetes Setup & Operations](../module-1.8-dual-stack-k8s/) to configure dual-stack Services, Pod CIDRs, and cluster rollout mechanics on top of these IPv6 foundations.
 
 ## Sources
 

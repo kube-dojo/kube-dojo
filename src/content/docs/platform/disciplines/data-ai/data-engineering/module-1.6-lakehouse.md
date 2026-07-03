@@ -1392,7 +1392,7 @@ This is the promise of the lakehouse: warehouse-grade reliability, lake-scale ec
 
 ## Next Module
 
-[Module 1.7 — Data Orchestration with Apache Airflow on Kubernetes](../module-1.7-airflow/) — Learn to build, schedule, and monitor complex data pipelines that span your lakehouse components
+[Module 1.7 — Event Streaming Fundamentals](../module-1.7-event-streaming-fundamentals/) — Learn the streaming mental model—logs, partitions, ordering, backpressure, and replay—that underpins lakehouse ingestion pipelines
 
 ---
 

@@ -911,4 +911,4 @@ Add a `serviceType` field to the WebApp spec with an enum that allows `ClusterIP
 
 ## Next Module
 
-Continue to the next module in the Platforms Toolkit to expand your platform engineering skills.
+Continue to [Module 3.5: Cluster API (CAPI)](../module-3.5-cluster-api/) to learn declarative Kubernetes cluster lifecycle management across infrastructure providers.

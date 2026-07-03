@@ -1000,6 +1000,8 @@ kubectl delete secret commerce-schema
 
 ## Next Module
 
+Continue to [Module 15.5: etcd-operator](../module-15.5-etcd-operator/) — the final module in this toolkit — to manage etcd clusters that back Kubernetes and other distributed control planes.
+
 - **Related**: [Module 15.3: PlanetScale](../module-15.3-serverless-databases/) — Managed Vitess experience
 - **Related**: [Distributed Systems Foundation](/platform/foundations/distributed-systems/) — Sharding theory and CAP theorem foundations
 - **Related**: [Observability Toolkit](/platform/toolkits/observability-intelligence/observability/) — Monitoring Vitess clusters with Prometheus and Grafana

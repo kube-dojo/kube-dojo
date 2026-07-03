@@ -1678,7 +1678,7 @@ experiment.mlops.seldon.io/iris-final-ab True
 
 ## Next Module
 
-Next: Module 9.10 — BentoML: Unified Model Packaging and Deployment
+Next: [Module 9.10 — BentoML](../module-9.10-bentoml/): Python-First Model Packaging and Serving
 
 ## Sources
 
