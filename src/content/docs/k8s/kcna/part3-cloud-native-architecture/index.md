@@ -1,5 +1,5 @@
 ---
-title: "Cloud Native Architecture (16%)"
+title: "Cloud Native Architecture (12%)"
 sidebar:
   order: 0
   label: "Cloud Native Architecture"
