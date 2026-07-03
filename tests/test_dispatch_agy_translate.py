@@ -77,6 +77,52 @@ def test_dispatch_agy_translate_retries_until_success() -> None:
     assert run_mock.call_count == 3
 
 
+_GENERAL_BODY = "Verdict: APPROVE\n\nThe change is correct."
+
+
+def test_dispatch_agy_captures_stdout_and_uses_general_suffix() -> None:
+    """General agy dispatch (#2125) captures stdout, uses the general print
+    suffix (not the translation one), and defaults to the agy writer model."""
+    plan = SimpleNamespace(cmd=["agy", "-p", "prompt"], cwd=Path("."))
+
+    with patch.object(dispatch.AgyAdapter, "build_invocation", return_value=plan) as build_mock, patch(
+        "dispatch.subprocess.run", return_value=_completed(_GENERAL_BODY)
+    ) as run_mock, patch("dispatch._log"):
+        ok, output = dispatch.dispatch_agy("Review this diff")
+
+    assert ok is True
+    assert output == _GENERAL_BODY
+    assert run_mock.call_count == 1
+    prompt = build_mock.call_args.kwargs["prompt"]
+    assert "printed to stdout" in prompt
+    # NOT the translation-specific suffix
+    assert "translated markdown" not in prompt
+    assert build_mock.call_args.kwargs["model"] == dispatch.AGY_DEFAULT_MODEL
+
+
+def test_dispatch_agy_honors_explicit_model() -> None:
+    plan = SimpleNamespace(cmd=["agy", "-p", "prompt"], cwd=Path("."))
+    with patch.object(dispatch.AgyAdapter, "build_invocation", return_value=plan) as build_mock, patch(
+        "dispatch.subprocess.run", return_value=_completed(_GENERAL_BODY)
+    ), patch("dispatch._log"):
+        ok, _ = dispatch.dispatch_agy("x", model="gemini-3.5-flash-high")
+
+    assert ok is True
+    assert build_mock.call_args.kwargs["model"] == "gemini-3.5-flash-high"
+
+
+def test_dispatch_agy_empty_stdout_retries_then_fails() -> None:
+    plan = SimpleNamespace(cmd=["agy", "-p", "prompt"], cwd=Path("."))
+    with patch.object(dispatch.AgyAdapter, "build_invocation", return_value=plan), patch(
+        "dispatch.subprocess.run", return_value=_completed("")
+    ) as run_mock, patch("dispatch._log"):
+        ok, err = dispatch.dispatch_agy("x", attempts=2)
+
+    assert ok is False
+    assert err
+    assert run_mock.call_count == 2
+
+
 def test_extract_agy_translation_from_stdout_unwraps_markdown_fence() -> None:
     wrapped = "Here is the translation:\n\n```markdown\n## Title\n\nBody.\n```"
     assert dispatch._extract_agy_translation_from_stdout(wrapped) == "## Title\n\nBody."
