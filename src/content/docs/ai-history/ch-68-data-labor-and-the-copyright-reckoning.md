@@ -41,7 +41,7 @@ timeline
     Dec 2023-May 2024 : OpenAI announces Axel Springer, FT, Reddit, News Corp deals
     Apr 4 2025 : NYT/OpenAI motion-to-dismiss opinion narrows some claims
     Jun 23 2025 : Bartz v. Anthropic fair-use order separates key copying and acquisition questions
-    Apr 2026 : Bartz settlement-finality hearing pending
+    May 14 2026 : Bartz settlement fairness hearing held, final approval deferred
 ```
 
 </details>
@@ -185,7 +185,7 @@ That is a narrow legal posture, but a historically powerful one.
 
 It teaches that "used for AI" is not one legal fact. A copy can be acquired one way and used another. A court can view training as transformative in one posture while still refusing to bless the acquisition path for a central library of pirated copies. The same model developer can win on one theory and face trial or settlement pressure on another.
 
-As of April 2026, Bartz settlement finality remained time-sensitive. Authors Alliance reported that the settlement fairness hearing had been moved to May 14, 2026 and discussed objections to the proposed settlement. That means the chapter should not treat the settlement process as final. The stable point for this draft is the June 23, 2025 fair-use order and its split by use and acquisition path.
+As of mid-2026, Bartz settlement finality remained time-sensitive. The settlement fairness hearing was held on May 14, 2026; the court weighed objections and, as of this writing, had not yet entered final approval. That means the chapter should not treat the settlement process as final. The stable point for this chapter is the June 23, 2025 fair-use order and its split by use and acquisition path.
 
 That split is the best antidote to sloppy claims. It does not support "all training is legal." It does not support "all training is illegal." It shows a court separating training use, purchased scanning, pirated acquisition, class procedure, and damages.
 
