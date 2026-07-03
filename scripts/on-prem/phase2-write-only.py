@@ -51,7 +51,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 VENV_PYTHON = str((REPO_ROOT / ".venv" / "bin" / "python").resolve())
 
-from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry  # type: ignore  # noqa: E402
+from dispatch import GEMINI_WRITER_MODEL, dispatch_agy  # type: ignore  # noqa: E402
 
 CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs" / "on-premises"
 LOG_FILE = REPO_ROOT / ".pipeline" / "on-prem-logs" / "phase2-write-only.log"
@@ -348,7 +348,8 @@ def extract_first_json_object(text: str) -> dict | None:
 def dispatch_writer(prompt: str, writer_model: str) -> tuple[bool, str]:
     """Dispatch to whichever writer model is configured. Routes by model name."""
     if writer_model.startswith("gemini"):
-        return dispatch_gemini_with_retry(prompt, model=writer_model, timeout=900)
+        # gemini-* slugs route to the agy Google lane; gemini-cli retired (#2125).
+        return dispatch_agy(prompt, model=writer_model, timeout=900)
     if writer_model.startswith("gpt-") or writer_model == "codex":
         cmd = [
             "codex", "--search", "exec", "--skip-git-repo-check",

@@ -177,7 +177,7 @@ def test_handler_quiz_injection(monkeypatch) -> None:
 
 
 def test_handler_thin_multi_pass_crosses_target(monkeypatch) -> None:
-    monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", lambda prompt, timeout=900: (True, _big_gemini_addition()))
+    monkeypatch.setattr(expand_module, "dispatch_agy", lambda prompt, timeout=900: (True, _big_gemini_addition()))
     doc = module_sections.parse_module(THIN_FIXTURE)
 
     result = expand_module.handler_thin(doc, THIN_MODULE_KEY, target_loc=600, max_thin_passes=5)
@@ -189,7 +189,7 @@ def test_handler_thin_multi_pass_crosses_target(monkeypatch) -> None:
 
 
 def test_handler_thin_max_passes_cap(monkeypatch) -> None:
-    monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", lambda prompt, timeout=900: (True, _tiny_gemini_addition()))
+    monkeypatch.setattr(expand_module, "dispatch_agy", lambda prompt, timeout=900: (True, _tiny_gemini_addition()))
     doc = module_sections.parse_module(THIN_FIXTURE)
 
     result = expand_module.handler_thin(doc, THIN_MODULE_KEY, target_loc=600, max_thin_passes=2)
@@ -264,7 +264,7 @@ def test_gap_skip_reasons_do_not_dispatch(monkeypatch, tmp_path: Path) -> None:
         raise AssertionError("dispatch should not run for skipped gaps")
 
     monkeypatch.setattr(expand_module, "dispatch_codex_patch", _fail_dispatch)
-    monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", _fail_dispatch)
+    monkeypatch.setattr(expand_module, "dispatch_agy", _fail_dispatch)
 
     result = expand_module.expand_module(
         "platform/foo/module-1.1-skip-fixture",
@@ -297,7 +297,7 @@ def test_expand_module_integration_shape_and_file_content(monkeypatch, tmp_path:
         raise AssertionError(prompt)
 
     monkeypatch.setattr(expand_module, "dispatch_codex_patch", _fake_codex)
-    monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", lambda prompt, timeout=900: (True, _big_gemini_addition()))
+    monkeypatch.setattr(expand_module, "dispatch_agy", lambda prompt, timeout=900: (True, _big_gemini_addition()))
 
     result = expand_module.expand_module(
         THIN_MODULE_KEY,

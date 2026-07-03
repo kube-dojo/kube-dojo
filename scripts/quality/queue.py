@@ -41,8 +41,11 @@ from .state import (
 # neither resolves, default to tertiary so a human picks instead of silently
 # routing to whichever the order ended up.
 
-PRIMARY_BEGINNER = "gemini-3.1-pro-preview"
-PRIMARY_ADVANCED = "gemini-3.1-pro-preview"
+# Primary writer is now the agy (Antigravity) Google lane, model
+# gemini-3.1-pro-high — gemini-cli is retired (#2125). The model id is an agy
+# display slug, dispatched via the `agy` subcommand in scripts/dispatch.py.
+PRIMARY_BEGINNER = "gemini-3.1-pro-high"
+PRIMARY_ADVANCED = "gemini-3.1-pro-high"
 TERTIARY = "claude-opus-4-8"
 
 # Map writer-model identifiers (returned by route_writer / stored in the
@@ -51,7 +54,7 @@ TERTIARY = "claude-opus-4-8"
 # vocabulary. Adding a writer means adding an entry here AND a
 # corresponding case in scripts/dispatch.py.
 _MODEL_TO_AGENT: dict[str, tuple[str, str]] = {
-    PRIMARY_BEGINNER: ("gemini", PRIMARY_BEGINNER),
+    PRIMARY_BEGINNER: ("agy", PRIMARY_BEGINNER),
     TERTIARY: ("claude", TERTIARY),
 }
 
@@ -123,7 +126,7 @@ def _tertiary_writer() -> str:
     """Resolve the tertiary writer, honouring a runtime degraded fallback.
     """
     fallback = os.environ.get("KUBEDOJO_TERTIARY_FALLBACK", "").lower().strip()
-    if fallback in {"gemini", "gemini-3.1-pro-preview"}:
+    if fallback in {"gemini", "agy", "gemini-3.1-pro-preview", "gemini-3.1-pro-high"}:
         return PRIMARY_BEGINNER
     return TERTIARY
 

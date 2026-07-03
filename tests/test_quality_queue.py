@@ -40,8 +40,8 @@ def _seed_module(repo: Path, rel: str, *, complexity: str | None = None, with_st
 
 
 def test_model_to_agent_known_models():
-    assert queue.model_to_agent(queue.PRIMARY_BEGINNER) == ("gemini", queue.PRIMARY_BEGINNER)
-    assert queue.model_to_agent(queue.PRIMARY_ADVANCED) == ("gemini", queue.PRIMARY_ADVANCED)
+    assert queue.model_to_agent(queue.PRIMARY_BEGINNER) == ("agy", queue.PRIMARY_BEGINNER)
+    assert queue.model_to_agent(queue.PRIMARY_ADVANCED) == ("agy", queue.PRIMARY_ADVANCED)
     assert queue.model_to_agent(queue.TERTIARY) == ("claude", queue.TERTIARY)
 
 

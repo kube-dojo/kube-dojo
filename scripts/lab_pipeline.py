@@ -25,9 +25,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from dispatch import (  # noqa: E402
     GEMINI_WRITER_MODEL,
     _is_rate_limited,
+    dispatch_agy,
     dispatch_claude,
     dispatch_codex,
-    dispatch_gemini_with_retry,
 )
 
 CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
@@ -117,8 +117,9 @@ class ModuleResolution:
 
 
 def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, str]:
+    # gemini-* slugs are agy (Antigravity) display models; gemini-cli retired (#2125).
     if model.startswith("gemini"):
-        return dispatch_gemini_with_retry(prompt, model=model, timeout=timeout)
+        return dispatch_agy(prompt, model=model, timeout=timeout)
     if model.startswith("claude"):
         return dispatch_claude(prompt, model=model, timeout=timeout)
     if model.startswith("codex") or "codex" in model or model.startswith("gpt-"):

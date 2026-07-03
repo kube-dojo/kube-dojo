@@ -31,9 +31,12 @@ _REPO_ROOT = primary_checkout_root(Path(__file__).resolve().parents[2])
 _VENV_PYTHON = str(_REPO_ROOT / ".venv" / "bin" / "python")
 _DISPATCH_CLI = str(_REPO_ROOT / "scripts" / "dispatch.py")
 
-Agent = Literal["codex", "claude", "gemini"]
+# "agy" is the Google lane (Antigravity) that replaced the retired gemini-cli
+# (#2125). "gemini" is retained as a still-accepted agent string for the legacy
+# dispatch path / opt-in callers; no default routes to it (see tiebreaker_agent).
+Agent = Literal["codex", "claude", "agy", "gemini"]
 
-VALID_AGENTS: frozenset[str] = frozenset({"codex", "claude", "gemini"})
+VALID_AGENTS: frozenset[str] = frozenset({"codex", "claude", "agy", "gemini"})
 
 # Timeouts by role, not agent. The citation-verify path is per-URL so
 # it gets a short timeout; writer/reviewer dispatches are per-module so
@@ -192,8 +195,12 @@ def writer_for_index(module_index: int) -> tuple[Agent, Agent]:
 def tiebreaker_agent() -> Agent:
     """Agent invoked when Codex↔Claude retry loop hits the cap.
 
-    Gemini is the third party because it's cheap, fast, and outside
-    the writer/reviewer rotation so its verdict is structurally
-    independent.
+    The agy (Antigravity) Google lane is the third party — outside the
+    codex/claude writer/reviewer rotation, so its verdict is structurally
+    independent (replaces the retired gemini-cli, #2125). The tiebreaker is
+    dispatched via ``dispatch(reviewer, ...)`` in stages.py WITHOUT an explicit
+    model, so it resolves to ``dispatch.py``'s ``AGY_DEFAULT_MODEL``
+    (gemini-3.1-pro-high). See #2125 note: to pin the flash review model here
+    the tiebreaker dispatch would need to pass ``model=``.
     """
-    return "gemini"
+    return "agy"

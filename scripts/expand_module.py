@@ -19,7 +19,7 @@ for candidate in (REPO_ROOT, SCRIPTS_DIR):
 
 import module_sections  # noqa: E402
 import rubric_gaps  # noqa: E402
-from dispatch import dispatch_codex_patch, dispatch_gemini_with_retry  # noqa: E402
+from dispatch import dispatch_agy, dispatch_codex_patch  # noqa: E402
 
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 PROVENANCE_PREFIX = "<!-- v4:generated"
@@ -299,7 +299,7 @@ def _dispatch_codex_section(prompt: str) -> tuple[bool, str]:
 
 
 def _dispatch_gemini_section(prompt: str) -> tuple[bool, str]:
-    return dispatch_gemini_with_retry(prompt, timeout=900)
+    return dispatch_agy(prompt, timeout=900)
 
 
 def handler_quiz(doc: module_sections.ModuleDocument, module_key: str) -> HandlerResult:
