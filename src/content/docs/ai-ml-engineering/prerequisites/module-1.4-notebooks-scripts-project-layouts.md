@@ -6,10 +6,8 @@ sidebar:
   order: 104
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
----
-**Reading Time**: 2-3 hours, including the refactor exercise, dependency-file inspection, and a clean-shell rerun of the starter project.
-
-**Prerequisites**: Modules 1.1 through 1.3 complete
+>
+> **Prerequisites**: Modules 1.1 through 1.3 complete
 
 ---
 
