@@ -19,7 +19,7 @@ lab:
 Before starting this module, make sure you are comfortable reading service state, interpreting basic filesystem layout, and thinking about Unix permissions. The examples use ordinary Linux paths and commands, but the operational judgment depends on knowing which user owns a job, which mount contains the data, and which service manager starts the work.
 - **Required**: [Module 1.2: Processes & systemd](/linux/foundations/system-essentials/module-1.2-processes-systemd/) for understanding services and unit files
 - **Required**: [Module 8.1: Storage Management](../module-8.1-storage-management/) for filesystem and mount point knowledge
-- **Helpful**: [Module 2.1: Users & Groups](../module-8.3-package-user-management/) for understanding file ownership and permissions
+- **Helpful**: [Module 8.3: Package & User Management](../module-8.3-package-user-management/) for understanding file ownership and permissions
 
 ## Learning Outcomes
 

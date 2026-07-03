@@ -20,7 +20,7 @@ Bare Metal Provisioning (4 modules)
         │
         ├── Networking (6 modules)
         ├── Storage (5 modules)
-        └── Multi-Cluster & Platform (5 modules)
+        └── Multi-Cluster & Platform (11 modules)
                 │
                 ▼
         Security & Compliance (8 modules)
@@ -43,13 +43,13 @@ Bare Metal Provisioning (4 modules)
 | [Bare Metal Provisioning](provisioning/) | 4 | PXE, MAAS, Talos, Sidero/Metal3 |
 | [Networking](networking/) | 6 | Spine-leaf, BGP, MetalLB, DNS/certs, cross-cluster, service mesh |
 | [Storage](storage/) | 5 | Ceph/Rook, local storage, object storage (MinIO), database operators |
-| [Multi-Cluster & Platform](multi-cluster/) | 5 | vSphere/OpenStack, vCluster/Kamaji, Cluster API, fleet management, active-active |
+| [Multi-Cluster & Platform](multi-cluster/) | 11 | vSphere/OpenStack, vCluster/Kamaji, Cluster API, fleet management, active-active |
 | [Security & Compliance](security/) | 8 | Air-gapped, HSM/TPM, AD/LDAP, SPIFFE, Vault, policy-as-code, zero-trust |
 | [Day-2 Operations](operations/) | 9 | Upgrades, firmware, observability, capacity, self-hosted CI/CD & registry, serverless |
 | [Resilience & Migration](resilience/) | 3 | Multi-site DR, hybrid connectivity, cloud repatriation |
 | [AI/ML Infrastructure](ai-ml-infrastructure/) | 6 | GPU nodes, private training, LLM serving, MLOps, AIOps, HPC storage |
 
-**51 modules total** (30 existing + 21 new from [#197](https://github.com/kube-dojo/kube-dojo.github.io/issues/197)). From "should we go on-prem?" to "how do we train LLMs on our own GPUs."
+**57 modules total** (expanded via [#197](https://github.com/kube-dojo/kube-dojo.github.io/issues/197)). From "should we go on-prem?" to "how do we train LLMs on our own GPUs."
 
 ---
 
