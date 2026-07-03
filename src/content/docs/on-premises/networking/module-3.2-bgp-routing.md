@@ -452,7 +452,7 @@ kubectl -n lab run verifier --rm -i --restart=Never --image=curlimages/curl:8.7.
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Module 3.3: Load Balancing Without Cloud](../module-3.3-load-balancing/) to design bare-metal ingress and service load balancing without cloud-managed L4/L7 primitives.
 
 ## Sources
 

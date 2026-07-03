@@ -756,7 +756,7 @@ kind delete cluster --name capi-mgmt
 
 ## Next Module
 
-End of Section 5 — Multi-Cluster & On-Prem. Continue to [Platform Engineering](../../platform/) to explore the next layer of the cloud-native stack.
+Continue to [Module 5.10: Edge Fleet Patterns](../module-5.10-edge-fleet-patterns/) to model retail and edge store fleets with selective GitOps rollouts and constrained-network overrides.
 
 ## Learner Check
 

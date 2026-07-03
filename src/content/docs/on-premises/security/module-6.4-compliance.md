@@ -943,4 +943,4 @@ For RBAC, expect create and delete events for `test-binding` at `RequestResponse
 
 ## Next Module
 
-Continue to [Module 7.1: Cluster Upgrades & Lifecycle](/on-premises/operations/module-7.1-upgrades/) to learn how to manage Kubernetes version upgrades, OS patching, and firmware updates in on-premises environments without violating the change-management controls you have just built.
+Continue to [Module 7.1: Kubernetes Upgrades on Bare Metal](/on-premises/operations/module-7.1-upgrades/) to learn how to manage Kubernetes version upgrades, OS patching, and firmware updates in on-premises environments without violating the change-management controls you have just built.

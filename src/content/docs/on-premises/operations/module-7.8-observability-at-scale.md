@@ -530,7 +530,7 @@ k delete namespace observability
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Serverless on Bare Metal](../module-7.9-serverless-bare-metal/) to design Knative, KEDA, and event-driven scale-to-zero workloads on bare-metal Kubernetes.
 
 ## Further Reading
 

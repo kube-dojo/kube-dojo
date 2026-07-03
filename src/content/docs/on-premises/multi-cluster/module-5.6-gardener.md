@@ -1472,7 +1472,7 @@ Garden, Seed, Shoot, extension, status, and reconciliation remain the same conce
 
 ## Next Module
 
-Next: Karmada/Liqo + kube-vip for multi-cluster on-prem federation, where you will compare cluster lifecycle management with workload placement and cross-cluster service continuity.
+Next: [Module 5.7: On-Premises Multi-Cluster Kubernetes Synthesis](../module-5.7-multi-cluster-on-prem/) — Karmada/Liqo + kube-vip for multi-cluster on-prem federation, where you will compare cluster lifecycle management with workload placement and cross-cluster service continuity.
 
 ---
 

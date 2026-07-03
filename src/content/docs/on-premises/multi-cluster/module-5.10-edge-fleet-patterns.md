@@ -743,7 +743,7 @@ Final exercise success criteria:
 
 ## Next Module
 
-Continue to [Module 5.5: Active-Active Multi-Site](../module-5.5-active-active-multi-site/) to connect fleet rollout safety with global load balancing, data replication, and cross-site failure recovery.
+Continue to [Module 5.11: Disconnected & Air-gapped K8s Ops](../module-5.11-disconnected-airgapped-k8s-ops/) to operate multi-cluster fleets without continuous upstream connectivity.
 
 ---
 

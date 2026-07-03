@@ -598,9 +598,7 @@ kubectl get pods
 
 ## Next Module
 
-Ready to secure the serverless platform you built? The next module covers advanced traffic management, zero-trust networking between functions, and mutual TLS with service meshes so that scale-to-zero endpoints do not become unauthenticated lateral movement paths inside your bare-metal fabric.
-
-[Continue with Zero-Trust Architecture ->](/on-premises/security/module-6.8-zero-trust-architecture/)
+This concludes the Day-2 Operations section. Continue to [Module 8.1: Multi-Site & Disaster Recovery](/on-premises/resilience/module-8.1-multi-site-dr/) to design multi-site failover, backup, and recovery patterns for bare-metal estates.
 
 ## Sources
 

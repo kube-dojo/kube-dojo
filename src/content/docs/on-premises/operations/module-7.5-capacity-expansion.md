@@ -1076,7 +1076,7 @@ Why is it dangerous to treat all CPU cores as identical when combining servers f
 
 ## Next Module
 
-This concludes the Day-2 Operations section. Return to the [Operations index](/on-premises/operations/) to review all modules, or continue to the next section in the on-premises track.
+Continue to [Self-Hosted CI/CD](../module-7.6-self-hosted-cicd/) to build pipeline infrastructure, runners, and GitOps workflows on bare-metal Kubernetes.
 
 ## Sources
 
