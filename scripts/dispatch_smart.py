@@ -517,6 +517,65 @@ def _opencode_binary() -> str:
     )
 
 
+def _parse_opencode_json_events(stdout: str) -> str:
+    """Extract the final assistant message from opencode ``--format json`` NDJSON.
+
+  Empirical schema (opencode run --format json, one JSON object per line):
+
+  - ``step_start``: agent turn begins; ``part.messageID`` identifies the turn.
+  - ``tool_use``: tool invocation; ignore for response capture.
+  - ``text``: assistant output chunk; final text is in ``part.text``.
+  - ``step_finish``: turn ends; ``part.reason`` is ``stop`` (final reply) or
+    ``tool-calls`` (intermediate turn).
+
+  Concatenate all ``text`` chunks for the message whose ``step_finish`` has
+  ``reason=stop``. Fall back to the last message that emitted text.
+  """
+    texts_by_message: dict[str, list[str]] = {}
+    message_order: list[str] = []
+    final_message_id: str | None = None
+
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+
+        event_type = event.get("type")
+        part = event.get("part")
+        if not isinstance(part, dict):
+            part = {}
+
+        if event_type == "text":
+            text = part.get("text")
+            if not isinstance(text, str) or not text:
+                continue
+            message_id = part.get("messageID")
+            if not isinstance(message_id, str):
+                message_id = ""
+            if message_id not in texts_by_message:
+                message_order.append(message_id)
+            texts_by_message.setdefault(message_id, []).append(text)
+        elif event_type == "step_finish" and part.get("reason") == "stop":
+            message_id = part.get("messageID")
+            if isinstance(message_id, str):
+                final_message_id = message_id
+
+    if final_message_id and final_message_id in texts_by_message:
+        return "".join(texts_by_message[final_message_id]).strip()
+
+    for message_id in reversed(message_order):
+        chunks = texts_by_message.get(message_id)
+        if chunks:
+            return "".join(chunks).strip()
+    return ""
+
+
 def _hermes_binary() -> str:
     """Resolve the hermes CLI path with an env override for local installs."""
     return (
@@ -571,7 +630,16 @@ def _hermes_cli_model(model: str) -> str:
 def _router_command(agent: str, model: str, prompt: str) -> list[str]:
     """Build the subprocess command for direct router CLIs."""
     if agent == "opencode":
-        return [_opencode_binary(), "run", "-m", model, "-"]
+        # ``--format json`` emits NDJSON events instead of ANSI TUI output.
+        # Reasoning effort can be overridden via opencode's ``--variant`` flag
+        # (e.g. high, max, minimal); plumb with dispatch_smart ``--variant``
+        # or ``KUBEDOJO_OPENCODE_VARIANT`` when we need per-task effort control.
+        cmd = [_opencode_binary(), "run", "--format", "json"]
+        variant = os.environ.get("KUBEDOJO_OPENCODE_VARIANT", "").strip()
+        if variant:
+            cmd.extend(["--variant", variant])
+        cmd.extend(["-m", model, "-"])
+        return cmd
     if agent == "cursor":
         return [
             _cursor_binary(),
@@ -602,6 +670,16 @@ def _router_command(agent: str, model: str, prompt: str) -> list[str]:
     raise ValueError(f"unsupported direct router agent: {agent}")
 
 
+def _router_subprocess_env(agent: str) -> dict[str, str]:
+    """Return env overrides for direct router CLIs."""
+    env = os.environ.copy()
+    if agent == "opencode":
+        # Prevent git tool calls from paging or blocking on credentials.
+        env.setdefault("GIT_PAGER", "cat")
+        env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    return env
+
+
 def _run_router_agent(
     *,
     agent: str,
@@ -620,6 +698,7 @@ def _run_router_agent(
             cmd,
             input=stdin_payload,
             cwd=cwd,
+            env=_router_subprocess_env(agent),
             text=True,
             capture_output=True,
             check=False,
@@ -632,8 +711,12 @@ def _run_router_agent(
     except OSError as exc:
         return False, "", f"{type(exc).__name__}: {exc}"
 
-    response = proc.stdout or ""
+    raw_stdout = proc.stdout or ""
     stderr = proc.stderr or ""
+    if agent == "opencode":
+        response = _parse_opencode_json_events(raw_stdout)
+    else:
+        response = raw_stdout.strip()
     ok = proc.returncode == 0 and bool(response.strip())
     if not ok and not stderr.strip():
         stderr = f"{agent} exited {proc.returncode} with no stdout"
