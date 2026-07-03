@@ -4,6 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.5-fleet-management
 sidebar:
   order: 6
 ---
+**Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Hybrid Cloud Architecture (Module 10.4), GitOps Basics (ArgoCD/Flux)
 
 ## What You'll Be Able to Do
 

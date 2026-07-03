@@ -1,5 +1,4 @@
 ---
-citations_verified: true
 title: "Module 3.16: Azure SQL Database — Operator Path"
 slug: cloud/azure-essentials/module-3.16-azure-sql
 sidebar:
