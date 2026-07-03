@@ -5,6 +5,10 @@ sidebar:
   order: 306
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
+>
+> **Prerequisites**: Embeddings and semantic search fundamentals (module 1.4), Python with NumPy/scikit-learn, basic linear algebra, and familiarity with vector similarity metrics.
+
 ## Learning Outcomes
 
 By the end of this intensive module, you will be capable of the following advanced engineering tasks:

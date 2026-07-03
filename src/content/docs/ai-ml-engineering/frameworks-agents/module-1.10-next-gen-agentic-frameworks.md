@@ -640,7 +640,7 @@ Cap the Security Analyst's reply budget — in AutoGen this is `max_consecutive_
 
 Now that you understand how to orchestrate multiple agents, manage persistent state, and prevent catastrophic context exhaustion, it is time to deploy these complex systems into production environments. Operating agents locally is one thing; running them at scale is another. In the next module, we will explore the cloud infrastructure required to host multi-agent systems, dealing with asynchronous task queues, system observability, and managing the financial costs of autonomous API usage.
 
-**Continue to:** [AI Infrastructure](/ai-ml-engineering/ai-infrastructure/) — Explore the inference stacks, observability, and cost controls required to run complex agent systems in production.
+**Continue to:** [MLOps & LLMOps](/ai-ml-engineering/mlops/) — Operationalize your agents: CI/CD for ML, experiment tracking, deployment, and monitoring before you scale the inference stack.
 
 ## Sources
 

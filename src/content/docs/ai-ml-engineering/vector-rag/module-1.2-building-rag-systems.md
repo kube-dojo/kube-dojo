@@ -5,6 +5,10 @@ sidebar:
   order: 403
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
+>
+> **Prerequisites**: Vector databases and embeddings (module 1.1), Python, LLM API usage, and basic document chunking concepts.
+
 ## Learning Outcomes
 
 When you finish this module, you will be able to design, implement, evaluate, and debug complete Retrieval-Augmented Generation pipelines rather than treating retrieval as a black-box library call. The learning outcomes below map directly to the hands-on lab and knowledge check at the end of the module. Each outcome corresponds to a phase of the ingest→retrieve→generate loop you will assemble in code, instrument in metrics, and defend in production reviews.

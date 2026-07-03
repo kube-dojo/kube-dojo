@@ -1362,4 +1362,4 @@ print("Final State:", output)
 
 ## Next Module
 
-[Module 1.5 - Building AI Agents](./module-1.5-building-ai-agents/) - Move from framework components to full agent architectures, orchestration patterns, and production-ready design tradeoffs that combine prompts, tools, memory, routing, and runtime safeguards.
+[Module 1.4 - LlamaIndex](./module-1.4-llamaindex/) - Add a purpose-built data framework for RAG and knowledge-intensive agents: ingestion, indexing, and query engines on top of the LangChain/LangGraph foundations you just built.

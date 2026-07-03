@@ -5,6 +5,10 @@ sidebar:
   order: 406
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 3-4 hours
+>
+> **Prerequisites**: RAG fundamentals (modules 1.2+), LLM API integration, prompt-structure discipline, and basic cost/latency observability for inference workloads.
+
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
