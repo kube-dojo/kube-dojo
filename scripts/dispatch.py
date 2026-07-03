@@ -198,25 +198,61 @@ def _pace_gemini_calls() -> None:
 # MCP tools for Ukrainian translations (shared RAG server)
 # ---------------------------------------------------------------------------
 
-# Claude with MCP: Ukrainian verification + quality tools
+# Claude with MCP: Ukrainian verification + quality tools.
+# Server name is ``sources`` (the live server in .mcp.json), so tool names are
+# ``mcp__sources__*`` — the old ``mcp__rag__*`` prefix pointed at a server that
+# no longer exists, so no tool resolved (#2134). ``search_etymology`` is served
+# as ``search_esum`` (ESUM — Ukrainian etymological dictionary) on this server.
+#
+# NOTE: kept as a single literal string (adjacent-string concatenation, one
+# ast.Constant) because dispatch_smart._load_dispatch_str_constant reads it via
+# ast.literal_eval — do NOT rewrite as variable concatenation.
 CLAUDE_TRANSLATION_TOOLS = (
-    "mcp__rag__verify_word,"
-    "mcp__rag__verify_words,"
-    "mcp__rag__verify_lemma,"
-    "mcp__rag__search_text,"
-    "mcp__rag__search_literary,"
-    "mcp__rag__query_pravopys,"
-    "mcp__rag__search_style_guide,"
-    "mcp__rag__query_cefr_level,"
-    "mcp__rag__search_definitions,"
-    "mcp__rag__search_etymology,"
-    "mcp__rag__search_idioms,"
-    "mcp__rag__search_synonyms,"
-    "mcp__rag__translate_en_uk,"
-    "mcp__rag__query_grac,"
-    "mcp__rag__query_ulif,"
-    "mcp__rag__query_r2u,"
+    "mcp__sources__verify_word,"
+    "mcp__sources__verify_words,"
+    "mcp__sources__verify_lemma,"
+    "mcp__sources__search_text,"
+    "mcp__sources__search_literary,"
+    "mcp__sources__query_pravopys,"
+    "mcp__sources__search_style_guide,"
+    "mcp__sources__query_cefr_level,"
+    "mcp__sources__search_definitions,"
+    "mcp__sources__search_esum,"
+    "mcp__sources__search_idioms,"
+    "mcp__sources__search_synonyms,"
+    "mcp__sources__translate_en_uk,"
+    "mcp__sources__query_grac,"
+    "mcp__sources__query_ulif,"
+    "mcp__sources__query_r2u,"
     "Read"
+)
+
+# Claude AUTHORING with MCP (draft/edit task classes): write-capable tools plus
+# the same ``sources`` verification tools, so a Sonnet author can corpus-verify
+# Ukrainian terminology at write time (#2134). Kept SEPARATE from the read-only
+# CLAUDE_TRANSLATION_TOOLS so the review/search lane never gains write access.
+# Same literal-string constraint as above (read via ast.literal_eval).
+CLAUDE_MCP_AUTHOR_TOOLS = (
+    "Write,"
+    "Edit,"
+    "MultiEdit,"
+    "Read,"
+    "mcp__sources__verify_word,"
+    "mcp__sources__verify_words,"
+    "mcp__sources__verify_lemma,"
+    "mcp__sources__search_text,"
+    "mcp__sources__search_literary,"
+    "mcp__sources__query_pravopys,"
+    "mcp__sources__search_style_guide,"
+    "mcp__sources__query_cefr_level,"
+    "mcp__sources__search_definitions,"
+    "mcp__sources__search_esum,"
+    "mcp__sources__search_idioms,"
+    "mcp__sources__search_synonyms,"
+    "mcp__sources__translate_en_uk,"
+    "mcp__sources__query_grac,"
+    "mcp__sources__query_ulif,"
+    "mcp__sources__query_r2u"
 )
 
 # ---------------------------------------------------------------------------
