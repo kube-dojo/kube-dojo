@@ -302,6 +302,48 @@ def make_task_id(task_class: str, agent: str) -> str:
     return f"smart-{agent}-{task_class}-{int(time.time())}"
 
 
+# China-hosted AI providers that must NEVER be called from GH Actions / CI
+# (.claude/rules + feedback_no_china_apis_from_gh_actions). The GLM coherence-audit
+# lane (`--agent opencode --model zai-coding-plan/glm-5.2`, #2171) is LOCAL-ONLY.
+# NOTE: `openrouter/*` is a US-hosted proxy, so openrouter-routed qwen/deepseek model
+# ids are intentionally NOT matched here — only DIRECT China endpoints are blocked.
+_CI_BLOCKED_PROVIDER_MARKERS = (
+    "zai-coding-plan",
+    "z.ai",
+    "zai/",
+    "glm-",
+    "bigmodel",
+    "zhipu",
+)
+
+
+def _running_in_ci() -> bool:
+    return (
+        os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+        or os.environ.get("CI", "").lower() in ("1", "true")
+    )
+
+
+def guard_no_china_provider_in_ci(agent: str, model: str) -> None:
+    """Refuse to dispatch a China-hosted provider from a CI / GH Actions context.
+
+    Defense-in-depth: no LLM dispatch runs in CI today (feedback_no_llm_review_in_ci),
+    so this can never break a legitimate CI path — it only hard-blocks the local-only
+    GLM/z.ai lane if it is ever wired into an Actions workflow by mistake.
+    """
+    if not _running_in_ci():
+        return
+    haystack = f"{agent} {model}".lower()
+    for marker in _CI_BLOCKED_PROVIDER_MARKERS:
+        if marker in haystack:
+            raise SystemExit(
+                f"[smart] REFUSED: '{marker}' (agent={agent!r} model={model!r}) is a "
+                f"China-hosted AI provider and must never be called from GH Actions / CI "
+                f"(.claude/rules + feedback_no_china_apis_from_gh_actions). The GLM "
+                f"coherence-audit lane is local-only."
+            )
+
+
 def _available_mcp_servers() -> list[str]:
     """Return sorted MCP server names from the repo-root ``.mcp.json``."""
     if not MCP_CONFIG_PATH.is_file():
@@ -917,6 +959,7 @@ def main() -> int:
 
     cfg = TASK_CLASSES[args.task_class]
     model = args.model or cfg.models[args.agent]
+    guard_no_china_provider_in_ci(args.agent, model)  # #2171: GLM/z.ai is local-only
     mode = args.mode or cfg.default_mode
     timeout_s = args.timeout or cfg.default_timeout_s
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
