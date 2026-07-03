@@ -7,10 +7,8 @@ sidebar:
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
-
-**Reading Time**: 2-3 hours
-
-**Prerequisites**: Module 1.1 complete, basic comfort with terminal commands, package installation, reading system specifications, and willingness to record evidence before upgrading hardware
+>
+> **Prerequisites**: Module 1.1 complete, basic comfort with terminal commands, package installation, reading system specifications, and willingness to record evidence before upgrading hardware
 
 ---
 
