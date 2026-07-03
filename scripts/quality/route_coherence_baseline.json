@@ -1,0 +1,11 @@
+{
+  "_comment": "Known route-coherence ERROR violations. CI fails only on NEW ones. Drain this as the curriculum lane fixes links; regenerate with check_route_coherence.py --update-baseline.",
+  "violations": [
+    "next-backward|ai-ml-engineering/advanced-genai/module-1.12-reasoning-models-and-grpo.md|Next -> ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation.md is backward/self ((1, 6) <= (1, 12))",
+    "next-backward|ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math.md|Next -> ai-ml-engineering/ai-infrastructure/module-1.3-vllm-sglang-inference.md is backward/self ((1, 3) <= (1, 6))",
+    "next-backward|ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking.md|Next -> ai-ml-engineering/ai-infrastructure/module-1.3-vllm-sglang-inference.md is backward/self ((1, 3) <= (1, 8))",
+    "next-backward|ai-ml-engineering/mlops/module-1.10-ml-monitoring.md|Next -> ai-ml-engineering/mlops/module-1.8-ml-pipelines.md is backward/self ((1, 8) <= (1, 10))",
+    "next-backward|platform/toolkits/infrastructure-networking/networking/module-5.6-calico.md|Next -> platform/toolkits/infrastructure-networking/networking/module-5.1-cilium.md is backward/self ((5, 1) <= (5, 6))",
+    "next-backward|platform/toolkits/infrastructure-networking/networking/module-5.8-multus.md|Next -> platform/toolkits/infrastructure-networking/networking/module-5.2-service-mesh.md is backward/self ((5, 2) <= (5, 8))"
+  ]
+}

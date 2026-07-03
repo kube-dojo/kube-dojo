@@ -49,3 +49,13 @@ jobs:
         # as raw code in the browser). This stdlib-only lint closes that gap
         # deterministically. Author fix: `python scripts/ci/check_mermaid_labels.py --fix`.
         run: python scripts/ci/check_mermaid_labels.py
+
+      - name: Check route coherence
+        # site-health checks that links RESOLVE; this checks the relationships
+        # BETWEEN modules and their section route (a backward "Next Module" link
+        # still resolves, so site-health passes it). Fails only on NEW backward /
+        # broken Next-Module links beyond the committed baseline (ratchet) — the
+        # existing inventory drains as the curriculum lane fixes it. Warnings
+        # (skip / terminus-orphan / count-drift) report but do not fail. stdlib-only.
+        # Refresh the baseline: python scripts/quality/check_route_coherence.py --update-baseline
+        run: python scripts/quality/check_route_coherence.py
