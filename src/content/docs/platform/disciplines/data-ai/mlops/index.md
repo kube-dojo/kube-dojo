@@ -19,7 +19,7 @@ Before starting this track:
 - Basic machine learning concepts (training, inference, models)
 - Python programming experience
 - Understanding of CI/CD concepts
-- Kubernetes basics (helpful but not required)
+- At least one Kubernetes route, such as Kubernetes Basics, KCNA, CKA, or equivalent production experience; the model-serving and pipeline modules assume Pods, Services, Deployments, namespaces, and YAML are familiar
 
 ## Modules
 
