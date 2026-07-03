@@ -88,9 +88,11 @@ GH_CHAR_LIMIT = 64000
 # Model defaults
 # ---------------------------------------------------------------------------
 
-# 2026-04-18: Google still exposes Gemini 3 Pro as preview-only, so pin the
-# currently tested writer alias here until a GA replacement is available.
-GEMINI_WRITER_MODEL = "gemini-3.1-pro-preview"
+# The default pipeline writer/reviewer model. gemini-cli is retired (#2125); the
+# Google lane is now agy (Antigravity), whose display slug is gemini-3.1-pro-high.
+# Callers that dispatch this model route it via dispatch_agy (the `agy`
+# subcommand), NOT the retired gemini-cli path.
+GEMINI_WRITER_MODEL = "gemini-3.1-pro-high"
 GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
 GEMINI_REVIEW_MODEL = "gemini-3.1-pro-preview"  # Pro for reviews — hallucinations on Flash cost real iteration time
 GEMINI_FALLBACK_MODEL = "auto"

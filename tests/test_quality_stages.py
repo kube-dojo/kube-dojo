@@ -225,7 +225,7 @@ def test_route_rewrite_when_score_below_threshold(fake_repo, monkeypatch):
     st = state.load_state(slug)
     assert st["stage"] == "WRITE_PENDING"
     assert st["route"]["track"] == "rewrite"
-    assert st["writer"] == "gemini"  # module_index=0 → even → gemini writes
+    assert st["writer"] == "agy"  # queue PRIMARY writer → agy Google lane (#2125)
     assert st["reviewer"] == "claude"
 
 
@@ -277,7 +277,7 @@ def test_write_one_happy_path_creates_worktree_commit(fake_repo, monkeypatch):
     st = state.load_state(slug)
     assert st["stage"] == "WRITE_DONE"
     assert st["write"]["commit_sha"]
-    assert st["write"]["agent"] == "gemini"
+    assert st["write"]["agent"] == "agy"
     # The worktree should exist with the new content.
     wt = worktree.worktree_dir(fake_repo, slug)
     assert wt.exists()
@@ -605,25 +605,25 @@ def test_review_changes_tiebreaker_after_cap(fake_repo, monkeypatch):
     stages.handle_review_changes(slug)
     st = state.load_state(slug)
     assert st["stage"] == "REVIEW_PENDING"
-    assert st["reviewer"] == "gemini"
+    assert st["reviewer"] == "agy"  # tiebreaker is agy now (#2125)
     assert st["retry_count"] == stages.RETRY_CAP  # not bumped past cap
 
 
 def test_review_changes_tiebreaker_also_changes_fails_terminally(fake_repo, monkeypatch):
-    """Tiebreaker (gemini) returning CHANGES must mark FAILED, not loop.
+    """Tiebreaker (agy) returning CHANGES must mark FAILED, not loop.
 
     Regression for the infinite-tiebreaker bug caught while running
     9.4 in the #378 recovery: previously, every call after the
     tiebreaker's CHANGES re-routed back to tiebreaker forever (only
     ``run_module``'s max_cycles eventually bailed, after wasting ~5
-    Gemini calls per module).
+    tiebreaker calls per module).
     """
     slug = _bootstrap(fake_repo)
     st = state.load_state(slug)
     st["stage"] = "REVIEW_CHANGES"
     st["retry_count"] = stages.RETRY_CAP
     st["writer"] = "codex"
-    st["reviewer"] = "gemini"  # tiebreaker already ran
+    st["reviewer"] = "agy"  # tiebreaker already ran (agy, #2125)
     st["review"] = {
         "verdict": "changes_requested",
         "must_fix": ["scaffold complexity is missing", "no inline prompts", "two facts wrong"],

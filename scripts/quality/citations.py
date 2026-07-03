@@ -228,8 +228,11 @@ without spawning subprocesses. Production uses :func:`default_verifier`.
 
 
 def default_verifier(prompt: str) -> DispatchResult:
-    """Production verifier — Gemini-flash, short per-URL timeout."""
-    return dispatch("gemini", prompt, timeout=60, model="gemini-3-flash-preview")
+    """Production verifier — agy flash (Google lane), short per-URL timeout.
+
+    gemini-cli is retired (#2125); the flash-tier review model on the agy lane
+    is gemini-3.5-flash-high."""
+    return dispatch("agy", prompt, timeout=60, model="gemini-3.5-flash-high")
 
 
 def verify_citation(

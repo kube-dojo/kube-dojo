@@ -24,8 +24,9 @@ def test_writer_for_index_returns_codex_writes_claude_reviews_for_every_index() 
         assert dispatchers.writer_for_index(idx) == ("codex", "claude"), idx
 
 
-def test_tiebreaker_is_gemini() -> None:
-    assert dispatchers.tiebreaker_agent() == "gemini"
+def test_tiebreaker_is_agy() -> None:
+    # gemini-cli retired (#2125); the independent third-party lane is now agy.
+    assert dispatchers.tiebreaker_agent() == "agy"
 
 
 def test_dispatch_rejects_unknown_agent() -> None:

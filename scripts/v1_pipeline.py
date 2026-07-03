@@ -151,7 +151,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from checks import structural, ukrainian, gaps
 from dispatch import (
     GEMINI_WRITER_MODEL,
-    dispatch_gemini_with_retry,
+    dispatch_agy,
     dispatch_claude,
     dispatch_codex,
     _is_rate_limited,
@@ -167,9 +167,12 @@ from uk_sync import (
 
 
 def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, str]:
-    """Route to Gemini, Claude, or Codex based on model name."""
+    """Route to agy (Google lane), Claude, or Codex based on model name.
+
+    ``gemini-*`` model slugs are agy (Antigravity) display models and route to
+    dispatch_agy — gemini-cli is retired (#2125)."""
     if model.startswith("gemini"):
-        return dispatch_gemini_with_retry(prompt, model=model, timeout=timeout)
+        return dispatch_agy(prompt, model=model, timeout=timeout)
     if model.startswith("claude"):
         return dispatch_claude(prompt, model=model, timeout=timeout)
     if model.startswith("codex") or "codex" in model or model.startswith("gpt-"):
