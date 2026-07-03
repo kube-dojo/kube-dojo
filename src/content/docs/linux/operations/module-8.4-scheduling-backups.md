@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: linux-8.4-scheduling-backups
   url: https://killercoda.com/kubedojo/scenario/linux-8.4-scheduling-backups
-  duration: "30 min"
+  duration: "45-55 min"
   difficulty: intermediate
   environment: ubuntu
 ---

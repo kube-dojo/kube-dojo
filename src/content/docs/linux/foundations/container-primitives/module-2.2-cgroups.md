@@ -4,6 +4,12 @@ title: "Module 2.2: Control Groups (cgroups)"
 slug: linux/foundations/container-primitives/module-2.2-cgroups
 sidebar:
   order: 3
+lab:
+  id: "linux-2.2-cgroups"
+  url: "https://killercoda.com/kubedojo/scenario/linux-2.2-cgroups"
+  duration: "30-35 min"
+  difficulty: "intermediate"
+  environment: "ubuntu"
 ---
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 30-35 min. This medium-depth lesson assumes you can already read basic Linux commands and Kubernetes pod output, and it focuses on turning cgroup files into practical operational decisions.

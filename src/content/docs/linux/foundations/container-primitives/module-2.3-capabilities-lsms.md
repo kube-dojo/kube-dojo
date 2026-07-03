@@ -4,6 +4,12 @@ title: "Module 2.3: Capabilities & Linux Security Modules"
 slug: linux/foundations/container-primitives/module-2.3-capabilities-lsms
 sidebar:
   order: 4
+lab:
+  id: "linux-2.3-capabilities-lsms"
+  url: "https://killercoda.com/kubedojo/scenario/linux-2.3-capabilities-lsms"
+  duration: "35-45 min"
+  difficulty: "intermediate"
+  environment: "ubuntu"
 ---
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 35-45 min | Focus: least-privilege process control for container workloads on shared Linux kernels.

@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: linux-5.2-cpu-scheduling
   url: https://killercoda.com/kubedojo/scenario/linux-5.2-cpu-scheduling
-  duration: "35 min"
+  duration: "40-55 min"
   difficulty: advanced
   environment: ubuntu
 ---

@@ -4,6 +4,12 @@ title: "Module 2.4: Union Filesystems"
 slug: linux/foundations/container-primitives/module-2.4-union-filesystems
 sidebar:
   order: 5
+lab:
+  id: "linux-2.4-union-filesystems"
+  url: "https://killercoda.com/kubedojo/scenario/linux-2.4-union-filesystems"
+  duration: "45-60 min"
+  difficulty: "intermediate"
+  environment: "ubuntu"
 ---
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 45-60 min

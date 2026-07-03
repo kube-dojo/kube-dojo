@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-0.1-cli-power-user"
   url: "https://killercoda.com/kubedojo/scenario/linux-0.1-cli-power-user"
-  duration: "30 min"
+  duration: "45 min"
   difficulty: "intermediate"
   environment: "ubuntu"
 ---

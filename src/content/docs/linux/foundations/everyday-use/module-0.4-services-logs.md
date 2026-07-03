@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-0.4-services-logs"
   url: "https://killercoda.com/kubedojo/scenario/linux-0.4-services-logs"
-  duration: "30 min"
+  duration: "45-50 min"
   difficulty: "intermediate"
   environment: "ubuntu"
 ---

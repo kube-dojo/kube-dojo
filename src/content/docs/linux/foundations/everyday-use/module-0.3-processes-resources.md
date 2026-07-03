@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-0.3-processes-resources"
   url: "https://killercoda.com/kubedojo/scenario/linux-0.3-processes-resources"
-  duration: "35 min"
+  duration: "40 min"
   difficulty: "intermediate"
   environment: "ubuntu"
 ---

@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: linux-8.3-package-user-management
   url: https://killercoda.com/kubedojo/scenario/linux-8.3-package-user-management
-  duration: "30 min"
+  duration: "40-50 min"
   difficulty: intermediate
   environment: ubuntu
 ---

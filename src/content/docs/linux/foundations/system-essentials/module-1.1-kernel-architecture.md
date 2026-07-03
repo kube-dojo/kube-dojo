@@ -9,7 +9,7 @@ lab:
   id: "linux-1.1-kernel-architecture"
   url: "https://killercoda.com/kubedojo/scenario/linux-1.1-kernel-architecture"
   duration: "35 min"
-  difficulty: "advanced"
+  difficulty: "intermediate"
   environment: "ubuntu"
 ---
 

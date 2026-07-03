@@ -23,9 +23,9 @@ After [Security and Hardening](/linux/security/hardening/), follow the modules i
 
 ## Modules
 
-| Module | Description |
-|--------|-------------|
-| [Module 8.1: Storage Management](module-8.1-storage-management/) | Disk partitioning, filesystems, and LVM |
-| [Module 8.2: Network Administration](module-8.2-network-administration/) | Network configuration and management |
-| [Module 8.3: Package Management & User Administration](module-8.3-package-user-management/) | Package managers and user/group management |
-| [Module 8.4: Task Scheduling and Backup Strategies](module-8.4-scheduling-backups/) | Cron, systemd timers, and backup approaches |
+| Module | Description | Time |
+|--------|-------------|------|
+| [Module 8.1: Storage Management](module-8.1-storage-management/) | Disk partitioning, filesystems, and LVM | 35 min |
+| [Module 8.2: Network Administration](module-8.2-network-administration/) | Network configuration and management | 45-55 min |
+| [Module 8.3: Package Management & User Administration](module-8.3-package-user-management/) | Package managers and user/group management | 40-50 min |
+| [Module 8.4: Task Scheduling and Backup Strategies](module-8.4-scheduling-backups/) | Cron, systemd timers, and backup approaches | 45-55 min |
