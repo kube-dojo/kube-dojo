@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-At the end of Chapter 71, we concluded that export controls do not make technology disappear; they rearrange incentives. The next question is the one that history always asks at scale: what does that rearrangement look like when it reaches the model architecture itself?
+Chapter 73 is the book's technical epilogue. After power, chips, and datacenter campuses made frontier AI look like infrastructure, this coda follows one pressure back into the model itself: long-context inference made the KV cache a memory bottleneck, HBM scarcity and export controls made that bottleneck strategic, and DeepSeek-V2's Multi-head Latent Attention showed one documented way to compress attention state, shift cost into reconstruction, and diffuse the response through open kernels and serving backends. The lesson is narrow: constraints did not end capability growth; they moved some capability formation down into the attention layer.
 :::
 
 ## Learning outcomes
@@ -18,7 +18,7 @@ At the end of Chapter 71, we concluded that export controls do not make technolo
 - Connect the chapter's argument to Chapter 71's uneven adaptation thesis without asserting a single-cause, policy-only causation line.
 
 The chip war was a policy story first, but its long shadow moved into compiler code and kernel layout.
-The chapter showed that export controls were not only legal instruments; they were structural pressures on the whole AI stack.
+Chapter 71 showed that export controls were not only legal instruments; they were structural pressures on the whole AI stack.
 It also showed that HBM and advanced packaging sit at the center of practical frontier performance, not as an engineering afterthought.
 When one actor cannot be supplied in the same way as before, the next layer in the stack feels the cost of that constraint.
 
@@ -360,10 +360,10 @@ These are the kinds of boundary conditions that keep infrastructure history from
 
 For readers mapping this to the prior chapter, the strongest takeaway is to treat adaptation as a layered process.
 Chapter 71 described where policy pressure fell hardest and where institutions diverged.
-Chapter 73 should show one instance where that same pressure shaped a memory strategy and then shifted who can implement that strategy.
+This technical epilogue shows one instance where that same pressure shaped a memory strategy and then shifted who can implement that strategy.
 That keeps causation explicit and bounded: policy pressure matters, but stack compatibility decides where that pressure translates into durable change.
 
-## What this changes in the series narrative
+## What this coda changes in the series narrative
 
 MLA marks a new frontier in the chapter's larger arc.
 The chip war made the stack visible by showing where export and hardware controls bind.
@@ -405,9 +405,9 @@ We do not claim exhaustive impact.
 We claim a verified sequence: constrained inference context -> low-rank KV memory redesign -> open implementation pathway -> conditional operational reuse.
 That sequence is testable, bounded, and still open-ended.
 
-The next chapter in the series inherits a cleaner problem statement:
+This technical epilogue leaves a cleaner problem statement for future histories:
 how do design substitutions in one layer propagate backward into procurement, compiler stack maturity, and eventually competitive positioning?
-If the series keeps this thread explicit, it will avoid the common failure mode of turning each policy shock into a myth of deterministic causation.
+If future histories keep this thread explicit, they will avoid the common failure mode of turning each policy shock into a myth of deterministic causation.
 
 ## Common mistakes / misconceptions
 
@@ -451,7 +451,7 @@ Compared to procurement disputes, design moves leave code, tables, reproducibili
 Even if adoption is partial, the mechanism can be copied, modified, and redeployed.
 That is why design responses are easier to trace than policy rhetoric.
 
-## What this changes for the book's closure
+## What this technical epilogue changes for the book's closure
 
 The chapter's title says “algorithmic response” on purpose.
 In this sequence, we now have three levels of response under one pressure regime:
@@ -459,7 +459,7 @@ policy, hardware, and architecture.
 Chapter 71 left us at the boundary where policy and hardware were visibly entwined.
 This chapter moves that boundary one layer deeper into what a model keeps around while it runs.
 
-That has one direct implication for the next chapter of infrastructure prose.
+That clarifies the infrastructure close in Chapter 72.
 The AI system no longer looks like an either/or sequence of “policy then compute.”
 It is a closed loop where policy shifts what is worth computing,
 hardware shifts what is affordable to compute,
