@@ -1,13 +1,15 @@
 ---
 title: "History of AI"
-description: "A 72-chapter history of artificial intelligence — the math, hardware, funding, people, and constraints that shaped each era."
+description: "A 73-chapter history of artificial intelligence — the math, hardware, funding, people, and constraints that shaped each era."
 sidebar:
   order: 0
 ---
 
 # History of AI
 
-A 72-chapter book about how artificial intelligence actually came to be.
+A 73-chapter book about how artificial intelligence actually came to be.
+
+> **Short on time?** Read the [quick history orientation](../ai-ml-engineering/history/module-1.1-history-of-ai-machine-learning/) — a single ~13k-word module covering the same arc in about an hour. This book is the deep version.
 
 Most histories of AI tell you what algorithms were invented and when. This book tells you why those algorithms became possible — the math that had to be discovered first, the hardware that had to mature, the money that had to flow, the bottlenecks that broke, and the people who happened to be in the right room at the right moment.
 

@@ -88,7 +88,7 @@ The track is organized as one main spine with several valid learner routes.
 | 10 | [Deep Learning Foundations](deep-learning/) | PyTorch, neural networks, CNNs, transformers, backprop |
 | 11 | [Machine Learning](machine-learning/) | Tabular ML practitioner essentials: sklearn API, regression, evaluation, feature engineering, trees, boosting, clustering, anomaly detection, dimensionality reduction, HPO, time series — plus Tier-2 imbalance, interpretability, recommenders, conformal prediction, fairness, causal inference |
 | 12 | [Reinforcement Learning](reinforcement-learning/) | RL practitioner foundations (PPO/DQN/SAC, SB3, Gymnasium) and offline RL / imitation learning |
-| A | [History of AI/ML](history/) | Historical context (appendix) |
+| A | [History of AI/ML](history/) | Historical context (appendix); for the deep version, read the [73-chapter AI History book](/ai-history/) |
 
 ## Recommended Default Route
 

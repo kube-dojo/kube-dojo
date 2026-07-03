@@ -225,7 +225,7 @@ The language was ready for a more interactive computing culture.
 
 That shift changes the setting.
 
-The next phase of the story moves from language substrate to institutional substrate. Project MAC and time-sharing would change how programmers encountered machines, making interaction less like submitting isolated jobs and more like living inside a computational environment. That later chapter belongs to the AI-lab and time-sharing world. LISP provided one of the languages ready to inhabit it.
+The next chapter returns to the other AI lineage that Dartmouth did not settle: learning machines. Rosenblatt's perceptron will ask a different question from LISP's symbolic workbench — not how to represent expressions, but how a machine might change its responses through experience. Project MAC and time-sharing still lie ahead, where LISP will become one of the languages ready to inhabit a more interactive computing culture.
 
 :::note[Why this still matters today]
 Every language that lets a program inspect its own source as data, every macro system that generates code at compile time, every interactive prompt that compiles each typed form before responding, descends from McCarthy's 1958–1962 line. The enduring lesson is not priority over list processing; it is the way `eval` made notation, data, and execution share one substrate, then made that substrate teachable through a manual. The cost LISP exposed and made portable — that interactive symbolic systems need automatic storage reclamation, anonymous functions, and a programmable conditional — is the cost every modern dynamic language pays in some form.
