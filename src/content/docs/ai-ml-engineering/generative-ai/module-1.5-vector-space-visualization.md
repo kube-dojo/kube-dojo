@@ -16,7 +16,7 @@ By the end of this intensive module, you will be capable of the following advanc
 - **Implement** non-linear dimensionality reduction techniques, specifically PCA and t-SNE, to visualize dense coordinate embeddings in two and three-dimensional topological planes.
 - **Evaluate** the mathematical validity and structural integrity of semantic relationships by computing vector arithmetic across localized concept clusters.
 - **Diagnose** critical memory and latency bottlenecks in high-throughput production search pipelines and apply scalar and product quantization strategies to optimize throughput.
-- **Implement** fault-tolerant, horizontally scalable vector databases within a modern Kubernetes v1.35 environment, utilizing advanced Approximate Nearest Neighbor (ANN) index structures.
+- **Understand** how production vector databases use advanced Approximate Nearest Neighbor (ANN) index structures to scale as fault-tolerant, stateful workloads, and optionally preview how a Kubernetes `StatefulSet` with persistent volumes hosts them in the later MLOps phase.
 
 ## Why This Module Matters
 
@@ -825,11 +825,13 @@ for path, score in results:
 
 ## Deploying Vector Search on Kubernetes
 
+> **Optional / looking ahead.** You do not need a Kubernetes cluster to complete this module; vector-space fundamentals stand on their own. This section previews how these databases run in production. Hands-on Kubernetes deployment is covered in the MLOps phase, so skim it now and return to it when you reach MLOps.
+
 Production vector databases are stateful workloads: they hold gigabytes to terabytes of index data that must survive pod restarts. A `Deployment` with ephemeral container storage loses the index on every reschedule; for serious workloads, use a `StatefulSet` with persistent volumes and stable network identities.
 
 Resource sizing starts from your index footprint. Estimate raw vector storage as `num_vectors × dimension × bytes_per_component`, then add 30–50% overhead for HNSW graph edges, metadata payloads, and write-ahead logs. A collection of five million 384-dimensional `float32` vectors needs roughly 7.5 GB for vectors alone; with HNSW at `M=16`, plan for 12–16 GB RAM on the indexing node before OS and sidecar overhead. CPU scales with query QPS and `efSearch`; GPU acceleration helps batch embedding generation, not usually single-query ANN lookup unless you use GPU-native FAISS builds.
 
-Below is a minimal Kubernetes v1.35–compatible `StatefulSet` for Qdrant with persistent storage and resource limits. Adjust `storageClassName` and capacity to match your cluster.
+Below is a minimal `StatefulSet` for Qdrant (shown against Kubernetes v1.35; the pattern applies to any recent supported version) with persistent storage and resource limits. Adjust `storageClassName` and capacity to match your cluster.
 
 ```yaml
 apiVersion: apps/v1
@@ -930,7 +932,7 @@ The "hardware cost" column disappears from real planning spreadsheets because th
 | Ignoring indexing parameters | Using default configuration values for `ef_construction` and `M` in HNSW leads to suboptimal recall or deeply bloated memory. | Profile the dataset extensively to balance memory footprint and recall targets based on the specific business requirement. |
 | Over-indexing metadata | Injecting excessive metadata into the payload inflates storage costs and slows down memory-mapped disk operations. | Store only fields necessary for pre-filtering or hybrid reranking. Offload heavy textual blobs to cheap object storage. |
 | Computing embeddings sequentially | Processing documents individually underutilizes hardware accelerators and drastically increases overall batch time. | Utilize batch encoding with appropriate sizes to maximize GPU memory bandwidth and system throughput. |
-| Deploying to end-of-life Kubernetes | Running vector databases on deprecated orchestrators risks severe stability failures and security flaws. | Ensure all cluster deployments explicitly target K8s version v1.35 or higher to maintain strict compatibility and support. |
+| Deploying to end-of-life Kubernetes | Running vector databases on deprecated orchestrators risks severe stability failures and security flaws. | When you do deploy to a cluster (in the MLOps phase or production), target a supported Kubernetes release rather than an end-of-life one. |
 
 ## Knowledge Check
 
@@ -968,14 +970,14 @@ Generating high-dimensional embeddings sequentially vastly underutilizes the mas
 
 ## Hands-On Exercise: Vector Search from Scratch
 
-This laboratory exercise requires a Python virtual environment and, for Task 5, a Kubernetes v1.35 cluster. You will build a vector arithmetic pipeline locally, index it with FAISS HNSW, and deploy a persistent vector database with a StatefulSet manifest.
+This laboratory exercise requires a Python virtual environment. You will build a vector arithmetic pipeline locally and index it with FAISS HNSW; Task 5 is an optional, looking-ahead MLOps preview that drafts a persistent Qdrant `StatefulSet` manifest.
 
 **Success criteria** (check off as you complete each item):
 
 - [ ] Virtual environment created with `sentence-transformers`, `scikit-learn`, `numpy`, `faiss-cpu`, and `matplotlib` installed
 - [ ] `vector_lab.py` generates embeddings and returns sensible results for `king - man + woman`
 - [ ] FAISS HNSW index returns nearest neighbors for a paraphrase query such as "royal"
-- [ ] Kubernetes StatefulSet manifest applied and Qdrant pod reaches Ready state
+- [ ] Optional MLOps preview completed: Kubernetes `StatefulSet` manifest drafted for persistent Qdrant storage
 - [ ] You can articulate when to use cosine similarity versus L2 distance after L2 normalization
 
 ### Task 1: Initialize the Environment
@@ -1090,9 +1092,9 @@ for i, dist in zip(indices[0], distances[0]):
 ```
 </details>
 
-### Task 5: Deploy Vector DB to Kubernetes
+### Optional Task 5: Preview Vector DB Deployment on Kubernetes
 
-Finally, write a robust Kubernetes manifest file to deploy a high-performance Qdrant instance for persistent stateful workloads. Ensure the manifest conforms strictly to Kubernetes v1.35 standards.
+Finally, for the optional MLOps preview, write a robust Kubernetes manifest file that shows how Qdrant can run as a persistent stateful workload. Kubernetes v1.35 is the example target here; when you deploy for real, use a currently supported release.
 
 <details>
 <summary>View Solution</summary>
