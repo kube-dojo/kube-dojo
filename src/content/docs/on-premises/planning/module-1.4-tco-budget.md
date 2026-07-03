@@ -560,7 +560,7 @@ The on-prem versus cloud question is rarely about hardware cost. Hardware accoun
 
 ## Next Module
 
-Continue to [Module 2.1: Datacenter Fundamentals](/on-premises/provisioning/module-2.1-datacenter-fundamentals/) to learn the physical infrastructure that supports your Kubernetes cluster.
+Continue to [Module 1.5: On-Prem FinOps & Chargeback](../module-1.5-onprem-finops-chargeback/) to turn the multi-year TCO model you just built into ongoing resource tracking, internal billing, and chargeback rates.
 
 ## Sources
 
