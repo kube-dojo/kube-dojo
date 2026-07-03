@@ -1,5 +1,4 @@
 ---
-citations_verified: true
 title: "Module 3.17: Azure Backup + Site Recovery — Operator Path"
 slug: cloud/azure-essentials/module-3.17-backup-site-recovery
 sidebar:

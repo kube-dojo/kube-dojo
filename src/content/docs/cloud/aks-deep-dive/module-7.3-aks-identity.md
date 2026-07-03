@@ -9,6 +9,7 @@ sidebar:
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
+
 Treat this list as a verification checklist so you can confirm each competency end-to-end before adding additional workloads and team velocity-dependent pressure. Work through outcomes in order, validate each step with commands, and only then move to the next module.
 
 - **Configure AKS Workload Identity with Entra ID federated credentials for pod-level Azure resource access**

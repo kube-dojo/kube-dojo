@@ -1,5 +1,4 @@
 ---
-revision_pending: false
 title: "Module 9.9: Cloud-Native API Gateways & WAF"
 slug: cloud/managed-services/module-9.9-api-gateways
 sidebar:
