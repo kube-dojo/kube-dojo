@@ -548,6 +548,15 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
 
 
 AGY_TRANSLATE_MODEL = "gemini-3.1-pro-high"
+# General Google-lane default (writer). Reviewers pass gemini-3.5-flash-high via
+# --model. Both are agy (Antigravity) display slugs, not gemini-cli ids (#2125).
+AGY_DEFAULT_MODEL = "gemini-3.1-pro-high"
+
+_AGY_GENERAL_PRINT_SUFFIX = (
+    "\n\nOutput ONLY your response as text printed to stdout. Do NOT write any "
+    "files, create scripts, or use tools — emit your answer directly, with no "
+    "preamble or surrounding code fences."
+)
 
 _AGY_PRINT_SUFFIX = (
     "\n\nOutput ONLY the complete translated markdown as your entire response, "
@@ -840,6 +849,88 @@ def dispatch_agy_translate(
             )
             _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, err)
             return False, err or "empty translation stdout"
+
+    last_output = ""
+    for attempt in range(1, attempts + 1):
+        ok, output = _run_once()
+        if ok:
+            return True, output
+        last_output = output
+        if attempt < attempts:
+            print(
+                f"agy attempt {attempt}/{attempts} failed — retrying",
+                file=sys.stderr,
+            )
+    return False, last_output
+
+
+def dispatch_agy(
+    prompt: str,
+    model: str | None = None,
+    timeout: int = 900,
+    *,
+    attempts: int = 2,
+) -> tuple[bool, str]:
+    """Dispatch a GENERAL prompt (review / write / verdict) to the agy CLI and
+    capture the model's response from stdout.
+
+    This is the general Google-lane dispatch path — the legacy pipeline
+    dispatchers shell out to ``dispatch.py agy - --model <m>`` for it (#2125,
+    replacing the retired gemini-cli lane). Distinct from
+    :func:`dispatch_agy_translate`, which is translation-specific. agy ``-p``
+    sandboxes file writes to a scratch dir, so — like
+    ``dispatch_gemini_with_retry`` and the ``--no-tools`` claude path — the
+    caller contract is ``(ok, response_text)`` captured from stdout.
+    """
+    adapter = AgyAdapter()
+    chosen_model = model or AGY_DEFAULT_MODEL
+
+    def _run_once() -> tuple[bool, str]:
+        full_prompt = prompt + _AGY_GENERAL_PRINT_SUFFIX
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path(td)
+            plan = adapter.build_invocation(
+                prompt=full_prompt,
+                mode="danger",
+                cwd=cwd,
+                model=chosen_model,
+                task_id=None,
+                session_id=None,
+                tool_config={"hard_timeout": timeout},
+            )
+            env = build_agent_env(provider="agy", overrides=_AGENT_ENV_OVERRIDES)
+            t0 = time.time()
+            try:
+                result = subprocess.run(
+                    plan.cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(plan.cwd),
+                    env=env,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                elapsed = time.time() - t0
+                _log("agy", chosen_model, prompt, "", False, elapsed, "TIMEOUT")
+                print(f"agy timed out after {timeout}s", file=sys.stderr)
+                return False, "TIMEOUT"
+            except FileNotFoundError:
+                elapsed = time.time() - t0
+                _log("agy", chosen_model, prompt, "", False, elapsed, "CLI not found")
+                print("agy CLI not found.", file=sys.stderr)
+                return False, "agy CLI not found"
+
+            elapsed = time.time() - t0
+            text = _extract_agy_translation_from_stdout(result.stdout or "")
+            if result.returncode == 0 and text.strip():
+                _log("agy", chosen_model, prompt, text, True, elapsed)
+                return True, text
+
+            err = redact_text(
+                (result.stderr or result.stdout or "empty agy stdout").strip()
+            )
+            _log("agy", chosen_model, prompt, "", False, elapsed, err)
+            return False, err or "empty agy stdout"
 
     last_output = ""
     for attempt in range(1, attempts + 1):
@@ -1401,6 +1492,16 @@ def main():
     rp.add_argument("--github", type=int, metavar="ISSUE", help="Post output to GitHub issue")
     rp.add_argument("--timeout", type=int, default=900, help="Timeout in seconds (default: 900)")
 
+    # agy (general Google-lane dispatch: review / write / verdict)
+    yp = subparsers.add_parser(
+        "agy",
+        help="Dispatch a general prompt to agy CLI (Google lane, stdout capture)",
+    )
+    yp.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
+    yp.add_argument("--model", default=None, help=f"agy model (default: {AGY_DEFAULT_MODEL!r})")
+    yp.add_argument("--github", type=int, metavar="ISSUE", help="Post output to GitHub issue")
+    yp.add_argument("--timeout", type=int, default=900, help="Timeout in seconds (default: 900)")
+
     # agy-translate
     ap = subparsers.add_parser(
         "agy-translate",
@@ -1487,6 +1588,15 @@ def main():
     elif args.agent == "codex":
         prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
         ok, output = dispatch_codex(prompt, args.model, args.timeout)
+        if ok:
+            print(output)
+        sys.exit(0 if ok else 1)
+
+    elif args.agent == "agy":
+        prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
+        ok, output = dispatch_agy(prompt, args.model, args.timeout)
+        if ok and args.github:
+            post_to_github(args.github, output, args.model or AGY_DEFAULT_MODEL)
         if ok:
             print(output)
         sys.exit(0 if ok else 1)
