@@ -2,7 +2,7 @@
 title: "Module 1.13: AWS Data Ingestion + Transformation — Kinesis / Firehose / Glue / Athena"
 slug: cloud/aws-essentials/module-1.13-data-ingestion
 sidebar:
-  order: 13
+  order: 14
 ---
 
 > **Complexity:** `[COMPLEX]`
