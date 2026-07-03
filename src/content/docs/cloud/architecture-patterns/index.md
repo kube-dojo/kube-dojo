@@ -6,7 +6,7 @@ sidebar:
 ---
 **Vendor-neutral theory for designing Kubernetes on any cloud provider.**
 
-Before diving into EKS, GKE, or AKS, you need to understand the architectural decisions that apply everywhere: managed vs self-managed trade-offs, multi-cluster strategies, cloud IAM integration patterns, and VPC network topologies. These concepts transfer across all three hyperscalers.
+This section covers the architectural decisions that apply across every cloud: managed vs self-managed trade-offs, multi-cluster strategies, cloud IAM integration patterns, and VPC network topologies. These concepts transfer across all three hyperscalers — and they land best once you have already worked through at least one provider's essentials and managed-Kubernetes deep dive (EKS, GKE, or AKS), so you can recognize each pattern in concrete form before generalizing it across clouds.
 
 ---
 
