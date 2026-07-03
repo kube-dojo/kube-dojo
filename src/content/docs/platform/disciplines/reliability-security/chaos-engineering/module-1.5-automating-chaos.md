@@ -1332,7 +1332,7 @@ Key takeaways:
 
 ## Next Module
 
-Return to the [Chaos Engineering README]() to review the complete discipline, explore further reading, and find links to related platform engineering tracks.
+Return to the [Chaos Engineering README](../) to review the complete discipline, explore further reading, and find links to related platform engineering tracks.
 
 ## Sources
 

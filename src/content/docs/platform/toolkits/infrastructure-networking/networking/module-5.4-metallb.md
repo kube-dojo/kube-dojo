@@ -965,7 +965,7 @@ kind delete cluster --name metallb-lab
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Module 5.5: Flannel](../module-5.5-flannel/) to learn overlay networking with VXLAN and host-gw backends from the ground up.
 
 ## Sources
 

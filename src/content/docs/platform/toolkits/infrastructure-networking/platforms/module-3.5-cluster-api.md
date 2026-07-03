@@ -609,7 +609,7 @@ The team should standardize and version the machine image contract before scalin
 
 Write a one-page recommendation for how your organization should adopt CAPI beyond the lab. Include the intended management-cluster ownership model, provider choice, base-image strategy, GitOps review process, deletion guardrails, backup plan, MachineHealthCheck stance, and the boundary between Terraform foundations and CAPI cluster lifecycle. Your recommendation should be specific enough that another platform engineer could challenge the trade-offs, not just agree with general statements.
 
-**Next Module**: [Module 7.1: Backstage](../module-7.1-backstage/) - Build an Internal Developer Portal to give developers self-service access to platform capabilities.
+**Next Module**: [Module 3.6: vCluster](../module-3.6-vcluster/) — run virtual Kubernetes clusters inside a host cluster for multi-tenancy and self-service isolation.
 
 ## Sources
 

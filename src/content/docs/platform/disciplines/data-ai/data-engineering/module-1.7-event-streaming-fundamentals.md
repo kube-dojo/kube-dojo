@@ -1025,4 +1025,4 @@ Your record should include the decision and the risk that would make you revisit
 
 ## Next Module
 
-Continue to [Module 1.2: Apache Kafka on Kubernetes (Strimzi)](../module-1.2-kafka/) to deploy and operate Kafka after you understand the streaming mental model.
+Continue to [Module 1.8: CloudEvents and Event-Driven Architecture](../module-1.8-cloudevents-event-driven-arch/) to design event contracts and Kubernetes delivery paths on top of the streaming mental model.

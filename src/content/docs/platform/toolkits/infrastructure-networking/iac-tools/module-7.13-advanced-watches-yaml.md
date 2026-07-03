@@ -844,4 +844,4 @@ The `ignored-app` CR should have no status conditions because the operator never
 
 ## Next Module
 
-[Module 7.14: Ansible Operator with AWX/AAP](../module-7.14-awx-aap-operator-integration/)
+[Module 7.14: AWX, Tower, and Event-Driven Ansible (EDA) Integration](../module-7.14-awx-tower-eda/)

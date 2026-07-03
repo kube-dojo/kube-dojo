@@ -1471,7 +1471,7 @@ You have completed this exercise when you can verify every item in the checklist
 - [ ] You can describe why model promotion should compare against a production baseline.
 - [ ] You can explain what evidence an incident responder needs from a model registry.
 ## Next Module
-The MLOps discipline sequence is complete. Next, move from discipline theory into implementation choices with the [ML Platforms Toolkit](/platform/toolkits/data-ai-platforms/ml-platforms/).
+Continue to [Module 5.7: Data Versioning with DVC](../module-5.7-dvc-data-versioning/) to version datasets and tie data changes to pipeline reproducibility.
 
 ## Sources
 - [kubeflow-pipelines.readthedocs.io: dsl.html](https://kubeflow-pipelines.readthedocs.io/en/latest/source/dsl.html) — The KFP DSL reference directly documents `kfp.dsl.component` as the decorator for Python-function-based components.

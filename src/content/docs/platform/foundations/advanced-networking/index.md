@@ -32,4 +32,4 @@ Kubernetes networking gets you pod-to-pod communication. But production traffic 
 
 - Basic DNS and HTTP knowledge
 - Kubernetes Ingress/Services (from CKA or Fundamentals)
-- Linux networking basics (from Linux Deep Dive)
+- Linux networking basics (from [Linux Networking](/linux/foundations/networking/))

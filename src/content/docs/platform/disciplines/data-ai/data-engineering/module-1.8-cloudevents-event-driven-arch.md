@@ -1138,4 +1138,4 @@ Build a small CloudEvents path for `order-placed` events in a Kubernetes 1.35+ c
 
 ## Next Module
 
-You've completed the Data Engineering track. Continue to the [MLOps discipline](../../mlops/) — [Module 5.1 — MLOps Fundamentals](../../mlops/module-5.1-mlops-fundamentals/) builds on these event-driven foundations when ML pipelines need to react to data-arrival events and emit prediction-emitted CloudEvents downstream. If you want to revisit stateful stream processing with the contracts from this module, return to [Module 1.3 — Stream Processing with Flink](../module-1.3-flink/).
+Continue to [Module 1.9 — NATS JetStream on Kubernetes](../module-1.9-nats-jetstream/) to run production NATS JetStream with streams, consumers, security, and observability. After finishing the Data Engineering sub-track, continue to the [MLOps discipline](../../mlops/) — [Module 5.1 — MLOps Fundamentals](../../mlops/module-5.1-mlops-fundamentals/) builds on these event-driven foundations when ML pipelines need to react to data-arrival events and emit prediction-emitted CloudEvents downstream.

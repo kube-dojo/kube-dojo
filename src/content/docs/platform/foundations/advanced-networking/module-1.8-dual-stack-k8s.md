@@ -858,4 +858,4 @@ kind delete cluster --name dualstack-dojo
 
 ## Next Module
 
-Use the upstream [Kubernetes dual-stack validation task](https://kubernetes.io/docs/tasks/network/validate-dual-stack/) as the operational follow-on while the later IPv6-only Kubernetes migration module is planned.
+Continue to [Module 1.9: IPv6-Only Kubernetes & Brownfield Migration](../module-1.9-ipv6-only-k8s/) to plan NAT64/DNS64, IPv6-only CNI, and brownfield migration paths.

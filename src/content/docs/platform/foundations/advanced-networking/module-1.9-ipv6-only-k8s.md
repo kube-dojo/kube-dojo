@@ -845,4 +845,4 @@ The `127.0.0.1` address is an IPv4 loopback literal. In an IPv6-only Pod's netwo
 
 ## Next Module
 
-Use the upstream [Kubernetes validate dual-stack task](https://kubernetes.io/docs/tasks/network/validate-dual-stack/) as a hands-on operational check until the Advanced Networking capstone module is available. For advanced routing topics, see [Module 1.4: BGP & Core Routing](module-1.4-bgp-routing/).
+You have completed the Advanced Networking track. Return to the [Advanced Networking overview](../) to review the full module sequence, or explore [Platform Engineering](/platform/) for persona-based next steps.

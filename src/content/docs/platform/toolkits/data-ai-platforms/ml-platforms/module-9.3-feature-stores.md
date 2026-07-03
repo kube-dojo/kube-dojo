@@ -659,4 +659,4 @@ Add an on-demand feature view that computes `purchase_velocity` as `total_purcha
 
 ## Next Module
 
-Continue to [Module 9.4: Model Serving](/platform/toolkits/data-ai-platforms/ml-platforms/module-9.4-model-serving/) to learn how trained models are deployed behind production endpoints and how feature stores connect to the serving layer.
+Continue to [Module 9.4: vLLM](/platform/toolkits/data-ai-platforms/ml-platforms/module-9.4-vllm/) to learn high-throughput LLM serving and how feature stores connect to the inference layer.

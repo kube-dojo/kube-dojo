@@ -680,4 +680,4 @@ sudo systemctl start rke2-server
 
 ## Next Module
 
-Next up: [Module 14.6: Managed Kubernetes](/platform/toolkits/infrastructure-networking/k8s-distributions/module-14.6-managed-kubernetes/) — exploring the architectural trade-offs of surrendering control plane management to AWS EKS, Google GKE, and Azure AKS.
+Next up: [Module 14.8: Edge Kubernetes Distros Landscape](../module-14.8-edge-distros-landscape/) — compare k3s, MicroK8s, K3OS, and other edge-focused distributions.

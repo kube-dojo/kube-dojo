@@ -5,7 +5,7 @@ sidebar:
   order: 2
 revision_pending: false
 ---
-> **Complexity**: `[MEDIUM]` | **Time**: 50-65 minutes | **Prerequisites**: None (entry point to Platform track)
+> **Complexity**: `[MEDIUM]` | **Time**: 50-65 minutes | **Prerequisites**: None (a natural starting point for the Platform foundations)
 
 ## What You'll Be Able to Do
 

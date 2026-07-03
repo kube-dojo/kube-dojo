@@ -7,6 +7,16 @@ revision_pending: false
 ---
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 3.5 hours
 
+## Prerequisites
+
+Before starting this module:
+- **Required**: [Module 1.1 — Stateful Workloads & Storage](../module-1.1-stateful-workloads/) — StatefulSets, PVCs, and operator patterns for stateful systems
+- **Required**: Kubernetes Storage fundamentals — PersistentVolumes, PersistentVolumeClaims, StorageClasses
+- **Required**: Kubernetes Jobs and CronJobs
+- **Recommended**: Familiarity with event-driven architecture, replication, partitioning, and basic streaming concepts
+
+---
+
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:

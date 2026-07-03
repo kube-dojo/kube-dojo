@@ -1592,7 +1592,7 @@ If you cannot write those sentences clearly, your decision record still needs wo
 
 ## Next Module
 
-Next Toolkit: [CI/CD Pipelines Toolkit](/platform/toolkits/cicd-delivery/ci-cd-pipelines/)
+Next up: [Module 14.7: RKE2](../module-14.7-rke2/) — enterprise-hardened Kubernetes with CIS profiles and embedded container runtime.
 
 ## Sources
 
