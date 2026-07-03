@@ -109,7 +109,10 @@ MCP_CONFIG_PATH = PRIMARY_REPO / ".mcp.json"
 MCP_SUPPORTED_AGENTS = frozenset({"claude", "deepseek"})
 HERMES_MCP_AGENTS = frozenset({"deepseek"})
 HERMES_MCP_TASK_CLASSES = frozenset({"draft", "edit"})
-CLAUDE_MCP_TASK_CLASSES = frozenset({"review", "search"})
+# review/search -> read-only sources tools; draft/edit -> write-capable author
+# tools (both curated in scripts/dispatch.py). See _import_dispatch_mcp_constants.
+CLAUDE_MCP_TASK_CLASSES = frozenset({"review", "search", "draft", "edit"})
+CLAUDE_MCP_AUTHOR_TASK_CLASSES = frozenset({"draft", "edit"})
 
 # Skill auto-loading — R2 follow-up to PR #1575 and the agents_extensions/
 # layout introduced there.
@@ -391,34 +394,46 @@ def _available_hermes_mcp_servers() -> list[str]:
     )
 
 
-def _load_claude_translation_tools() -> str:
-    """Read ``CLAUDE_TRANSLATION_TOOLS`` from ``scripts/dispatch.py`` without importing it."""
+def _load_dispatch_str_constant(name: str) -> str:
+    """Read a module-level string constant from ``scripts/dispatch.py`` without
+    importing it (dispatch.py is a CLI with import-time side effects). The named
+    constant must be a plain string literal (read via ast.literal_eval)."""
     dispatch_path = REPO / "scripts" / "dispatch.py"
     tree = ast.parse(dispatch_path.read_text(encoding="utf-8"))
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == "CLAUDE_TRANSLATION_TOOLS":
+            if isinstance(target, ast.Name) and target.id == name:
                 value = ast.literal_eval(node.value)
                 if isinstance(value, str):
                     return value
-                raise ValueError("CLAUDE_TRANSLATION_TOOLS must be a string")
-    raise ValueError("CLAUDE_TRANSLATION_TOOLS not found in scripts/dispatch.py")
+                raise ValueError(f"{name} must be a string")
+    raise ValueError(f"{name} not found in scripts/dispatch.py")
 
 
-def _import_dispatch_mcp_constants() -> tuple[str, str]:
-    """Reuse the curated RAG allowlist from ``scripts/dispatch.py``."""
-    return str(MCP_CONFIG_PATH), _load_claude_translation_tools()
+def _import_dispatch_mcp_constants(task_class: str) -> tuple[str, str]:
+    """Return (mcp_config_path, allowed_tools) for a claude MCP dispatch.
+
+    Authoring classes (draft/edit) get the write-capable
+    ``CLAUDE_MCP_AUTHOR_TOOLS``; read classes (review/search) get the read-only
+    ``CLAUDE_TRANSLATION_TOOLS``. Both are curated in scripts/dispatch.py (#2134).
+    """
+    constant = (
+        "CLAUDE_MCP_AUTHOR_TOOLS"
+        if task_class in CLAUDE_MCP_AUTHOR_TASK_CLASSES
+        else "CLAUDE_TRANSLATION_TOOLS"
+    )
+    return str(MCP_CONFIG_PATH), _load_dispatch_str_constant(constant)
 
 
-def _build_mcp_tool_config(agent: str, mcp_server: str) -> dict | None:
+def _build_mcp_tool_config(agent: str, mcp_server: str, task_class: str) -> dict | None:
     """Build adapter ``tool_config`` for MCP tool access."""
     sys.path.insert(0, str(REPO / "scripts"))
     from agent_runtime.tool_config import build_mcp_tool_config
 
     if agent == "claude":
-        mcp_config_path, allowed_tools = _import_dispatch_mcp_constants()
+        mcp_config_path, allowed_tools = _import_dispatch_mcp_constants(task_class)
         tool_config, _diagnostics = build_mcp_tool_config(
             agent,
             mcp_servers=[mcp_server],
@@ -998,12 +1013,11 @@ def main() -> int:
         if args.agent == "claude":
             if args.task_class not in CLAUDE_MCP_TASK_CLASSES:
                 p.error(
-                    f"--mcp is only supported for read task classes "
-                    f"({', '.join(sorted(CLAUDE_MCP_TASK_CLASSES))}) on claude; "
-                    f"got task_class={args.task_class!r}. Write classes would "
-                    f"either cripple claude (allowedTools restricted to RAG+Read, "
-                    f"no write) or silently scope-creep; use the write-mode "
-                    f"dispatch.py --mcp path for translation authoring."
+                    f"--mcp on claude is supported for "
+                    f"{', '.join(sorted(CLAUDE_MCP_TASK_CLASSES))} task classes "
+                    f"(review/search use the read-only sources allowlist; "
+                    f"draft/edit use the write-capable author allowlist, #2134); "
+                    f"got task_class={args.task_class!r}."
                 )
         elif args.agent in HERMES_MCP_AGENTS:
             if args.task_class not in HERMES_MCP_TASK_CLASSES:
@@ -1035,7 +1049,9 @@ def main() -> int:
             )
 
     tool_config = (
-        _build_mcp_tool_config(args.agent, args.mcp) if args.mcp else None
+        _build_mcp_tool_config(args.agent, args.mcp, args.task_class)
+        if args.mcp
+        else None
     )
 
     # Codex always runs in danger mode — read-only starves it of

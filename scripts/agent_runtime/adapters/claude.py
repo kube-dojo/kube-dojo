@@ -151,9 +151,22 @@ class ClaudeAdapter:
         if isinstance(permission_mode, str) and permission_mode:
             cmd.extend(["--permission-mode", permission_mode])
 
-        # Model override
+        # Model override + reasoning effort (#2134). Effort can be supplied two
+        # ways: an explicit ``tool_config["effort"]`` (mirrors the codex/qwen/
+        # deepseek convention), or an effort SUFFIX on the model slug
+        # (``claude-sonnet-5-high`` -> model ``claude-sonnet-5`` + effort
+        # ``high``, mirroring the agy ``gemini-3.1-pro-high`` slug). Claude Code's
+        # headless CLI accepts ``--effort <level>``. Real model ids
+        # (claude-sonnet-4-6, claude-opus-4-8, ...) never end in a bare
+        # -high/-medium/-low token, so the suffix strip is unambiguous.
+        effort = tc.get("effort")
         if model:
+            suffix_match = re.match(r"^(.*)-(high|medium|low)$", model)
+            if suffix_match and not effort:
+                model, effort = suffix_match.group(1), suffix_match.group(2)
             cmd.extend(["--model", model])
+        if isinstance(effort, str) and effort and effort != "default":
+            cmd.extend(["--effort", effort])
 
         # Output format
         cmd.extend(["--output-format", tc.get("output_format", "text")])
