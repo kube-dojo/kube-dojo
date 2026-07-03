@@ -4,7 +4,7 @@ slug: cloud/gke-deep-dive/module-6.1-gke-architecture
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: GCP Essentials, Cloud Architecture Patterns — expect to run real `gcloud` commands against a billing-enabled project and delete clusters when finished.
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: GCP Essentials — expect to run real `gcloud` commands against a billing-enabled project and delete clusters when finished. [Cloud Architecture Patterns](../../architecture-patterns/) is a recommended companion, not required first.
 
 ## What You'll Be Able to Do
 
