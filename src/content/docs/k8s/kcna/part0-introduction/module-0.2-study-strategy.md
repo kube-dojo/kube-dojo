@@ -89,25 +89,21 @@ The KCNA curriculum is weighted, so equal study time across every topic is usual
 │                                                             │
 │  Total: ~20-30 hours recommended                           │
 │                                                             │
-│  Kubernetes Fundamentals (46%)                             │
-│  ████████████████████████████░░░░░░░░░░  10-14 hours       │
-│  Core concepts, architecture, resources                     │
+│  Kubernetes Fundamentals (44%)                             │
+│  ████████████████████████████░░░░░░░░░░  9-13 hours        │
+│  Core concepts, administration, scheduling, containers      │
 │                                                             │
-│  Container Orchestration (22%)                             │
-│  █████████████░░░░░░░░░░░░░░░░░░░░░░░░░  4-6 hours         │
-│  Scheduling, scaling, networking                            │
+│  Container Orchestration (28%)                             │
+│  ██████████████████░░░░░░░░░░░░░░░░░░░░  6-9 hours         │
+│  Networking, security, troubleshooting, storage             │
 │                                                             │
-│  Cloud Native Architecture (16%)                           │
+│  Cloud Native Application Delivery (16%)                    │
 │  ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░  3-5 hours         │
-│  CNCF, principles, serverless                               │
+│  Application delivery, debugging                            │
 │                                                             │
-│  Cloud Native Observability (8%)                           │
-│  █████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1-2 hours         │
-│  Prometheus, logging basics                                 │
-│                                                             │
-│  Application Delivery (8%)                                 │
-│  █████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1-2 hours         │
-│  CI/CD, GitOps, Helm basics                                 │
+│  Cloud Native Architecture (12%)                           │
+│  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  2-4 hours         │
+│  Observability, CNCF ecosystem, principles, community       │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -118,13 +114,12 @@ Use a simple scorecard instead of relying on vague confidence. Rate each domain 
 
 | Domain | Exam Weight | Example Confidence | Gap | Priority Signal |
 |---|---:|---:|---:|---:|
-| Kubernetes Fundamentals | 46% | 5 | 5 | 230 |
-| Container Orchestration | 22% | 6 | 4 | 88 |
-| Cloud Native Architecture | 16% | 4 | 6 | 96 |
-| Cloud Native Observability | 8% | 7 | 3 | 24 |
-| Application Delivery | 8% | 3 | 7 | 56 |
+| Kubernetes Fundamentals | 44% | 5 | 5 | 220 |
+| Container Orchestration | 28% | 6 | 4 | 112 |
+| Cloud Native Application Delivery | 16% | 3 | 7 | 112 |
+| Cloud Native Architecture | 12% | 4 | 6 | 72 |
 
-In this example, Kubernetes Fundamentals still dominates because the weight is large and the confidence score is not strong. Cloud Native Architecture outranks Container Orchestration even though it has a lower exam weight, because the learner has a larger gap there. Application Delivery is low weight, but the weak baseline means it deserves targeted review rather than total neglect. A proportional KCNA study plan is not rigid arithmetic; it is a disciplined way to prevent panic, comfort-zone studying, and last-minute overcorrection.
+In this example, Kubernetes Fundamentals still dominates because the weight is large and the confidence score is not strong. Application Delivery ties Container Orchestration in priority even though it carries a lower exam weight, because the learner's gap there is much larger — the higher weight of orchestration is offset by the smaller gap. That is the whole point: multiply weight by gap rather than studying by weight alone, or a lower-weight, weak-baseline domain like Application Delivery gets neglected. A proportional KCNA study plan is not rigid arithmetic; it is a disciplined way to prevent panic, comfort-zone studying, and last-minute overcorrection.
 
 When you convert the priority signal into calendar blocks, place the hardest and most valuable work early. Learners often save weak areas for the final days because those topics feel unpleasant, but that creates a poor feedback loop. You discover confusion when there is no time to fix it, then cram facts without building relationships. A better two-week plan uses the first half for high-weight conceptual domains, the middle for ecosystem and delivery topics, and the final days for practice tests, wrong-answer review, and light consolidation.
 

@@ -594,11 +594,10 @@ Congratulations. You have completed the full KCNA curriculum — from Kubernetes
 
 | Exam domain | Official KCNA exam weight |
 |-------------|--------------------------|
-| Kubernetes Fundamentals | 46% |
-| Container Orchestration | 22% |
-| Cloud Native Architecture | 16% |
-| Cloud Native Observability | 8% |
-| Cloud Native Application Delivery | 8% |
+| Kubernetes Fundamentals | 44% |
+| Container Orchestration | 28% |
+| Cloud Native Application Delivery | 16% |
+| Cloud Native Architecture (includes Observability) | 12% |
 
 See [Module 0.1: KCNA Overview](../../part0-introduction/module-0.1-kcna-overview/) for the full domain breakdown and study strategy.
 
