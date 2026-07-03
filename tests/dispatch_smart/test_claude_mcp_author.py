@@ -87,3 +87,15 @@ def test_explicit_effort_in_tool_config_wins() -> None:
         tool_config={"effort": "medium"},
     )
     assert _model_and_effort(plan.cmd) == ("claude-sonnet-5", "medium")
+
+
+def test_suffix_is_stripped_even_when_explicit_effort_set() -> None:
+    """Model slug carries a -high suffix AND explicit effort is given: the suffix
+    must still be stripped from --model (it is not a real model id), and the
+    explicit effort wins. Regression for the codex R1 finding on #2227/#2134."""
+    plan = ClaudeAdapter().build_invocation(
+        prompt="x", mode="read-only", cwd=Path("."),
+        model="claude-sonnet-5-high", task_id="t", session_id=None,
+        tool_config={"effort": "medium"},
+    )
+    assert _model_and_effort(plan.cmd) == ("claude-sonnet-5", "medium")

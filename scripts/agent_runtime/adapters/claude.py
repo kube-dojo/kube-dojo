@@ -162,8 +162,13 @@ class ClaudeAdapter:
         effort = tc.get("effort")
         if model:
             suffix_match = re.match(r"^(.*)-(high|medium|low)$", model)
-            if suffix_match and not effort:
-                model, effort = suffix_match.group(1), suffix_match.group(2)
+            if suffix_match:
+                # Always strip the effort suffix from the model id (it is not a
+                # real API model id). The suffix supplies the effort ONLY when no
+                # explicit tool_config["effort"] was given — explicit wins.
+                model = suffix_match.group(1)
+                if not effort:
+                    effort = suffix_match.group(2)
             cmd.extend(["--model", model])
         if isinstance(effort, str) and effort and effort != "default":
             cmd.extend(["--effort", effort])
