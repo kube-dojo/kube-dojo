@@ -93,7 +93,7 @@ START HERE
 └──────────────────┬──────────────────┘
                    │
                    ▼
-           FOUNDATIONS COMPLETE
+           READY TO APPLY
                    │
     ┌──────────────┼──────────────┐
     │              │              │
@@ -182,9 +182,9 @@ Papers:
 
 ---
 
-## Foundations Complete
+## Applying These Foundations
 
-This is the final track in the Foundations series. You've now covered:
+Distributed Systems is one foundation area, not the end of the Foundations section. It connects several earlier mental models:
 
 1. **Systems Thinking**: See systems as interconnected wholes
 2. **Reliability Engineering**: Design for failure, measure with SLOs
@@ -192,7 +192,7 @@ This is the final track in the Foundations series. You've now covered:
 4. **Security Principles**: Defense in depth, least privilege
 5. **Distributed Systems**: Consensus, consistency, coordination, ordering
 
-These foundations prepare you for the practical Disciplines and Toolkits tracks.
+These foundations prepare you to make practical tradeoffs in Disciplines and Toolkits, while later Foundations topics such as networking, eBPF, and leadership add more depth for specific platform routes.
 
 ---
 
