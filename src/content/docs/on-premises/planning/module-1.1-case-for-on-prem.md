@@ -8,7 +8,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 90 minutes
 >
-> **Prerequisites**: [Cloud Native 101](/prerequisites/cloud-native-101/), [Kubernetes Basics](/prerequisites/kubernetes-basics/)
+> **Prerequisites**: [CKA](/k8s/cka/) (cluster architecture, kubeadm) — required. You should already be comfortable with core Kubernetes troubleshooting, Linux networking/storage/security, and day-2 operational thinking. Foundational refreshers: [Cloud Native 101](/prerequisites/cloud-native-101/), [Kubernetes Basics](/prerequisites/kubernetes-basics/).
 
 ---
 

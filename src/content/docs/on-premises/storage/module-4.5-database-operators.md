@@ -608,7 +608,7 @@ kubectl get pods -l cnpg.io/cluster=dojo-db -L cnpg.io/instanceRole -w
 
 ## Next Module
 
-Next, continue with [Storage Observability and Capacity Forecasting](module-4.6-storage-observability-capacity-forecasting/) to connect database operator health with the storage metrics and forecasts that keep on-premises stateful platforms reliable.
+Next, continue with [Module 6.1: Physical Security & Air-Gapped Environments](/on-premises/security/module-6.1-air-gapped/) to harden on-premises Kubernetes boundaries after your stateful storage platform is in place.
 
 ## Sources
 

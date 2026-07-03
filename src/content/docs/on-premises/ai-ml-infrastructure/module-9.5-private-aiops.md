@@ -1144,4 +1144,4 @@ Answer these questions before considering the design production-ready, because a
 
 ## Next Module
 
-Ready to take your bare-metal clusters to the next level; in the next module, [Module 9.6: Edge Inference and Hardware Acceleration](/on-premises/ai-ml-infrastructure/module-9.6-edge-inference), you will explore how to configure SR-IOV, MIG, and optimized scheduling to get reliable inference performance from local hardware.
+Ready to take your bare-metal clusters to the next level; in the next module, [Module 9.6: High-Performance Storage for AI](/on-premises/ai-ml-infrastructure/module-9.6-high-performance-storage-ai/), you will architect parallel file systems, distributed caches, and tiering strategies to prevent GPU starvation on bare-metal Kubernetes.

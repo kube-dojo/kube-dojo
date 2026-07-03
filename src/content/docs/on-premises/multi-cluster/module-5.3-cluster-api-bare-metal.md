@@ -607,7 +607,7 @@ Both stacks share the same `Metal3Cluster` API VIP (`10.10.50.100:6443`); bootst
 
 ## Next Module
 
-Continue to [Module 6.1: Physical Security & Air-Gapped Environments](../../security/module-6.1-air-gapped/) to harden on-premises Kubernetes boundaries after your bare-metal fleet provisions declaratively.
+Continue to [Module 5.4: Fleet Management](../module-5.4-fleet-management/) to manage multi-cluster rollouts, GitOps bundles, and selective sync across bare-metal estates.
 
 ## Learner Check
 

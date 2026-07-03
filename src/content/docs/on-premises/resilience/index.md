@@ -16,4 +16,4 @@ Whether you are designing active-active multi-site failover, establishing hybrid
 |--------|-------------|------|
 | [Module 8.1: Multi-Site & Disaster Recovery](module-8.1-multi-site-dr/) | Active-active vs active-passive, stretched clusters, Velero backups, etcd snapshots, DNS failover | 60 min |
 | [Module 8.2: Hybrid Cloud Connectivity](module-8.2-hybrid-connectivity/) | VPN tunnels, direct interconnects, Submariner, cross-environment service mesh, unified policy | 60 min |
-| [Module 8.3: Cloud Repatriation & Migration](module-8.3-cloud-repatriation/) | Moving workloads from cloud to on-prem, service translation, storage migration, phased cutover | 60 min |
+| [Module 8.3: Cloud Repatriation & Migration](module-8.3-cloud-repatriation/) | Moving workloads from cloud to on-prem, service translation, storage migration, phased cutover | 90 min |

@@ -611,7 +611,7 @@ kind delete cluster --name dns-certs-lab
 
 ## Next Module
 
-Continue to [Module 4.1: Storage Architecture Decisions](/on-premises/storage/module-4.1-storage-architecture/) to design persistent storage for stateful workloads now that names and certificates resolve reliably inside your estate.
+Continue to [Module 3.5: Cross-Cluster Networking](../module-3.5-cross-cluster-networking/) to design east-west routing, MCS service discovery, and encrypted tunnels across bare-metal clusters.
 
 ## Learner Check
 

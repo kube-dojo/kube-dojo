@@ -942,7 +942,7 @@ kind delete cluster
 
 ## Next Module
 
-Continue to [Module 5.1: Private Cloud Platforms](../../multi-cluster/module-5.1-private-cloud/) to learn how VMware vSphere, OpenStack, and Harvester provide infrastructure abstraction layers for on-premises Kubernetes, including how those platforms handle storage, networking, and scheduling above the bare-metal layer you have been working at in this part of the curriculum.
+Continue to [Object Storage on Bare Metal](../module-4.4-object-storage-bare-metal/) to deploy and scale S3-compatible object storage on bare-metal Kubernetes using distributed MinIO, erasure coding, and DirectPV.
 
 ## Sources
 

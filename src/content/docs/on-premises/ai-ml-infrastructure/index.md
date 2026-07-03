@@ -14,12 +14,12 @@ Running AI and ML workloads on bare metal is a different sport from running them
 
 | Module | Focus | Time |
 |--------|-------|------|
-| [GPU Nodes & Accelerated Computing](module-9.1-gpu-nodes-accelerated/) | NVIDIA GPU Operator, MIG, time slicing, DCGM monitoring, AMD ROCm, Intel Gaudi | 60 min |
-| [Private AI Training Infrastructure](module-9.2-private-ai-training/) | Distributed training, NCCL over InfiniBand/RoCE, Volcano/Kueue, fault-tolerant jobs | 75 min |
-| [Private LLM Serving](module-9.3-private-llm-serving/) | vLLM, TGI, Ollama at scale, quantization, KServe, continuous batching | 75 min |
-| [Private MLOps Platform](module-9.4-private-mlops-platform/) | Kubeflow, MLflow, Feast, model registry, experiment tracking on bare metal | 60 min |
-| [Private AIOps](module-9.5-private-aiops/) | Anomaly detection, predictive scaling, AI-augmented incident response with guardrails | 60 min |
-| [High-Performance Storage for AI](module-9.6-high-performance-storage-ai/) | NFS-over-RDMA, Lustre/BeeGFS/WekaFS, avoiding GPU idle from storage bottlenecks | 60 min |
+| [GPU Nodes & Accelerated Computing](module-9.1-gpu-nodes-accelerated/) | NVIDIA GPU Operator, MIG, time slicing, DCGM monitoring, AMD ROCm, Intel Gaudi | 75-95 min |
+| [Private AI Training Infrastructure](module-9.2-private-ai-training/) | Distributed training, NCCL over InfiniBand/RoCE, Volcano/Kueue, fault-tolerant jobs | 120-150 min |
+| [Private LLM Serving](module-9.3-private-llm-serving/) | vLLM, TGI, Ollama at scale, quantization, KServe, continuous batching | 90-120 min |
+| [Private MLOps Platform](module-9.4-private-mlops-platform/) | Kubeflow, MLflow, Feast, model registry, experiment tracking on bare metal | 3-4 hours |
+| [Private AIOps](module-9.5-private-aiops/) | Anomaly detection, predictive scaling, AI-augmented incident response with guardrails | 90-120 min |
+| [High-Performance Storage for AI](module-9.6-high-performance-storage-ai/) | NFS-over-RDMA, Lustre/BeeGFS/WekaFS, avoiding GPU idle from storage bottlenecks | 90-120 min |
 
 ---
 
