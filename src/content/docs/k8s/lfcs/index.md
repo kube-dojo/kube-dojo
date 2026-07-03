@@ -173,7 +173,7 @@ Just like CKA/CKAD, you get a terminal and must complete tasks. No multiple choi
 
 ### Time Management
 - **2 hours** for all tasks
-- Use the [Three-Pass Strategy](../../prerequisites/philosophy-design/):
+- Use the Three-Pass Strategy:
   - **Pass 1**: Quick wins — file creation, user management, basic commands
   - **Pass 2**: Medium tasks — filesystem, systemd, networking config
   - **Pass 3**: Complex tasks — LVM, NFS, firewall rules

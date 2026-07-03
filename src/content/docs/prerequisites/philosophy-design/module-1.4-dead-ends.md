@@ -10,7 +10,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes.
 >
-> **Prerequisites**: Module 1, Module 2, Module 3.
+> **Prerequisites**: Module 1.1, Module 1.2, Module 1.3.
 
 ---
 

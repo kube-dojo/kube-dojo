@@ -9,7 +9,7 @@ revision_pending: false
 >
 > **Time to Complete**: 35-45 minutes
 >
-> **Prerequisites**: Module 1, Module 2
+> **Prerequisites**: Module 1.1, Module 1.2
 
 ---
 
