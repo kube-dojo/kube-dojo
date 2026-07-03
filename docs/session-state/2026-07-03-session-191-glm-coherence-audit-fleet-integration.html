@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 191 — GLM coherence audit + fleet integration</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.reject { background: #f8d7da; color: #721c24 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 191 — GLM-5.2 curriculum coherence audit + fleet integration</h1>
+<p class="meta"><b>2026-07-03.</b> The DO-NEXT ("read GLM-5.2's findings, grain of salt") became a full workstream: GLM (in the ChatGPT-style UI, driven by the user) ran section-by-section <b>cross-module coherence audits</b> across the whole curriculum — a defect class our per-module pipeline is structurally blind to. Every finding was orchestrator-ground-checked (fact-gated against the EN source, the <code>sources</code> MCP, and primary web sources) before the fleet fixed it. <b>8 PRs merged, ~18 issues closed</b>, GLM proven from unknown → trusted finder, and GLM wired into the fleet (Hermes lane live; OpenCode lane diagnosed to a ~15-line fix). Translation volume stayed PAUSED throughout.</p>
+
+<h2>Headline: the coherence-audit loop</h2>
+<p>GLM finds (cross-module coherence, which single-module review can't see) → orchestrator ground-checks + web-verifies volatile facts → fleet fixes → cross-family review → merge → scorecard back to GLM. The fact-gate earned its keep repeatedly (see below). GLM's accuracy climbed each pass as scorecards fed back.</p>
+
+<table>
+<tr><th>PR</th><th>State</th><th>Fix</th><th>Author → Reviewer</th></tr>
+<tr><td>#2158</td><td><span class="pill merged">MERGED</span></td><td>prereq route framing + nav (#2143/#2144/#2148)</td><td>cursor → deepseek</td></tr>
+<tr><td>#2165</td><td><span class="pill merged">MERGED</span></td><td>AI foundations 1.1 re-leveled to zero-background + nav (#2138/#2140)</td><td>codex → composer-2.5</td></tr>
+<tr><td>#2170</td><td><span class="pill merged">MERGED</span></td><td>KCNA/KCSA stale exam facts (#2159/#2160)</td><td>codex + orch web-verify → composer-2.5</td></tr>
+<tr><td>#2172</td><td><span class="pill merged">MERGED</span></td><td>cloud EKS/GKE/AKS prereq cycle — indexes (#2155)</td><td>cursor → codex</td></tr>
+<tr><td>#2173</td><td><span class="pill merged">MERGED</span></td><td>linux system-essentials false entry-point framing (#2152)</td><td>deepseek → opus inline</td></tr>
+<tr><td>#2174</td><td><span class="pill merged">MERGED</span></td><td>platform distributed-systems terminal-claim + mlops k8s gate (#2163/#2164)</td><td>codex → composer-2.5</td></tr>
+<tr><td>#2182</td><td><span class="pill merged">MERGED</span></td><td>CKA/CKAD validity + part3 nav + CKS 5.3 header + cert counts (#2175/#2177/#2178)</td><td>codex + orch web-verify → GLM (Hermes) + orch</td></tr>
+<tr><td>#2183</td><td><span class="pill merged">MERGED</span></td><td>linux 8.x sysadmin group rewired into route + everyday-use promise (#2179/#2180)</td><td>cursor → codex</td></tr>
+<tr><td>#2149</td><td><span class="pill inflight">INFRA-LANE</span></td><td>agy retry-recovery (from s190b) — verified-ready, infra to merge</td><td>—</td></tr>
+<tr><td>opencode-json-capture</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>fix opencode headless output capture (<code>--format json</code>)</td><td>cursor authoring</td></tr>
+</table>
+
+<h2>The fact-gate — why the orchestrator web-verifies (do NOT trust the issue OR the author)</h2>
+<p>The single most load-bearing discipline this session. Three separate saves:</p>
+<ul>
+<li><b>KCNA domain weights (#2159):</b> GLM's issue premise was <b>inverted</b> — it said "the index is wrong, fix it to match the overview." codex, authoring, <i>contradicted the premise</i> and rewrote the overview instead. I web-verified against the Linux Foundation KCNA program-changes + cert pages: the current official structure is <b>4-domain 44/28/16/12</b> (Observability folded into Cloud Native Architecture), validity <b>2 years</b> — exactly what codex wrote. The <i>overview</i> was the stale side. Had I trusted GLM's issue framing, we'd have "fixed" it backwards and published wrong exam data.</li>
+<li><b>#2176 "the fix didn't land":</b> GLM's second pass alarmed that the KCNA overview STILL taught 5-domain, calling it a process failure. I checked current <code>main</code>: the overview IS 4-domain, zero 5-domain refs remain. GLM had audited a <b>stale pre-merge checkout</b>. REJECTED. → new rule for GLM: <code>git pull</code> to HEAD before auditing.</li>
+<li><b>Incomplete-fix catches:</b> composer-2.5 caught 3 "five-domain" leftovers in KCNA study-strategy prose my table-fix missed; GLM's re-audit caught that my #2155 fix was <b>index-only</b> (the EKS/GKE/AKS entry modules 5.1/6.1/7.1 still hard-require Architecture Patterns → #2184). Same class as the KCNA prose leftovers — "fix ALL siblings."</li>
+</ul>
+
+<h2>GLM scorecards (the proving record)</h2>
+<table>
+<tr><th>Pass</th><th>Result</th></tr>
+<tr><td>AI + Prereq (pass 1, all-at-once ~19 min)</td><td>~13/14 findings accurate on ground-check; 1 mischaracterized (#2153 "nonexistent Module 0.8" — 0.8 exists); #2145 GLM self-retracted (prove-the-negative worked).</td></tr>
+<tr><td>k8s certs (section-by-section)</td><td>3/4 real (#2175 validity+counts, #2177 CKA nav, #2178 KCNA nav+CKS header); 1 false alarm (#2176 stale checkout). GLM's module counts were <b>exact</b> (cloud 4/4).</td></tr>
+<tr><td>Linux (section-by-section)</td><td>Best pass — disproved 4 class-C candidates via grep, reported negative results with a coverage list, and <b>self-corrected the pass-1 sidebar over-report</b> (per-directory <code>order:0</code> doesn't collide in render). #2179/#2180 both confirmed + fixed.</td></tr>
+<tr><td>Cloud re-audit (landed end of session)</td><td>#2184–2187 filed; #2184 (my #2155 was index-only) confirmed real. Others pending ground-check next session.</td></tr>
+</table>
+<p><b>Verdict:</b> GLM is a proven <b>finder</b> now — cheap, wide, and it has the one lens (cross-module coherence) the per-module fleet lacks. Grain of salt still earns its keep (one bad label per pass), so we keep the two-gate verification: reject no-evidence findings; ground-check + web-verify volatile facts.</p>
+
+<h2>Fleet integration — GLM as the 6th family</h2>
+<p><b>Roster shift (user):</b> drop grok (xAI), keep cursor (Kimi), add GLM (Zhipu) → 6 clean independent cross-family lanes: OpenAI (codex) · Anthropic (opus) · Google (agy) · DeepSeek (deepseek) · Kimi (cursor) · Zhipu (GLM).</p>
+<table>
+<tr><th>GLM lane</th><th>State</th><th>Use</th></tr>
+<tr><td>GLM in UI</td><td>✅ working (user-driven)</td><td>thorough section-by-section audits — the deep finder</td></tr>
+<tr><td>GLM via Hermes (<code>--agent hermes --model glm-5.2</code>, provider <code>zai</code>)</td><td>✅ works, but shallow</td><td>fast cross-family second-opinion (single-pass; proven on #2182 review)</td></tr>
+<tr><td>GLM via OpenCode (<code>--agent opencode --model zai-coding-plan/glm-5.2</code>)</td><td>⚠ capture bug, fix in-flight</td><td>candidate deep reviewer/author (if it reaches UI-depth)</td></tr>
+</table>
+<p><b>OpenCode diagnosis:</b> the lane WORKS (manual <code>opencode run</code> returned a clean "PONG"). The adapter already uses <code>opencode run</code>; the failure on agentic tasks is <b>output capture</b> — default format streams ANSI/TUI tool-echoes that pollute + truncate stdout before the verdict. <b>Fix (~15 lines, dispatched to cursor):</b> use <code>opencode run --format json</code> and parse the final assistant message; set <code>GIT_PAGER=cat</code>. Bonus: <code>--variant &lt;effort&gt;</code> is opencode's reasoning-effort knob (the "can't set effort" answer). Local-only (China-hosted → never CI) per <code>feedback_no_china_apis_from_gh_actions</code>.</p>
+
+<h2>The systemic finding: cross-module coherence is un-gated</h2>
+<p>Every existing gate is per-module (<code>verify_module.py</code> density, 7-dim rubric, cross-family review) or per-line (site-health checks links <i>resolve</i> — a backward link still resolves). Nothing checks relationships <i>between</i> modules or between a module and its section's route. That's why these defects (framing-vs-placement, backward Next-links, orphaned groups, stale counts, cert-fact contradictions) accumulated invisibly. Two responses filed:</p>
+<ul>
+<li><b>#2151 (infra):</b> deterministic route-coherence linter — sidebar-order uniqueness, forward Next-links, marker vocab, prereq-citation format, stale-count check. Kills the <i>mechanical</i> subset permanently.</li>
+<li><b>Coherence review lens (this session's method):</b> quote the hub contract → walk the section → flag only contradictions. Now GLM's standing job.</li>
+</ul>
+<p>Phase-0 deterministic sweep (ran this session) confirmed the mechanical class is site-wide: <code>sidebar.order</code> collisions in every track, marker-format chaos worst in platform (~24 variants), stale hub counts everywhere.</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Outcome</th></tr>
+<tr><td>prereq semantic (#2143/44/48)</td><td>cursor edit</td><td>clean + literal-complete; orch caught a broken <code>../linux/</code> link</td></tr>
+<tr><td>AI re-level (#2138/40)</td><td>codex draft gpt-5.5</td><td>zero-background re-level, all gates pass, sourced OECD/NIST</td></tr>
+<tr><td>prereq review</td><td>deepseek</td><td>APPROVE_WITH_NITS — caught a real "two paths" leftover (fixed)</td></tr>
+<tr><td>AI review</td><td>composer-2.5</td><td>PASS</td></tr>
+<tr><td>cert facts (#2159/60)</td><td>codex draft</td><td>correctly contradicted the inverted premise; orch web-verified</td></tr>
+<tr><td>cert review</td><td>composer-2.5</td><td>NEEDS CHANGES — 3 prose leftovers (fixed inline)</td></tr>
+<tr><td>cloud cycle (#2155)</td><td>cursor edit</td><td>relabeled AP as recommended-companion ×3</td></tr>
+<tr><td>platform (#2163/64)</td><td>codex edit</td><td>de-claimed terminus + aligned mlops gate</td></tr>
+<tr><td>linux framing (#2152)</td><td>deepseek edit</td><td>cites Everyday Use</td></tr>
+<tr><td>cloud/platform reviews</td><td>codex + composer-2.5</td><td>both PASS</td></tr>
+<tr><td>k8s cert cleanup (#2175/77/78)</td><td>codex draft</td><td>validity/nav/header/counts; orch web-verified CKA=2yr</td></tr>
+<tr><td>#2182 review (first fleet dispatch)</td><td>GLM-5.2 (Hermes)</td><td>PASS but shallow (1 obs) → orch ground-checked</td></tr>
+<tr><td>linux 8.x rewire (#2179/80)</td><td>cursor edit</td><td>recovered from a cursor connection blip; wired 8.x into route</td></tr>
+<tr><td>#2183 review (OpenCode depth test)</td><td>GLM-5.2 (OpenCode)</td><td><span class="pill reject">CAPTURE BUG</span> ANSI/truncated, no verdict → codex reviewed instead (PASS)</td></tr>
+<tr><td>opencode adapter fix</td><td>cursor edit</td><td>in-flight (<code>--format json</code>)</td></tr>
+</table>
+
+<h2>What's next</h2>
+<ul>
+<li><b>GLM 2nd UI pass is running</b> (user) — process the returned findings: ground-check → fleet-fix. GLM's own steer: re-walk the sections it skimmed in pass 1 (on-premises, ai-ml-engineering, platform-toolkits).</li>
+<li><b>Cloud re-audit batch (#2184–2187)</b> — ground-check + distribute. <b>#2184 first</b> (my #2155 was index-only; the entry modules 5.1/6.1/7.1 still hard-require Architecture Patterns). Plus #2185 (Azure/AKS nav), #2186 (Architecture-Patterns "What's Next" reverses route), #2187 (mechanical).</li>
+<li><b>Finish the OpenCode integration</b> — merge the <code>--format json</code> adapter fix (infra-gated), then re-run the depth test: does GLM-via-OpenCode reach UI-depth? If yes → automated headless audits (retire the courier). <b>Test whether GLM-5.2 is fully usable through OpenCode</b> (strong-coder reputation — prove-write on a real task, ground-check, before trusting as author).</li>
+<li><b>Mechanical batch (one coordinated pass, linter-verified via #2151):</b> #2139/#2141/#2142/#2146/#2147/#2154/#2156/#2157/#2161/#2162/#2166/#2167/#2168 — markers, stale counts, order collisions, dead links, phase-labels. Batch after the re-sweep so markers get normalized once repo-wide. Canonical marker format LOCKED: backticked <code>[TIER]</code> in a body blockquote, drop the <code>complexity:</code> frontmatter key.</li>
+<li><b>#2169 — history reconciliation: NEEDS USER A/B/C DECISION</b> (73-chapter ai-history book vs ai-ml-engineering/history appendix — keep+cross-link / fold / pointer). Held.</li>
+<li><b>Translation volume — still PAUSED.</b> When resumed: the s190b agreed workflow (`docs/decisions/2026-07-02-uk-review-workflow.md`); order ai-native-work (5) → open-models-local-inference (8) → ai-ml-engineering (142). agy fix #2149 infra-lane to merge.</li>
+</ul>
+
+<h2>Rules / discipline reinforced</h2>
+<ul>
+<li><b>Orchestrator web-verifies volatile facts at the gate</b> — never trust the issue, the author, OR training priors on cert weights/validity/versions/prices/maturity. This session proved it 3×.</li>
+<li><b>New GLM rule: <code>git pull</code> to HEAD before auditing</b> (the #2176 stale-checkout false alarm). Verify your <i>inputs</i> are current, not just your facts.</li>
+<li><b>GLM findings pass the same two-gate verification</b> as agy/deepseek self-reports: reject no-evidence findings, ground-check survivors. Headless wiring does not remove the fact-gate.</li>
+<li><b>Roster:</b> grok dropped, cursor kept, GLM (Zhipu) added → 6 clean families. GLM = finder (UI) + reviewer (Hermes) + author-candidate (OpenCode, pending).</li>
+</ul>
+
+<h2>Files touched (curriculum content — all via merged PRs)</h2>
+<ul>
+<li><code>prerequisites/{philosophy-design,modern-devops,zero-to-terminal,git-deep-dive}/**</code> — route framing + nav</li>
+<li><code>ai/foundations/module-1.1-what-is-ai.md</code> — zero-background re-level; <code>ai/foundations/index.md</code> + module-1.6 nav</li>
+<li><code>k8s/{kcna,kcsa,cka,ckad}/**</code> — validity 2yr, KCNA 4-domain, part3 nav, CKS 5.3 header, counts</li>
+<li><code>cloud/{eks,gke,aks}-deep-dive/index.md</code> — Architecture Patterns → recommended-companion</li>
+<li><code>platform/foundations/distributed-systems/index.md</code> + <code>platform/disciplines/data-ai/mlops/index.md</code></li>
+<li><code>linux/{foundations/everyday-use,operations,security/hardening}/**</code> — 8.x rewire + theory-promise</li>
+<li><i>Infra (not this lane):</i> <code>scripts/dispatch_smart.py</code> opencode adapter (in-flight, cursor)</li>
+</ul>
+
+</body></html>
