@@ -1008,4 +1008,4 @@ Success criteria:
 
 ## Next Module
 
-Continue to the [Part 3 Cumulative Quiz](../part3-cumulative-quiz/) to test the full Services and Networking stack, including Services, DNS, Ingress, Gateway API, NetworkPolicy, and CNI troubleshooting.
+Continue to [Module 3.8: Cluster Networking Data Path](../module-3.8-cluster-networking-data-path/) to connect CNI behavior with packet flow, routing, NAT, and node-level forwarding.

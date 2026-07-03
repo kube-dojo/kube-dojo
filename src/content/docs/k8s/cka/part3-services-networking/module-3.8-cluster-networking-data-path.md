@@ -1012,4 +1012,4 @@ kubectl delete svc trace-svc
 
 ## Next Module
 
-[Module 3.3: DNS in Kubernetes](../module-3.3-dns/) - Deep-dive into CoreDNS configuration, custom DNS policies, and advanced troubleshooting.
+Continue to the [Part 3 Cumulative Quiz](../part3-cumulative-quiz/) to test the full Services and Networking stack, including Services, DNS, Ingress, Gateway API, NetworkPolicy, CNI, and the cluster networking data path.

@@ -98,10 +98,10 @@ Specialist certifications are not a better first move than learning the core Kub
 |------|------|------|---------|------------|
 | [KCNA](/k8s/kcna/) | Kubernetes & Cloud Native Associate | Multiple choice | 28 | [Details](/k8s/kcna/) |
 | [KCSA](/k8s/kcsa/) | Kubernetes & Cloud Native Security Associate | Multiple choice | 26 | [Details](/k8s/kcsa/) |
-| [CKAD](/k8s/ckad/) | Certified Kubernetes Application Developer | Hands-on lab | 30 | [Details](/k8s/ckad/) |
-| [CKA](/k8s/cka/) | Certified Kubernetes Administrator | Hands-on lab | 47 | [Details](/k8s/cka/) |
+| [CKAD](/k8s/ckad/) | Certified Kubernetes Application Developer | Hands-on lab | 24 | [Details](/k8s/ckad/) |
+| [CKA](/k8s/cka/) | Certified Kubernetes Administrator | Hands-on lab | 41 | [Details](/k8s/cka/) |
 | [CKS](/k8s/cks/) | Certified Kubernetes Security Specialist | Hands-on lab | 30 | [Details](/k8s/cks/) |
-| | **Total** | | **161** | |
+| | **Total** | | **149** | |
 
 ---
 

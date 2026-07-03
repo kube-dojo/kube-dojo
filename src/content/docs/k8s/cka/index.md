@@ -16,23 +16,23 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 | **Duration** | 2 hours |
 | **Questions** | 15-20 tasks |
 | **Passing Score** | 66% |
-| **Validity** | 3 years |
+| **Validity** | 2 years |
 
 ## Curriculum Structure
 
 | Part | Topic | Weight | Modules |
 |------|-------|--------|---------|
-| Part 0 | Environment | - | 6 |
-| Part 1 | Cluster Architecture, Installation & Configuration | 25% | 8 |
-| Part 2 | Workloads & Scheduling | 15% | 8 |
+| Part 0 | Environment | - | 5 |
+| Part 1 | Cluster Architecture, Installation & Configuration | 25% | 7 |
+| Part 2 | Workloads & Scheduling | 15% | 9 |
 | Part 3 | Services & Networking | 20% | 8 |
-| Part 4 | Storage | 10% | 6 |
-| Part 5 | Troubleshooting | 30% | 8 |
-| **Total** | | **100%** | **44** |
+| Part 4 | Storage | 10% | 5 |
+| Part 5 | Troubleshooting | 30% | 7 |
+| **Total** | | **100%** | **41** |
 
 ## Module Overview
 
-### Part 0: Environment (6 modules)
+### Part 0: Environment (5 modules)
 - 0.1 Cluster Setup - Creating practice clusters
 - 0.2 Shell Mastery - bash, aliases, autocompletion
 - 0.3 Vim and YAML - Efficient editing
@@ -40,7 +40,7 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 - 0.5 Exam Strategy - Three-pass approach
 - Part 0 Cumulative Quiz
 
-### Part 1: Cluster Architecture (8 modules)
+### Part 1: Cluster Architecture (7 modules)
 - 1.1 Control Plane - API server, etcd, scheduler
 - 1.2 Extension Interfaces - CNI, CSI, CRI
 - 1.3 Helm - Package management
@@ -50,7 +50,7 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 - 1.7 kubeadm - Cluster bootstrap and upgrades
 - Part 1 Cumulative Quiz
 
-### Part 2: Workloads & Scheduling (8 modules)
+### Part 2: Workloads & Scheduling (9 modules)
 - 2.1 Pods - Core workload unit
 - 2.2 Deployments - Application management
 - 2.3 DaemonSets & StatefulSets - Specialized workloads
@@ -70,9 +70,10 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 - 3.5 Gateway API - Next-gen ingress
 - 3.6 Network Policies - Traffic control
 - 3.7 CNI - Container networking
+- 3.8 Cluster Networking Data Path - Packet flow and node routing
 - Part 3 Cumulative Quiz
 
-### Part 4: Storage (6 modules)
+### Part 4: Storage (5 modules)
 - 4.1 Volumes - Storage basics
 - 4.2 PV and PVC - Persistent storage
 - 4.3 StorageClasses - Dynamic provisioning
@@ -80,7 +81,7 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 - 4.5 Storage Troubleshooting - Common issues
 - Part 4 Cumulative Quiz
 
-### Part 5: Troubleshooting (8 modules)
+### Part 5: Troubleshooting (7 modules)
 - 5.1 Methodology - Systematic approach
 - 5.2 Application Failures - Pod and container issues
 - 5.3 Control Plane - API server, etcd problems

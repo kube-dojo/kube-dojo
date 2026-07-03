@@ -16,42 +16,42 @@ The CKAD is a **hands-on, performance-based exam** that validates your ability t
 | **Duration** | 2 hours |
 | **Questions** | 15-20 tasks |
 | **Passing Score** | 66% |
-| **Validity** | 3 years |
+| **Validity** | 2 years |
 
 ## Curriculum Structure
 
 | Part | Topic | Weight | Modules |
 |------|-------|--------|---------|
-| Part 0 | Environment | - | 3 |
-| Part 1 | Application Design and Build | 20% | 5 |
-| Part 2 | Application Deployment | 20% | 5 |
-| Part 3 | Application Observability and Maintenance | 15% | 6 |
-| Part 4 | Application Environment, Configuration, Security | 25% | 7 |
-| Part 5 | Services and Networking | 20% | 4 |
-| **Total** | | **100%** | **30** |
+| Part 0 | Environment | - | 2 |
+| Part 1 | Application Design and Build | 20% | 4 |
+| Part 2 | Application Deployment | 20% | 4 |
+| Part 3 | Application Observability and Maintenance | 15% | 5 |
+| Part 4 | Application Environment, Configuration, Security | 25% | 6 |
+| Part 5 | Services and Networking | 20% | 3 |
+| **Total** | | **100%** | **24** |
 
 ## Module Overview
 
-### Part 0: Environment (3 modules)
+### Part 0: Environment (2 modules)
 - 0.1 CKAD Overview - Exam format and domains
 - 0.2 Developer Workflow - Setting up your environment
 - Part 0 Cumulative Quiz
 
-### Part 1: Application Design and Build (5 modules)
+### Part 1: Application Design and Build (4 modules)
 - 1.1 Container Images - Building and managing images
 - 1.2 Jobs and CronJobs - Batch workloads
 - 1.3 Multi-Container Pods - Sidecar, init containers
 - 1.4 Volumes - Storage for applications
 - Part 1 Cumulative Quiz
 
-### Part 2: Application Deployment (5 modules)
+### Part 2: Application Deployment (4 modules)
 - 2.1 Deployments - Rolling updates, rollbacks
 - 2.2 Helm - Package management
 - 2.3 Kustomize - Configuration customization
 - 2.4 Deployment Strategies - Blue-green, canary
 - Part 2 Cumulative Quiz
 
-### Part 3: Application Observability and Maintenance (6 modules)
+### Part 3: Application Observability and Maintenance (5 modules)
 - 3.1 Probes - Liveness, readiness, startup
 - 3.2 Logging - Container log management
 - 3.3 Debugging - Troubleshooting applications
@@ -59,7 +59,7 @@ The CKAD is a **hands-on, performance-based exam** that validates your ability t
 - 3.5 API Deprecations - Handling version changes
 - Part 3 Cumulative Quiz
 
-### Part 4: Application Environment (7 modules)
+### Part 4: Application Environment (6 modules)
 - 4.1 ConfigMaps - Application configuration
 - 4.2 Secrets - Sensitive data management
 - 4.3 Resources - Requests and limits
@@ -68,7 +68,7 @@ The CKAD is a **hands-on, performance-based exam** that validates your ability t
 - 4.6 CRDs - Custom Resource Definitions
 - Part 4 Cumulative Quiz
 
-### Part 5: Services and Networking (4 modules)
+### Part 5: Services and Networking (3 modules)
 - 5.1 Services - Exposing applications
 - 5.2 Ingress - HTTP routing
 - 5.3 Network Policies - Traffic control

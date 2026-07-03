@@ -27,10 +27,10 @@ The KCSA is a **multiple-choice exam** (not hands-on) that validates foundationa
 | [Part 1](part1-cloud-native-security/) | Overview of Cloud Native Security | 14% | 3 |
 | [Part 2](part2-cluster-component-security/) | Kubernetes Cluster Component Security | 22% | 4 |
 | [Part 3](part3-security-fundamentals/) | Kubernetes Security Fundamentals | 22% | 5 |
-| [Part 4](part4-threat-model/) | Kubernetes Threat Model | 16% | 4 |
+| [Part 4](part4-threat-model/) | Kubernetes Threat Model | 16% | 5 |
 | [Part 5](part5-platform-security/) | Platform Security | 16% | 4 |
 | [Part 6](part6-compliance/) | Compliance and Security Frameworks | 10% | 3 |
-| **Total** | | **100%** | **25** |
+| **Total** | | **100%** | **26** |
 
 ## Module Overview
 
@@ -56,11 +56,12 @@ The KCSA is a **multiple-choice exam** (not hands-on) that validates foundationa
 - [3.4 ServiceAccount Security](part3-security-fundamentals/module-3.4-serviceaccounts/) - Identity and tokens
 - [3.5 Network Policies](part3-security-fundamentals/module-3.5-network-policies/) - Traffic control
 
-### Part 4: Kubernetes Threat Model - 16% (4 modules)
+### Part 4: Kubernetes Threat Model - 16% (5 modules)
 - [4.1 Attack Surfaces](part4-threat-model/module-4.1-attack-surfaces/) - Where vulnerabilities exist
 - [4.2 Common Vulnerabilities](part4-threat-model/module-4.2-vulnerabilities/) - CVEs and misconfigurations
 - [4.3 Container Escape](part4-threat-model/module-4.3-container-escape/) - Breakout scenarios
 - [4.4 Supply Chain Threats](part4-threat-model/module-4.4-supply-chain/) - Image and dependency risks
+- [4.5 Threat Modeling & Supply Chain Theory](part4-threat-model/module-4.5-threat-modeling-supply-chain-theory/) - Supply chain threat analysis
 
 ### Part 5: Platform Security - 16% (4 modules)
 - [5.1 Image Security](part5-platform-security/module-5.1-image-security/) - Scanning and signing

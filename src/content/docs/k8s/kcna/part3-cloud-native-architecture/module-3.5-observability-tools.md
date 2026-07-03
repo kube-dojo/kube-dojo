@@ -629,4 +629,4 @@ Success criteria:
 
 ## Next Module
 
-Part 3 is complete. Continue to [Part 4: Application Delivery](/k8s/kcna/part4-application-delivery/module-4.1-ci-cd/) to connect cloud native architecture with CI/CD, deployment strategies, and the release workflows that observability helps protect.
+Continue to [Module 3.6: Security Basics](/k8s/kcna/part3-cloud-native-architecture/module-3.6-security-basics/) to connect observability signals with the security foundations that keep cloud native systems trustworthy.
