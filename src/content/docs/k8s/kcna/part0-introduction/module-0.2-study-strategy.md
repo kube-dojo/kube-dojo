@@ -133,7 +133,7 @@ One useful planning habit is to attach a product to every block. A study block t
 
 The priority signal should also influence the order inside each session. Start with retrieval or recognition before rereading, because an early self-test tells you what your brain can actually produce or identify. Then use docs, notes, or videos to repair the gaps you exposed. End with a small application task, such as analyzing two practice questions or explaining a concept in your own words. This rhythm keeps study active without turning every evening into a full mock exam.
 
-If your calendar is very compressed, protect breadth before depth. KCNA is broad enough that total ignorance in a small domain can cost points quickly, even if the domain weight is low. A learner with only a few evenings should still touch all five domains, but the touch can be brief: one official overview, one concept map, and a handful of recognition questions. Depth then goes to the highest priority signal. This is not ideal preparation, but it is a rational fallback when real life reduces the available hours.
+If your calendar is very compressed, protect breadth before depth. KCNA is broad enough that total ignorance in a small domain can cost points quickly, even if the domain weight is low. A learner with only a few evenings should still touch all four domains, but the touch can be brief: one official overview, one concept map, and a handful of recognition questions. Depth then goes to the highest priority signal. This is not ideal preparation, but it is a rational fallback when real life reduces the available hours.
 
 ## Build Recognition with Maps, Flashcards, and Explanations
 
@@ -435,7 +435,7 @@ Use the official domain list while you work, and be strict about distinguishing 
 
 ### Setup
 
-Create a note titled `KCNA Study Strategy` in your preferred notebook, issue tracker, or plain text file. Add five headings for the KCNA domains, one heading for practice-test review, and one heading for exam-day pacing. If you use a shell while reviewing command recognition, remember that this course uses `alias k=kubectl` and short commands such as `k get pods -A` only as readable examples, not as the main KCNA training method.
+Create a note titled `KCNA Study Strategy` in your preferred notebook, issue tracker, or plain text file. Add four headings for the KCNA domains, one heading for practice-test review, and one heading for exam-day pacing. If you use a shell while reviewing command recognition, remember that this course uses `alias k=kubectl` and short commands such as `k get pods -A` only as readable examples, not as the main KCNA training method.
 
 ### Tasks
 
@@ -454,7 +454,7 @@ A strong solution should show that your calendar follows evidence rather than pr
 
 ### Success Criteria
 
-- [ ] You have a written schedule mapping study hours to the five KCNA domains.
+- [ ] You have a written schedule mapping study hours to the four KCNA domains.
 - [ ] Your schedule allocates the most time to Kubernetes Fundamentals unless your practice data clearly justifies a documented exception.
 - [ ] You have created at least five recognition-focused cards or one concept map for your weakest subject.
 - [ ] You have bookmarked the official CNCF KCNA curriculum page.
