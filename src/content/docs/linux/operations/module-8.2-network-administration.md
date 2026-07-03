@@ -987,4 +987,4 @@ sudo nmcli connection delete static-eth0
 
 ## Next Module
 
-You've now covered the key LFCS gaps in storage and networking. Return to the [LFCS Learning Path](/k8s/lfcs/) to review remaining study areas, or continue strengthening your Linux fundamentals with [Module 5.1: The USE Method](/linux/operations/performance/module-5.1-use-method/) for performance analysis.
+Continue with [Module 8.3: Package Management & User Administration](../module-8.3-package-user-management/) to manage software packages, users, groups, and sudo access on production Linux hosts.

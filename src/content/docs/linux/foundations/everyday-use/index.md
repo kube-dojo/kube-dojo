@@ -8,7 +8,7 @@ sidebar:
 
 You've finished Zero to Terminal — you know what a terminal is and can run basic commands. Now it's time to build real muscle memory with the tools you'll use every single day as a DevOps engineer.
 
-These 5 modules bridge the gap between "I can use a terminal" and "I understand how Linux works under the hood." No theory, no kernel internals — just hands-on practice with the tools that matter.
+These 5 modules bridge the gap between "I can use a terminal" and "I understand how Linux works under the hood." Minimal theory, focused on the practical mental models you need — hands-on practice with the tools that matter.
 
 ---
 

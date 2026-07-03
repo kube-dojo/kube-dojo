@@ -994,4 +994,4 @@ Cleanup is part of the exercise because temporary schedules can become permanent
 
 ## Next Module
 
-You now have the skills to automate recurring work and protect data with restore-tested backups. Return to the [LFCS Learning Path](/k8s/lfcs/) to review remaining study areas, or revisit [Module 8.1: Storage Management](../module-8.1-storage-management/) if you want to combine LVM snapshots with your backup strategy.
+You now have the skills to automate recurring work and protect data with restore-tested backups. Next, continue to [Module 5.1: The USE Method](/linux/operations/performance/module-5.1-use-method/) to analyze how those administered systems behave under real workload pressure. For LFCS exam prep, see the [LFCS Learning Path](/k8s/lfcs/).
