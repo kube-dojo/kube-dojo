@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.4-object-storage
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes PersistentVolumes and CSI concepts — you should understand when to use a PVC versus an HTTP API before choosing object storage patterns for pods.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes PersistentVolumes and CSI concepts — you should understand when to use a PVC versus an HTTP API before choosing object storage patterns for pods.
 
 ## What You'll Be Able to Do
 

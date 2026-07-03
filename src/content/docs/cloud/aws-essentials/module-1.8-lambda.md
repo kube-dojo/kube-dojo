@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.8-lambda
 sidebar:
   order: 9
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 2 hours
 
 ---

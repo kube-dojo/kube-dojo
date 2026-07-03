@@ -4,7 +4,7 @@ slug: ai-ml-engineering/synthesis-apps/module-3.2-orchestration-layer
 sidebar:
   order: 2
 ---
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 90-120 min
 >

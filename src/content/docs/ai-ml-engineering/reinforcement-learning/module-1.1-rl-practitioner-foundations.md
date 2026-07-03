@@ -6,7 +6,7 @@ sidebar:
   order: 1
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 75-90 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../../machine-learning/module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.5: Decision Trees & Random Forests](../../machine-learning/module-1.5-decision-trees-and-random-forests/), and [Module 1.11: Hyperparameter Optimization](../../machine-learning/module-1.11-hyperparameter-optimization/).
 
 Reinforcement learning rarely fails in a dramatic way first.

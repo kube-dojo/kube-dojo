@@ -6,7 +6,7 @@ sidebar:
   order: 4
 ---
 
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 ## Time to Complete: 70 minutes
 
 ## Prerequisites

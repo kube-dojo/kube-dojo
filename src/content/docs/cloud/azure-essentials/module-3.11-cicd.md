@@ -6,7 +6,7 @@ sidebar:
 ---
 ## What You'll Be Able to Do
 
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.6 (ACR), Module 3.7 (Container Apps), Module 3.1 (Entra ID)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 3.6 (ACR), Module 3.7 (Container Apps), Module 3.1 (Entra ID)
 
 When you finish this module, you will be able to design, secure, and operate CI/CD pipelines that build container images and deploy them to Azure using either Azure DevOps Pipelines or GitHub Actions. The learning outcomes below map directly to the hands-on exercise and quiz, so you can verify each skill as you go.
 

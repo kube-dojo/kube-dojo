@@ -8,7 +8,7 @@ sidebar:
   order: 92
 ---
 
-> **Complexity**: Advanced
+> **Complexity**: `[ADVANCED]`
 >
 > **Time to Complete**: 120-150 minutes
 >

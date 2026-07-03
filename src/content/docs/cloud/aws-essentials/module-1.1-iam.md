@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.1-iam
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101. After completing this module, you will be able to perform all of the outcomes listed below and defend those choices during an incident review:
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101. After completing this module, you will be able to perform all of the outcomes listed below and defend those choices during an incident review:
 
 ## What You'll Be Able to Do
 

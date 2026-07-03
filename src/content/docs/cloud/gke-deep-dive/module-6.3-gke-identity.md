@@ -4,7 +4,7 @@ slug: cloud/gke-deep-dive/module-6.3-gke-identity
 sidebar:
   order: 4
 ---
-> **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 6.1 (GKE Architecture)](../module-6.1-gke-architecture/)
+> **Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: [Module 6.1 (GKE Architecture)](../module-6.1-gke-architecture/)
 
 ## What You'll Be Able to Do
 

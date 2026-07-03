@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.1-aks-architecture
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Azure Essentials and basic `kubectl` familiarity. [Cloud Architecture Patterns](../../architecture-patterns/) is a recommended companion, not required first.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Azure Essentials and basic `kubectl` familiarity. [Cloud Architecture Patterns](../../architecture-patterns/) is a recommended companion, not required first.
 
 ## What You'll Be Able to Do
 

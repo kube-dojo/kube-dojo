@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Cloud Governance & Policy as Code (Module 10.2), Kubernetes Security Basics, `jq` utility
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2h | **Prerequisites**: Cloud Governance & Policy as Code (Module 10.2), Kubernetes Security Basics, `jq` utility
 
 ## What You'll Be Able to Do
 

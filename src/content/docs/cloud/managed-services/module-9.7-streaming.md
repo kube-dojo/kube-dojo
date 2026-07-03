@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.7-streaming
 sidebar:
   order: 8
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 9.2 (Message Brokers), Module 9.6 (Search & Analytics), distributed systems basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 9.2 (Message Brokers), Module 9.6 (Search & Analytics), distributed systems basics
 
 ## What You'll Be Able to Do
 

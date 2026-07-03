@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.4-gcs
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy). This module assumes you can read IAM bindings and organization policies; you will apply those concepts directly to bucket design, lifecycle automation, and disaster-recovery placement.
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy). This module assumes you can read IAM bindings and organization policies; you will apply those concepts directly to bucket design, lifecycle automation, and disaster-recovery placement.
 
 ## What You'll Be Able to Do
 

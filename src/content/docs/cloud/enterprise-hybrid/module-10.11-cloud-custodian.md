@@ -4,7 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.11-cloud-custodian
 sidebar:
   order: 12
 ---
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 45-60 minutes
 >

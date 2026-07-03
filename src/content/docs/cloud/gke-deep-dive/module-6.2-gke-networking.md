@@ -4,7 +4,7 @@ slug: cloud/gke-deep-dive/module-6.2-gke-networking
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture). Expect to reason about CIDR math, Google Cloud load balancer objects, and Kubernetes policy objects in the same narrative—this is integrative networking design, not a single-feature checklist.
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture). Expect to reason about CIDR math, Google Cloud load balancer objects, and Kubernetes policy objects in the same narrative—this is integrative networking design, not a single-feature checklist.
 
 ## What You'll Be Able to Do
 

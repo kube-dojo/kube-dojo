@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.2-vpc
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
 ## What You'll Be Able to Do
 

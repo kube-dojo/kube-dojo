@@ -6,7 +6,7 @@ sidebar:
 revision_pending: false
 ---
 
-> **Complexity**: [MEDIUM]
+> **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 90 minutes
 >

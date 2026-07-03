@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.3-aks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [ADVANCED] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/). This is the practical security baseline module before you scale AKS identity and policy controls across teams.
+**Complexity**: `[ADVANCED]` | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/). This is the practical security baseline module before you scale AKS identity and policy controls across teams.
 
 ## What You'll Be Able to Do
 

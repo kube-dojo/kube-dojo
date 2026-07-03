@@ -6,7 +6,7 @@ sidebar:
   order: 21
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.9: Anomaly Detection & Novelty Detection](../module-1.9-anomaly-detection-and-novelty-detection/).
 
 Class imbalance is one of those topics where the first instinct is almost always wrong. A practitioner sees a 1:50 positive class, reaches for SMOTE, applies it before the train/test split because that is the order the snippet on Stack Overflow uses, and then reports a cross-validated F1 that looks like a small miracle. Production never reproduces it. The model is fine. The data is fine. The evaluation lied, because synthetic minority samples crossed the fold boundary and the held-out metric was scoring on rows that shared neighbors with rows the resampler had used to manufacture training data.

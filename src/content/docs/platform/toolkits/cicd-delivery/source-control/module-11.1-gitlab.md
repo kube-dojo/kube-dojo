@@ -5,7 +5,7 @@ slug: platform/toolkits/cicd-delivery/source-control/module-11.1-gitlab
 sidebar:
   order: 2
 ---
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 ## Time to Complete: 50-60 minutes
 
 ---

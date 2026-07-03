@@ -6,7 +6,7 @@ sidebar:
   order: 7
 ---
 
-> **Complexity**: [BEGINNER]
+> **Complexity**: `[QUICK]`
 >
 > **Time to Complete**: 60 minutes
 >

@@ -6,7 +6,7 @@ sidebar:
   order: 4
 ---
 
-> **Complexity**: `[INTERMEDIATE]` | Time: 60 minutes
+> **Complexity**: `[MEDIUM]` | Time: 60 minutes
 >
 > **Prerequisites**: [Module 4.1: Storage Architecture](../module-4.1-storage-architecture/), [Module 4.2: Ceph & Rook](../module-4.2-ceph-rook/)
 

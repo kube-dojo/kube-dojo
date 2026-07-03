@@ -4,7 +4,7 @@ slug: cloud/managed-services/module-9.1-databases
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (any provider), Kubernetes networking basics
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (any provider), Kubernetes networking basics
 
 ## What You'll Be Able to Do
 

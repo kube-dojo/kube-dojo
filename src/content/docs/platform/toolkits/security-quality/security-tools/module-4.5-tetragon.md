@@ -5,7 +5,7 @@ slug: platform/toolkits/security-quality/security-tools/module-4.5-tetragon
 sidebar:
   order: 6
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 
 This module sits at medium complexity because it combines kernel-level concepts, Kubernetes custom resources, and operational judgment about when to enforce versus observe. You should arrive with working familiarity from [Module 4.3 Falco](../module-4.3-falco/), the [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/) track, Linux syscall behavior, and baseline Kubernetes security primitives such as namespaces, service accounts, and DaemonSets. Plan roughly ninety minutes to read the theory, study the policy examples, and reason through the layered architecture with Falco. The learning path emphasizes design trade-offs—when kernel enforcement helps, when it creates risk, and how to roll out policies without breaking legitimate workloads.
 

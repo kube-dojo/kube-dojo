@@ -6,7 +6,7 @@ sidebar:
   order: 10
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 75-90 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.2: Linear & Logistic Regression with Regularization](../module-1.2-linear-and-logistic-regression-with-regularization/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/), and [Module 1.9: Anomaly Detection & Novelty Detection](../module-1.9-anomaly-detection-and-novelty-detection/).
 
 Most teams arrive at dimensionality reduction the same way.

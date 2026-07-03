@@ -7,7 +7,7 @@ sidebar:
   order: 101
 ---
 
-> **CGOA Track** | **Complexity**: Medium | **Time to Complete**: 90 minutes | **Prerequisites**: No Kubernetes operations experience required, but basic Git and CI/CD vocabulary will help
+> **CGOA Track** | **Complexity**: `[MEDIUM]` | **Time to Complete**: 90 minutes | **Prerequisites**: No Kubernetes operations experience required, but basic Git and CI/CD vocabulary will help
 
 ## Learning Outcomes
 

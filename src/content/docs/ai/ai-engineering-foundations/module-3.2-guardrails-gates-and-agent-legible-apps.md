@@ -7,7 +7,7 @@ citations_verified: true
 revision_pending: false
 ---
 
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: ~55 minutes
 >

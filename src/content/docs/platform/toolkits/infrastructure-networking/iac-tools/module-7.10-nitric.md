@@ -5,7 +5,7 @@ slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.10-nitric
 sidebar:
   order: 11
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 60-75 minutes
 
 ---

@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Kubernetes Networking, Service Mesh Basics, Hybrid Cloud Architecture (Module 10.4)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Kubernetes Networking, Service Mesh Basics, Hybrid Cloud Architecture (Module 10.4)
 
 ## What You'll Be Able to Do
 

@@ -5,7 +5,7 @@ sidebar:
   order: 13
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 1.5 hours | **Prerequisites**: [Modules 2.1–2.11](../module-2.11-cloud-build/)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 1.5 hours | **Prerequisites**: [Modules 2.1–2.11](../module-2.11-cloud-build/)
 
 ## What You'll Be Able to Do
 

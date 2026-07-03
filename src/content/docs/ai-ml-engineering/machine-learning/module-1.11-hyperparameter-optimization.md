@@ -6,7 +6,7 @@ sidebar:
   order: 11
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 75-90 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.2: Linear & Logistic Regression with Regularization](../module-1.2-linear-and-logistic-regression-with-regularization/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.5: Decision Trees & Random Forests](../module-1.5-decision-trees-and-random-forests/), [Module 1.6: XGBoost & Gradient Boosting](../module-1.6-xgboost-gradient-boosting/), and [Module 1.10: Dimensionality Reduction](../module-1.10-dimensionality-reduction/).
 
 Most teams arrive at hyperparameter optimization with a goal that sounds

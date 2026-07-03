@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 3.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
 ## What You'll Be Able to Do
 

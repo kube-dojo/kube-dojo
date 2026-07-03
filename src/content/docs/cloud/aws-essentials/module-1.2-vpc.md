@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.2-vpc
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 1.1, Linux Networking
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Module 1.1, Linux Networking
 
 This module is labeled **[COMPLEX]** because VPC networking stacks several independent control planes—CIDR planning, subnet placement, route tables, NAT, security groups, NACLs, and cross-VPC connectivity—into one design surface where a single mistake can silently break production traffic. Budget about three hours if you work through the hands-on CLI exercise and pause on the prediction prompts; you should already be comfortable with Linux networking fundamentals from Module 1.1 and with IAM concepts from the prior AWS Essentials module, because you will attach policies to VPC endpoints and flow-log delivery roles later in the track.
 

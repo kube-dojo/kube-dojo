@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.1-iam
 sidebar:
   order: 2
 ---
-> **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
+> **Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
 
 ## What You'll Be Able to Do
 

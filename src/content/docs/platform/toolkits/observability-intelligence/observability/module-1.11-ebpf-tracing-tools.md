@@ -7,7 +7,7 @@ sidebar:
 revision_pending: false
 ---
 
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 
 **Time to Complete**: 50 minutes, plus extra lab time if you need to install kernel headers, create a disposable Kubernetes cluster, or request temporary debugging privileges.
 

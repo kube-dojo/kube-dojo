@@ -6,7 +6,7 @@ sidebar:
   order: 902
 ---
 
-**Complexity**: Intermediate to Advanced  
+**Complexity**: `[ADVANCED]`  
 **Reading Time**: 7-8 hours
 **Prerequisites**: Phase 8 complete, basic Python, HTTP APIs, container images, and Kubernetes v1.35+ deployment knowledge.
 

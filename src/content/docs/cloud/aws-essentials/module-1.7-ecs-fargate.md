@@ -4,7 +4,7 @@ slug: cloud/aws-essentials/module-1.7-ecs-fargate
 sidebar:
   order: 8
 ---
-## Complexity: [COMPLEX]
+## Complexity: `[COMPLEX]`
 ## Time to Complete: 3 hours
 
 ---

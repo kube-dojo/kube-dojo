@@ -6,7 +6,7 @@ sidebar:
   order: 23
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.2: Linear and Logistic Regression with Regularization](../module-1.2-linear-and-logistic-regression-with-regularization/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), and [Module 1.12: Time Series Forecasting](../module-1.12-time-series-forecasting/). This module also sets up a plain-text forward reference to Module 2.5, conformal prediction and uncertainty quantification.
 
 The on-call story for Bayesian ML rarely starts with a philosophical argument

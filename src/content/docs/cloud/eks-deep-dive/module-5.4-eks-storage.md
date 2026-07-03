@@ -4,7 +4,7 @@ slug: cloud/eks-deep-dive/module-5.4-eks-storage
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 2h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
 ## What You'll Be Able to Do
 

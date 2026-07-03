@@ -4,7 +4,7 @@ slug: cloud/eks-deep-dive/module-5.2-eks-networking
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
 ## What You'll Be Able to Do
 

@@ -6,7 +6,7 @@ sidebar:
   order: 22
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.5: Decision Trees & Random Forests](../module-1.5-decision-trees-and-random-forests/), and [Module 1.6: XGBoost & Gradient Boosting](../module-1.6-xgboost-gradient-boosting/).
 
 The on-call interpretability incident usually begins with a well-intentioned report. A team ships a SHAP appendix to compliance, the appendix lists top drivers for denied applications, and the next meeting treats those SHAP values as if they were causal statements about the world. They are not. SHAP describes what the model did with the features it was given; it does not prove that changing a feature would change the real outcome in the same way. The second version of the same incident is operational instead of legal: a team spends a week reading per-row SHAP plots for 50,000 denials, when the real failure is concentrated in one cohort that a slice table would have surfaced in ten minutes. This module is the corrective. The interpretability tool has to match the question. SHAP describes the model, not reality, and per-row attribution is rarely the right operational tool when the defect lives at the cohort level.

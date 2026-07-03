@@ -4,7 +4,7 @@ slug: cloud/eks-deep-dive/module-5.3-eks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane). After completing this module, you will be able to:
+**Complexity**: `[MEDIUM]` | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane). After completing this module, you will be able to:
 
 ## What You'll Be Able to Do
 

@@ -4,7 +4,7 @@ slug: cloud/gcp-essentials/module-2.10-operations
 sidebar:
   order: 11
 ---
-> **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.3 (Compute Engine), Module 2.7 (Cloud Run)
+> **Complexity**: `[MEDIUM]` | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.3 (Compute Engine), Module 2.7 (Cloud Run)
 
 ## What You'll Be Able to Do
 

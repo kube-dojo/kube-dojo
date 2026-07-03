@@ -6,7 +6,7 @@ sidebar:
   order: 24
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-110 minutes
+> Track: AI/ML Engineering | Complexity: `[MEDIUM]` | Time: 90-110 minutes
 > Prerequisites: [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), [Module 1.10: Dimensionality Reduction](../module-1.10-dimensionality-reduction/), and [Module 2.1: Class Imbalance & Cost-Sensitive Learning](../module-2.1-class-imbalance-and-cost-sensitive-learning/). This module also sets up a plain-text forward reference to Module 2.5, conformal prediction and uncertainty quantification.
 
 The on-call story for recommender systems starts after the celebration. A team ships a fancy recommender that looked excellent in the notebook. Offline NDCG@10 was high. The dashboard was clean. The model card said the ranking objective matched the product surface. Then the A/B test failed. The first instinct was to blame traffic, seasonality, or a missing feature flag. The deeper review found a plainer problem. The offline split was random, so the same users appeared on both sides. The model was partly memorizing future taste. The popularity baseline was actually beating the new model in production. The offline metric the team celebrated did not match the engagement metric the deployment paid for.

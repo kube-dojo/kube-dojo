@@ -3,7 +3,7 @@ title: "The Hyperscaler Rosetta Stone"
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM]
+**Complexity**: `[MEDIUM]`
 **Time to Complete**: 2 hours
 **Prerequisites**: Cloud Native 101 (containers, Docker basics)
 

@@ -4,7 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.4-hybrid
 sidebar:
   order: 5
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Enterprise Landing Zones (Module 10.1), Kubernetes networking basics
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 3h | **Prerequisites**: Enterprise Landing Zones (Module 10.1), Kubernetes networking basics
 
 ## What You'll Be Able to Do
 

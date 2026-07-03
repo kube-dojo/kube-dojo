@@ -4,7 +4,7 @@ slug: cloud/enterprise-hybrid/module-10.10-enterprise-finops
 sidebar:
   order: 11
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (AWS/Azure/GCP), Kubernetes Resource Management, Enterprise Landing Zones (Module 10.1)
+**Complexity**: `[COMPLEX]` | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (AWS/Azure/GCP), Kubernetes Resource Management, Enterprise Landing Zones (Module 10.1)
 
 ## What You'll Be Able to Do
 

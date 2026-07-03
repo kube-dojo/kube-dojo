@@ -5,7 +5,7 @@ slug: platform/toolkits/security-quality/code-quality/module-12.5-trivy
 sidebar:
   order: 6
 ---
-## Complexity: [MEDIUM]
+## Complexity: `[MEDIUM]`
 ## Time to Complete: 45-50 minutes
 
 ---

@@ -4,7 +4,7 @@ slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.13-advanced
 sidebar:
   order: 14
 ---
-> **Complexity**: [COMPLEX]
+> **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: ~100 minutes
 >
