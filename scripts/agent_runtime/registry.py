@@ -96,7 +96,12 @@ AGENTS: dict[str, AgentEntry] = {
     },
     "gemini": {
         "adapter": "scripts.agent_runtime.adapters.gemini:GeminiAdapter",
-        "default_model": GEMINI_WRITER_MODEL,
+        # Decoupled from GEMINI_WRITER_MODEL (which is now the agy slug
+        # gemini-3.1-pro-high, #2125): the GeminiAdapter invokes the retired
+        # gemini-cli, so its default must stay a gemini-cli model id, not an agy
+        # display slug. This whole entry is dead residual pending removal (#2125
+        # follow-up) — gemini-cli has no binary — but keep it internally coherent.
+        "default_model": "gemini-3.1-pro-preview",
         "cost_tier": "low",
         "capabilities": frozenset({
             "content_writing",
