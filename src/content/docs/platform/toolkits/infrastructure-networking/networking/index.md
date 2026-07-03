@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Networking"
 ---
-> **Toolkit Track** | 5 Modules | ~4.5 hours total
+> **Toolkit Track** | 8 Modules | ~4.5 hours total
 
 ## Overview
 

@@ -329,6 +329,11 @@ Module 15.4: Vitess
      │  Migration from monolith
      │  Extreme scale patterns
      ▼
+Module 15.5: etcd-operator
+     │
+     │  Operator-managed etcd lifecycle
+     │  Quorum-safe backups, restores, and member changes
+     ▼
 [Toolkit Complete] → IaC Tools or Security Tools
 ```
 
@@ -419,6 +424,7 @@ spec:
 | CloudNativePG | Deploy cluster, perform failover, restore from backup |
 | Neon/PlanetScale | Create database branches, test schema migrations |
 | Vitess | Shard a MySQL database, run cross-shard queries |
+| etcd-operator | Manage member replacement, snapshots, and restore workflow |
 
 ## Cost Considerations
 
