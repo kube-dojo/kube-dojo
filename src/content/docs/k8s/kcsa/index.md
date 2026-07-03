@@ -16,7 +16,7 @@ The KCSA is a **multiple-choice exam** (not hands-on) that validates foundationa
 | **Duration** | 90 minutes |
 | **Questions** | ~60 questions |
 | **Passing Score** | 75% |
-| **Validity** | 3 years |
+| **Validity** | 2 years |
 | **Prerequisites** | None (CKA knowledge helpful) |
 
 ## Curriculum Structure

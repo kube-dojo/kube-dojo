@@ -28,7 +28,7 @@ After completing this module, you will be able to connect the exam overview to c
 
 That kind of incident is exactly why the KCNA exists. It is not meant to prove that you can rescue a production control plane at midnight, and it is not a substitute for deep administrator practice. It validates whether you can reason about the cloud native system as a system: why Kubernetes exists, how its main resources relate, why orchestration changes operational habits, and where ecosystem tools such as Prometheus, Helm, Fluentd, service meshes, and GitOps controllers fit. Teams use that foundation to reduce translation cost before they invest in higher-stakes certifications or production responsibilities.
 
-This module gives you a clean map before you start walking. You will see what KCNA measures, what it does not measure, how the exam differs from performance-based Kubernetes certifications, and how to build a study plan that respects both official materials and the KubeDojo curriculum structure. The module uses the current official five-domain split (effective November 2025) because the rest of this track uses it for scaffolding, while also reminding you to check the official Linux Foundation and CNCF pages before scheduling because certification details can change.
+This module gives you a clean map before you start walking. You will see what KCNA measures, what it does not measure, how the exam differs from performance-based Kubernetes certifications, and how to build a study plan that respects both official materials and the KubeDojo curriculum structure. The module uses the current official four-domain split published by the Linux Foundation and CNCF, while also reminding you to check the official pages before scheduling because certification details can change.
 
 ## What KCNA Is Really Testing
 
@@ -107,36 +107,33 @@ For Kubernetes versioning, this track targets Kubernetes 1.35 and later. That do
 
 ## Domains, Weights, And Study Strategy
 
-The KCNA exam uses a five-domain structure that makes the learning path easier to scaffold: Kubernetes Fundamentals, Container Orchestration, Cloud Native Architecture, Cloud Native Observability, and Application Delivery. A curriculum update took effect November 24, 2025; the domain-weight diagram below reflects the current official outline with weights of 46%, 22%, 16%, 8%, and 8%. Use the diagram as a KubeDojo planning aid and reconcile it with the official syllabus when you book your exam.
+The KCNA exam uses a four-domain structure: Kubernetes Fundamentals, Container Orchestration, Cloud Native Application Delivery, and Cloud Native Architecture. The current official outline weights those domains at 44%, 28%, 16%, and 12%; Observability is now listed under Cloud Native Architecture rather than as a separate domain. Use the diagram as a KubeDojo planning aid and reconcile it with the official syllabus when you book your exam.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              KCNA DOMAIN WEIGHTS                            │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Kubernetes Fundamentals       ██████████████████████ 46%  │
+│  Kubernetes Fundamentals       ██████████████████████ 44%  │
 │  Pods, Deployments, Services, Architecture                  │
 │                                                             │
-│  Container Orchestration       ██████████░░░░░░░░░░░ 22%   │
-│  Scheduling, scaling, service discovery                     │
+│  Container Orchestration       ██████████████░░░░░░░ 28%   │
+│  Networking, security, troubleshooting, storage             │
 │                                                             │
-│  Cloud Native Architecture     ████████░░░░░░░░░░░░░ 16%   │
-│  Principles, CNCF, serverless                               │
+│  Application Delivery          ████████░░░░░░░░░░░░░ 16%   │
+│  Application delivery, debugging                            │
 │                                                             │
-│  Cloud Native Observability    ████░░░░░░░░░░░░░░░░░ 8%    │
-│  Monitoring, logging, Prometheus                            │
-│                                                             │
-│  Application Delivery          ████░░░░░░░░░░░░░░░░░ 8%    │
-│  CI/CD, GitOps, Helm                                        │
+│  Cloud Native Architecture     ██████░░░░░░░░░░░░░░░ 12%   │
+│  Observability, ecosystem, principles, community            │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 The lesson behind the old weights remains valid even when the official domain list changes: fundamentals and orchestration dominate your preparation. Kubernetes is a layered system, and the upper layers do not make sense if you cannot explain the lower layers. Observability, delivery, serverless, and service mesh questions often assume that you already understand Pods, Services, desired state, scheduling, and the control plane. If those terms are blurry, your later answers become guesswork.
 
-In the current official five-domain split (effective November 2025), **68% of the exam** comes from two domains, which is why a rational study plan starts there before spreading into the smaller ecosystem areas:
-- Kubernetes Fundamentals (46%)
-- Container Orchestration (22%)
+In the current official split, **72% of the exam** comes from two domains, which is why a rational study plan starts there before spreading into the smaller ecosystem areas:
+- Kubernetes Fundamentals (44%)
+- Container Orchestration (28%)
 
 Master these, and you're most of the way there, provided you still reserve enough time to understand why cloud native architecture, observability, and delivery appear in the same certification.
 
@@ -144,7 +141,7 @@ That simple calculation should shape your study plan, but it should not make you
 
 Before running this study plan, what output do you expect from your own confidence scores? If you already work with CI/CD but have never explained Kubernetes scheduling, the weights may tell you to study orchestration before delivery. If you are a developer who deploys to a managed platform but never sees observability internals, the smaller observability domain may deserve more attention than its raw percentage suggests. The right plan combines exam weight with personal weakness rather than treating all learners as identical.
 
-The current official materials are especially important because the KCNA program has gone through updates. The November 2025 curriculum update established the current five-domain structure and weights reflected in this module. Third-party study guides published before that update may still teach useful concepts but can use outdated domain names or weights, so classify them carefully. Use the official syllabus to decide exam coverage, use KubeDojo modules to build explanations, and use practice questions to test whether you can apply those concepts under scenario pressure.
+The current official materials are especially important because the KCNA program has gone through updates. The current Linux Foundation page and CNCF curriculum place Observability under Cloud Native Architecture and use the four-domain weights reflected in this module. Third-party study guides may still teach useful concepts but can use outdated domain names or weights, so classify them carefully. Use the official syllabus to decide exam coverage, use KubeDojo modules to build explanations, and use practice questions to test whether you can apply those concepts under scenario pressure.
 
 A useful study loop has three passes. First, skim the official syllabus and mark every term as familiar, vague, or new. Second, use KubeDojo modules to turn vague and new terms into working explanations. Third, answer scenario questions and write down why the wrong answers are wrong. That last step matters because multiple-choice success often comes from elimination. You do not merely select Deployment; you reject Pod because it lacks the controller behavior, reject Service because it solves networking, and reject Ingress because it manages external HTTP routing rather than replica lifecycle.
 
@@ -205,9 +202,9 @@ The topics you do not need to master are just as important. You do not need to w
 
 Since KCNA is conceptual, your study approach should look different from a live terminal certification plan. Start with the official syllabus, because it defines the contract. Then use the KubeDojo modules to build explanations for each term in that contract. Finally, use practice scenarios to test whether you can choose among similar concepts. This order prevents two common failures: studying random Kubernetes trivia that is not on the exam, and passing through the syllabus so quickly that you recognize headings without being able to reason about them.
 
-The first pass through the syllabus should be diagnostic rather than performative. Create five columns that match the current official five-domain split (effective November 2025). Under each column, list the topics from the official curriculum and mark them green, yellow, or red based on whether you can explain them to another person. Red means you cannot define it. Yellow means you can define it but cannot apply it to a scenario. Green means you can explain it, give an example, and eliminate at least one misleading alternative.
+The first pass through the syllabus should be diagnostic rather than performative. Create four columns that match the current official domain split. Under each column, list the topics from the official curriculum and mark them green, yellow, or red based on whether you can explain them to another person. Red means you cannot define it. Yellow means you can define it but cannot apply it to a scenario. Green means you can explain it, give an example, and eliminate at least one misleading alternative.
 
-Your second pass should connect concepts to examples. For Kubernetes Fundamentals, explain Pods, Deployments, Services, namespaces, the API server, controllers, and desired state using a single application story. For Container Orchestration, explain scheduling, scaling, runtime, networking, storage, service discovery, and security in terms of what a platform must do after a container image exists. For Cloud Native Architecture, explain why microservices, declarative APIs, resilience, portability, and open standards change team behavior. For Observability and Delivery, explain how teams see and change the system after it is running.
+Your second pass should connect concepts to examples. For Kubernetes Fundamentals, explain Pods, Deployments, Services, namespaces, the API server, controllers, and desired state using a single application story. For Container Orchestration, explain scheduling, scaling, runtime, networking, storage, service discovery, and security in terms of what a platform must do after a container image exists. For Cloud Native Architecture, explain why observability, microservices, declarative APIs, resilience, portability, and open standards change team behavior. For Application Delivery, explain how teams change the system after it is running.
 
 The third pass should be assessment driven. When you miss a practice question, do not write only the correct letter. Write the requirement that made the answer correct and the assumption that made each wrong option tempting. For example, if you choose Ingress when the correct answer is Service, note that you reacted to "traffic" but missed "internal stable IP." That note is more useful than copying a definition because it trains the exact discrimination skill that multiple-choice scenario questions require.
 
@@ -235,7 +232,7 @@ The most reliable pattern is role-aware preparation. Developers should emphasize
 
 The strongest anti-pattern is certification theater. Teams sometimes require a credential, celebrate the badge, and then never change how they communicate about systems. That wastes the best part of KCNA. A better alternative is to turn study artifacts into shared language: a glossary for incident reviews, a domain map for onboarding, a practice-question error log for lunch-and-learn sessions, and a clear statement that KCNA means foundational literacy rather than production authority.
 
-Another anti-pattern is studying only the largest domain. Weighting is a guide, not permission to ignore the rest of the system. Observability and delivery are smaller slices in the current official five-domain split (effective November 2025), but they represent the reality of running applications after deployment. A candidate who can describe Pods but cannot explain why metrics, logs, traces, CI/CD, or GitOps matter has an incomplete cloud native picture. KCNA expects a broad foundation because Kubernetes rarely operates alone.
+Another anti-pattern is studying only the largest domain. Weighting is a guide, not permission to ignore the rest of the system. Architecture and delivery are smaller slices in the current official split, but they represent the reality of running applications after deployment. A candidate who can describe Pods but cannot explain why metrics, logs, traces, CI/CD, or GitOps matter has an incomplete cloud native picture. KCNA expects a broad foundation because Kubernetes rarely operates alone.
 
 ## When You'd Use This vs Alternatives
 
@@ -257,7 +254,7 @@ The decision framework is simple. If you are new to Kubernetes, start with KCNA 
 
 - **No hands-on means no kubectl** - You won't type a single command during the exam. It's all reading and selecting answers.
 
-- **The exam changes** - A curriculum update took effect November 24, 2025; these five domains and weights reflect the current official outline. Stay current with CNCF announcements and check the official certification page before scheduling.
+- **The exam changes** - The official KCNA outline now lists four domains and places Observability under Cloud Native Architecture. Stay current with CNCF announcements and check the official certification page before scheduling.
 
 ## Common Mistakes
 
@@ -265,7 +262,7 @@ The decision framework is simple. If you are new to Kubernetes, start with KCNA 
 |---------|----------------|---------------|
 | Over-preparing technically | Learners copy CKA habits and spend most study time on command speed instead of concepts. | Keep light hands-on practice, but prioritize scenario reasoning, vocabulary, and official KCNA domain coverage. |
 | Ignoring the CNCF ecosystem | Kubernetes feels large enough by itself, so tools outside the core API look optional. | Use the CNCF Landscape to identify major observability, delivery, networking, runtime, and governance projects. |
-| Treating pre-2025 domain weights as current law | Many third-party study guides were published before the November 2025 update, and learners rarely check program-change notices. | Confirm the official Linux Foundation or CNCF curriculum before scheduling, then map any older notes to the current five-domain outline. |
+| Treating old domain weights as current law | Many third-party study guides outlive certification updates, and learners rarely check program-change notices. | Confirm the official Linux Foundation or CNCF curriculum before scheduling, then map any older notes to the current four-domain outline. |
 | Not practicing multiple choice elimination | Hands-on learners know the tool but have not practiced selecting between similar conceptual answers. | For every missed question, write why the correct answer fits and why each tempting answer does not. |
 | Rushing through scenario wording | The stem often hides the real requirement in words such as stable, internal, replicated, observable, or declarative. | Underline the requirement before choosing an option, then match it to the resource or ecosystem category. |
 | Memorizing YAML files | Kubernetes examples make YAML visible, so beginners assume the syntax is the exam target. | Learn object purpose and relationships first; read YAML only enough to recognize resource kind, metadata, spec, and intent. |
@@ -324,7 +321,7 @@ GitOps improves delivery by making version control the source of truth for desir
 
 ## Hands-On Exercise: Mapping Your KCNA Strategy
 
-The KCNA exam is not hands-on in the same way that CKA, CKAD, or CKS are hands-on, but preparation still requires active work. In this exercise, you will build a personal study map that connects the official syllabus, the current official five-domain split (effective November 2025), the CNCF ecosystem, and your own confidence level. The output is not a decorative study calendar. It is a decision tool that tells you which concept to study next and why that concept matters for the exam.
+The KCNA exam is not hands-on in the same way that CKA, CKAD, or CKS are hands-on, but preparation still requires active work. In this exercise, you will build a personal study map that connects the official syllabus, the current official four-domain split, the CNCF ecosystem, and your own confidence level. The output is not a decorative study calendar. It is a decision tool that tells you which concept to study next and why that concept matters for the exam.
 
 Do this exercise with a plain document, spreadsheet, notebook, or task board. The format is less important than the discipline of writing down evidence. If you mark "Services" as green, you should be able to explain stable discovery, selectors, endpoint changes, and why Ingress is not the same thing. If you mark "GitOps" as yellow, you should know the rough idea but admit that you still need practice explaining reconciliation and auditability. Honest labels are more useful than optimistic labels.
 
@@ -343,18 +340,18 @@ Kubernetes should appear as a central orchestration project, but the useful lear
 ### Step 2: Analyze the Exam Syllabus
 
 1. Download the latest official KCNA exam syllabus from the Linux Foundation website.
-2. Review the detailed bullet points under each of the five main domains.
+2. Review the detailed bullet points under each of the four main domains.
 3. Highlight any concepts or tools you have never encountered before.
 
 <details>
 <summary>Solution guidance</summary>
 
-Use the official syllabus as the contract for the exam you plan to sit. The KubeDojo track follows the current official five-domain split (effective November 2025); if the live certification page ever changes again, add a note that maps each KubeDojo section to the updated official domain. This prevents outdated third-party material from steering your booking decision while still preserving a coherent path through the modules.
+Use the official syllabus as the contract for the exam you plan to sit. The KubeDojo track follows the current official four-domain split; if the live certification page ever changes again, add a note that maps each KubeDojo section to the updated official domain. This prevents outdated third-party material from steering your booking decision while still preserving a coherent path through the modules.
 </details>
 
 ### Step 3: Draft Your Study Plan
 
-1. Create a simple document or spreadsheet with the five exam domains.
+1. Create a simple document or spreadsheet with the four exam domains.
 2. Based on your syllabus review, assign a confidence score (1-5) to each domain.
 3. Allocate your available study hours proportionally, giving the most time to your lowest-scoring domains that have the highest exam weight (like Kubernetes Fundamentals).
 
@@ -403,13 +400,12 @@ This curriculum follows the exam domains as a learning sequence, which means the
 | Part | Domain | Weight | Modules |
 |------|--------|--------|---------|
 | 0 | Introduction | - | Exam overview, study strategy |
-| 1 | Kubernetes Fundamentals | 46% | Core concepts, architecture |
-| 2 | Container Orchestration | 22% | Scheduling, scaling, services |
-| 3 | Cloud Native Architecture | 16% | Principles, CNCF, serverless |
-| 4 | Cloud Native Observability | 8% | Monitoring, logging |
-| 5 | Application Delivery | 8% | CI/CD, GitOps, Helm |
+| 1 | Kubernetes Fundamentals | 44% | Core concepts, administration, scheduling, containerization |
+| 2 | Container Orchestration | 28% | Networking, security, troubleshooting, storage |
+| 3 | Cloud Native Architecture | 12% | Observability, ecosystem, principles, community |
+| 4 | Application Delivery | 16% | Application delivery, debugging |
 
-The table is preserved because it explains how this KubeDojo track is organized and aligns with the current official five-domain split (effective November 2025). If the official exam outline changes in a future update, do not panic. The modules still teach the underlying concepts; you only need to map the local curriculum labels to the then-current exam labels. Always check the official certification page before scheduling.
+The table is preserved because it explains how this KubeDojo track is organized and aligns with the current official four-domain split. If the official exam outline changes in a future update, do not panic. The modules still teach the underlying concepts; you only need to map the local curriculum labels to the then-current exam labels. Always check the official certification page before scheduling.
 
 The summary of the module is straightforward: KCNA is your entry point to Kubernetes certification, but it is a conceptual entry point. The exam format is multiple choice, the focus is concepts over commands, and the biggest study investment should go into Kubernetes fundamentals and orchestration. The certification is different from CKA, CKAD, and CKS because there is no terminal, no live YAML writing requirement, and no production troubleshooting simulation. That difference should shape every study decision you make.
 

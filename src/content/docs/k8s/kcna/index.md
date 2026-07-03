@@ -16,7 +16,7 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 | **Duration** | 90 minutes |
 | **Questions** | ~60 questions |
 | **Passing Score** | 75% |
-| **Validity** | 3 years |
+| **Validity** | 2 years (3 years if earned before April 1, 2024) |
 
 ## Curriculum Structure
 

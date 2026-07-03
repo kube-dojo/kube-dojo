@@ -1,5 +1,5 @@
 ---
-title: "Kubernetes Fundamentals (46%)"
+title: "Kubernetes Fundamentals (44%)"
 sidebar:
   order: 0
   label: "K8s Fundamentals"
