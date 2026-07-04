@@ -1,6 +1,7 @@
 // @ts-check
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
+import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -51,8 +52,13 @@ export default defineConfig({
       '/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/',
   },
   markdown: {
-    remarkPlugins: [remarkMath],
-    rehypePlugins: [rehypeKatex],
+    // Astro 7 defaults to the Rust "Sätteri" markdown engine, which drops the
+    // unified remark/rehype pipeline. We keep KaTeX by explicitly running the
+    // unified processor from @astrojs/markdown-remark (a Starlight 0.41 peer dep).
+    processor: unified({
+      remarkPlugins: [remarkMath],
+      rehypePlugins: [rehypeKatex],
+    }),
   },
   vite: {
     server: {
