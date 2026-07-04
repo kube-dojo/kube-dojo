@@ -5,7 +5,7 @@ For each module path in --input (default scripts/quality/pilot-2026-05-02.txt):
   1. Worktree at .worktrees/codex-388-pilot-<slug> from origin/main
   2. Codex (gpt-5.5, mode=danger) rewrites per module-rewriter-388.md,
      runs verifier, commits, pushes, opens PR
-  3. Gemini cross-family review on the PR (read-only)
+  3. Cross-family review on the PR (agy — the Google lane — with claude/qwen fallback)
   4. APPROVE       -> squash-merge with --delete-branch
      APPROVE_WITH_NITS -> log + post review; orchestrator triages (C3 fix-up lane)
      NEEDS CHANGES -> log + hold; orchestrator decides (re-dispatch vs inline)
@@ -305,7 +305,7 @@ def orchestrator_open_pr(slug: str, module_path: str, codex_response: str) -> in
     return pr_num
 
 
-def gemini_review_prompt(pr_num: int, module_path: str) -> str:
+def cross_family_review_prompt(pr_num: int, module_path: str) -> str:
     return f"""Adversary cross-family review of PR #{pr_num} on KubeDojo.
 
 This is a #388 Day 2 pilot rewrite of: {module_path}
@@ -342,33 +342,13 @@ Keep the review under 700 words. If any LAB RUNNABILITY check fails, the floor i
 """
 
 
-def dispatch_gemini_review(pr_num: int, module_path: str, slug: str):
-    log({"event": "gemini_review_start", "pr": pr_num, "module": module_path})
-    try:
-        result = invoke(
-            agent_name="gemini",
-            prompt=gemini_review_prompt(pr_num, module_path),
-            mode="workspace-write",  # needs gh shell access
-            cwd=REPO,
-            task_id=f"388-pilot-review-{slug}",
-            entrypoint="dispatch",
-            hard_timeout=900,
-        )
-    except Exception as e:  # noqa: BLE001
-        log({"event": "gemini_error", "pr": pr_num, "error": repr(e)})
-        return None, "ERROR"
-    text = result.response or ""
-    log({"event": "gemini_done", "pr": pr_num, "ok": result.ok, "response_excerpt": text[-2000:]})
-    return text, classify_verdict(text)
-
-
 def dispatch_claude_review(pr_num: int, module_path: str, slug: str):
-    """Fallback when Gemini fails. Headless Claude (sonnet) cross-family review."""
+    """Fallback when the primary reviewer fails. Headless Claude (sonnet) cross-family review."""
     log({"event": "claude_review_start", "pr": pr_num, "module": module_path})
     try:
         result = invoke(
             agent_name="claude",
-            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            prompt=cross_family_review_prompt(pr_num, module_path),  # reuse same prompt
             mode="read-only",
             cwd=REPO,
             model="claude-sonnet-4-6",
@@ -387,24 +367,24 @@ def dispatch_claude_review(pr_num: int, module_path: str, slug: str):
 def dispatch_qwen_review(pr_num: int, module_path: str, slug: str):
     """Cross-family review via Qwen 3.6 (hermes openrouter).
 
-    Qwen is a peer cross-family reviewer alongside gemini-pro and claude-sonnet.
-    Uses the same prompt (gemini_review_prompt). Qwen's strengths: independent
+    Qwen is a peer cross-family reviewer alongside agy and claude-sonnet.
+    Uses the same prompt (cross_family_review_prompt). Qwen's strengths: independent
     family and hermes terminal/file toolsets so it can curl URLs and inspect
     the diff itself.
 
     Selection:
         - Primary: set ``KUBEDOJO_388_PRIMARY_REVIEWER=qwen`` to make this the
           first-pass reviewer in the cascade.
-        - Tertiary: if gemini and claude both return ERROR/UNCLEAR, qwen is
+        - Tertiary: if agy and claude both return ERROR/UNCLEAR, qwen is
           the third-line reviewer.
         - Manual: callable directly from one-off review scripts (mirrors
-          dispatch_gemini_review / dispatch_claude_review shape).
+          dispatch_agy_review / dispatch_claude_review shape).
     """
     log({"event": "qwen_review_start", "pr": pr_num, "module": module_path})
     try:
         result = invoke(
             agent_name="qwen",
-            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            prompt=cross_family_review_prompt(pr_num, module_path),  # reuse same prompt
             mode="workspace-write",  # qwen benefits from terminal+file tools (curl, gh pr diff)
             cwd=REPO,
             task_id=f"388-pilot-review-qwen-{slug}",
@@ -435,7 +415,7 @@ def dispatch_deepseek_review(pr_num: int, module_path: str, slug: str):
     try:
         result = invoke(
             agent_name="deepseek",
-            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            prompt=cross_family_review_prompt(pr_num, module_path),  # reuse same prompt
             mode="workspace-write",  # deepseek benefits from terminal+file access
             cwd=REPO,
             model="deepseek-v4-pro",
@@ -454,14 +434,11 @@ def dispatch_deepseek_review(pr_num: int, module_path: str, slug: str):
 def dispatch_agy_review(pr_num: int, module_path: str, slug: str):
     """Cross-family review via Agy (Antigravity CLI — Google).
 
-    Agy is the gemini-cli replacement for Google One / unpaid tier; rolls out
-    fully on 2026-06-18 per #1350. Run-time:
+    Agy is the Google lane (it replaced the retired gemini-cli per #1350/#2125)
+    for the Google One / unpaid tier. Run-time:
     - mode=danger required (dispatch_smart enforces this for agy)
     - no `model=` arg — agy picks model via its TUI panel (env override:
       KUBEDOJO_AGY_MODEL; adapter default gemini-3.5-flash-high)
-    - rate-limit signature is distinct from gemini-cli (separate counter),
-      so agy can run as a peer reviewer alongside gemini without sharing
-      the OAuth quota.
 
     Failure shapes and how they surface to the cascade:
     - Quota-exhausted: invoke returns ok=False, response="" — this function
@@ -478,7 +455,7 @@ def dispatch_agy_review(pr_num: int, module_path: str, slug: str):
     try:
         result = invoke(
             agent_name="agy",
-            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            prompt=cross_family_review_prompt(pr_num, module_path),  # reuse same prompt
             mode="danger",  # required for agy in headless dispatch
             cwd=REPO,
             task_id=f"388-pilot-review-agy-{slug}",
@@ -494,7 +471,7 @@ def dispatch_agy_review(pr_num: int, module_path: str, slug: str):
 
 
 def classify_verdict(text: str) -> str:
-    """Classify a gemini review into APPROVE / APPROVE_WITH_NITS / NEEDS CHANGES / UNCLEAR.
+    """Classify a reviewer's verdict into APPROVE / APPROVE_WITH_NITS / NEEDS CHANGES / UNCLEAR.
 
     Order matters: must check APPROVE WITH NITS BEFORE APPROVE so the
     longer phrase wins (otherwise nits silently auto-merge — see #388
@@ -514,7 +491,7 @@ def classify_verdict(text: str) -> str:
 def post_review_comment(pr_num: int, body: str) -> None:
     subprocess.run(
         ["gh", "pr", "comment", str(pr_num), "--body",
-         f"## Gemini cross-family review (#388 pilot)\n\n{body}"],
+         f"## Cross-family review (#388 pilot)\n\n{body}"],
         cwd=REPO, check=False,
     )
 
@@ -531,7 +508,7 @@ def build_reviewer_cascade(primary_reviewer: str) -> list[tuple[str, Callable]]:
     if primary_reviewer == "claude":
         return [
             ("claude", dispatch_claude_review),
-            ("gemini", dispatch_gemini_review),
+            ("agy", dispatch_agy_review),
             ("qwen", dispatch_qwen_review),
         ]
     if primary_reviewer == "deepseek":
@@ -541,24 +518,16 @@ def build_reviewer_cascade(primary_reviewer: str) -> list[tuple[str, Callable]]:
             ("qwen", dispatch_qwen_review),
         ]
     if primary_reviewer == "qwen":
-        # qwen → gemini → claude
+        # qwen → agy → claude
         return [
             ("qwen", dispatch_qwen_review),
-            ("gemini", dispatch_gemini_review),
-            ("claude", dispatch_claude_review),
-        ]
-    if primary_reviewer == "agy":
-        # agy → claude → qwen. Gemini is on a SHARED Google OAuth pool with
-        # agy pre-2026-06-18 (separate counter on Google side but auth-flow
-        # collisions can still happen) — fall to claude first.
-        return [
             ("agy", dispatch_agy_review),
             ("claude", dispatch_claude_review),
-            ("qwen", dispatch_qwen_review),
         ]
-    # default: gemini
+    # default (also handles the retired "gemini" value): agy → claude → qwen.
+    # agy is the Google lane (gemini-cli retired, #2125); fall to claude first.
     return [
-        ("gemini", dispatch_gemini_review),
+        ("agy", dispatch_agy_review),
         ("claude", dispatch_claude_review),
         ("qwen", dispatch_qwen_review),
     ]
@@ -685,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
                 log({"event": "module_skip", "module": module_path, "reason": "pr_creation_failed"})
                 continue
         # Reviewer cascade. Primary defaults to claude; override via
-        # KUBEDOJO_388_PRIMARY_REVIEWER (gemini | claude | qwen | deepseek | agy).
+        # KUBEDOJO_388_PRIMARY_REVIEWER (claude | agy | qwen | deepseek).
         # Cascade order is always primary → claude → qwen/deepseek fallback
         # depending on the configured primary.
         primary = os.environ.get("KUBEDOJO_388_PRIMARY_REVIEWER", "claude").lower()
