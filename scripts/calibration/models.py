@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 Family = Literal["anthropic", "openai", "google", "deepseek", "alibaba", "xai"]
-ProviderCli = Literal["claude-cli", "codex-cli", "agy-cli", "gemini-cli", "hermes"]
+ProviderCli = Literal["claude-cli", "codex-cli", "agy-cli", "hermes"]
 EffortMechanism = Literal[
     "native_flag",
     "cli_config",
@@ -97,21 +97,20 @@ ANCHORS: tuple[CalibrationModel, ...] = (
         "B",
         "claude-sonnet-4-6",
     ),
-    # Wave B uses gemini-cli for gemini-3.1-pro-preview because agy-cli
-    # does not expose pro-preview models.
-    # After 2026-06-18 (gemini-cli cutover to agy), this row may need to
-    # migrate or be retired.
-    # Tracked in #1365.
+    # Wave B google frontier: migrated from the retired gemini-cli to the agy
+    # lane (agy exposes gemini-3.1-pro via the -high suffix, same mechanism as
+    # the Wave A agy row). gemini-cli has no binary after the 2026-06-18 cutover.
+    # Tracked in #1365 / retired in #2125.
     CalibrationModel(
         "google",
-        "gemini-cli",
+        "agy-cli",
         "gemini-3.1-pro",
-        "3.1-pro-preview",
+        "3.1-pro",
         "high",
         "model_name_suffix",
         "high",
         "B",
-        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-high",
     ),
     CalibrationModel(
         "deepseek",

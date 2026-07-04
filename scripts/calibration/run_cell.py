@@ -100,13 +100,6 @@ def build_dispatch_plan(model: CalibrationModel) -> DispatchPlan:
             mode="danger",
             model=model.canonical_string,
         )
-    if model.provider_cli == "gemini-cli" and model.effort_mechanism == "model_name_suffix":
-        return DispatchPlan(
-            kind="runtime",
-            agent_name="gemini",
-            mode="read-only",
-            model=model.canonical_string,
-        )
     if model.provider_cli == "hermes" and model.effort_mechanism == "prompt_prefix_hint":
         if model.family == "deepseek":
             agent_name = "deepseek"
