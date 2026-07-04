@@ -353,6 +353,18 @@ def fire(agent: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         return False, f"_dispatch crashed_: {type(e).__name__}: {e}"
 
 
+def verdict_marker_agent(agent: str) -> str:
+    """Marker token for the ``<!-- verdict {token} -->`` comment.
+
+    The agy (Google) lane keeps the legacy ``gemini`` token so that
+    ``audit_review_coverage.py`` (which maps ``<!-- verdict gemini -->`` →
+    ``gemini_gap``, matching existing chapter status files) still recognizes
+    agy-lane research verdicts. Renaming the marker/schema is a coupled cleanup
+    deferred to the final #2230 slice. codex/claude keep their own tokens.
+    """
+    return "gemini" if agent == "agy" else agent
+
+
 def post_comment(pr_num: int, body: str) -> None:
     """Post a single PR comment via gh."""
     p = Path(f"/tmp/verdict-comment-{pr_num}.md")
@@ -422,11 +434,9 @@ def process_one(pr_num: int, *, only: str | None) -> None:
 
     for agent, (ok, body) in out.items():
         marker = "OK" if ok else "FAILED"
-        # Keep the "gemini" marker TOKEN for the agy lane: audit_review_coverage.py
-        # maps `<!-- verdict gemini -->` → gemini_gap (matching existing chapter
-        # status files). Renaming the marker/schema is a coupled cleanup deferred
-        # to the final #2230 slice — same deferral as dispatch_prose_review.py.
-        comment_agent = "gemini" if agent == "agy" else agent
+        # verdict_marker_agent keeps the "gemini" token for the agy lane so
+        # audit_review_coverage.py keeps matching gemini_gap (see #2230).
+        comment_agent = verdict_marker_agent(agent)
         post_comment(pr_num, f"<!-- verdict {comment_agent} -->\n\n_{marker}_\n\n{body}")
 
 
