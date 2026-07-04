@@ -6,7 +6,10 @@ peer to codex / claude / gemini for code review, deliberation, and fix lanes.
 Key design points:
 
 - **Transport:** ``hermes`` CLI in oneshot mode (``--oneshot=<prompt>``
-  argv binding). Hermes proxies to DeepSeek via the ``deepseek`` provider.
+  argv binding). Two provider lanes: ``deepseek`` (DEFAULT — first-party
+  API, China-hosted, cheapest, local-only) and ``openrouter`` (opt-in —
+  US-hosted proxy for residency / failover / CI-eligibility). Provider is
+  resolved by ``_resolve_provider`` (tool_config > env > model slug).
 - **Modes:** All three (read-only / workspace-write / danger) supported.
   Mode → hermes toolset mapping is conservative for read-only (no
   terminal/file tools), permissive for workspace-write and danger.
@@ -114,6 +117,41 @@ def translate_mcp_prefix_for_hermes(prompt: str) -> str:
     return prompt.replace("mcp__sources__", "mcp_sources_")
 
 
+def _resolve_provider(tool_config: dict[str, Any], model: str) -> str:
+    """Pick the Hermes provider for a DeepSeek dispatch.
+
+    Two lanes share this adapter:
+
+    1. ``deepseek`` (**default**) — DeepSeek's first-party API
+       (``api.deepseek.com``, China-hosted). Cheapest path; local-only —
+       never dispatched from CI (``feedback_no_china_apis_from_gh_actions``).
+    2. ``openrouter`` — OpenRouter's US-hosted proxy. Opt-in, for residency /
+       failover / CI-eligibility. NOTE: OpenRouter's default DeepSeek pool can
+       still route to DeepSeek's own China API — pin non-China hosts on the
+       OpenRouter side (``provider.only``/``ignore`` + ``data_collection: deny``)
+       or you keep China residency plus an extra hop.
+
+    Precedence (first match wins), mirroring
+    ``dispatch_smart._hermes_provider_for_model``:
+
+    1. explicit ``tool_config["provider"]`` — caller intent.
+    2. ``KUBEDOJO_HERMES_PROVIDER`` env — operator override.
+    3. model-slug inference — an OpenRouter-style slug (``openrouter/…`` or any
+       ``vendor/model`` form such as ``deepseek/deepseek-v3.2``) routes via
+       ``openrouter``; a bare first-party slug (``deepseek-v4-pro``) via
+       ``deepseek``.
+    """
+    explicit = tool_config.get("provider")
+    if explicit:
+        return str(explicit)
+    env_override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
+    if env_override:
+        return env_override
+    if model.startswith("openrouter/") or "/" in model:
+        return "openrouter"
+    return "deepseek"
+
+
 class DeepSeekAdapter:
     """Adapter for ``hermes -z`` with the deepseek provider."""
 
@@ -146,7 +184,10 @@ class DeepSeekAdapter:
             - ``toolsets: str`` — comma-separated override for ``-t``.
               Wins over the mode-default mapping.
             - ``provider: str`` — override hermes provider. Default
-              ``deepseek``.
+              ``deepseek`` (first-party, China-hosted); pass ``openrouter``
+              (US-hosted proxy) for residency / failover / CI-eligibility.
+              Also selectable via ``KUBEDOJO_HERMES_PROVIDER`` or an
+              OpenRouter model slug — see ``_resolve_provider``.
             - ``effort: str`` — reasoning effort label. Hermes does not
               expose this as a flag today; we forward it via prompt
               prefix when ``"xhigh"`` is requested. Tracking issue: see
@@ -182,10 +223,14 @@ class DeepSeekAdapter:
             final_prompt = translate_mcp_prefix_for_hermes(final_prompt)
 
         # Model
-        cmd.extend(["-m", model or self.default_model])
+        effective_model = model or self.default_model
+        cmd.extend(["-m", effective_model])
 
-        # Provider — deepseek is the canonical KubeDojo path (Hermes API key).
-        provider = tc.get("provider", "deepseek")
+        # Provider — first-party ``deepseek`` (China-hosted) is the default;
+        # opt into OpenRouter's US-hosted proxy via tool_config, the
+        # KUBEDOJO_HERMES_PROVIDER env, or an OpenRouter model slug. See
+        # ``_resolve_provider``.
+        provider = _resolve_provider(tc, effective_model)
         cmd.extend(["--provider", provider])
 
         # Toolset selection — caller override wins, else mode default.
