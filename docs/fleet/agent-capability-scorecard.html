@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KubeDojo Fleet — Agent Capability Scorecard (2026-07-04)</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#e2e2e2; --accent:#2b6cb0; --good:#1a7f37; --warn:#b7791f; --bad:#c53030; --code:#f5f5f5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16181c; --fg:#e8e8e8; --muted:#9aa0a6; --line:#2c2f36; --accent:#63b3ed; --good:#4ade80; --warn:#f6c453; --bad:#f87171; --code:#22262c; }
+  }
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 80px;}
+  h1{font-size:1.7rem;margin:0 0 4px;}
+  h2{font-size:1.25rem;margin:2.2em 0 .5em;border-bottom:2px solid var(--line);padding-bottom:.25em;}
+  h3{font-size:1.03rem;margin:1.4em 0 .4em;}
+  .sub{color:var(--muted);margin:0 0 1.5em;}
+  .note{background:var(--code);border-left:3px solid var(--accent);padding:.7em 1em;border-radius:4px;margin:1em 0;font-size:.93rem;}
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.9rem;}
+  .scroll{overflow-x:auto;}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--code);font-weight:600;}
+  code{background:var(--code);padding:1px 5px;border-radius:3px;font-size:.86em;}
+  .g{color:var(--good);font-weight:600;} .w{color:var(--warn);font-weight:600;} .b{color:var(--bad);font-weight:600;}
+  .muted{color:var(--muted);}
+  ul{margin:.4em 0 .9em;padding-left:1.3em;} li{margin:.25em 0;}
+  .uk{font-size:.9rem;background:var(--code);padding:.6em .8em;border-radius:5px;margin:.4em 0;}
+  .tag{display:inline-block;font-size:.72rem;padding:1px 6px;border-radius:10px;border:1px solid var(--line);color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>KubeDojo Fleet — Agent Capability Scorecard</h1>
+<p class="sub">Empirical test results · <strong>as of 2026-07-04</strong> · infra lane · owner: <code>claude-infra</code></p>
+
+<div class="note">
+<strong>Purpose &amp; scope.</strong> Head-to-head capability tests of the local agent fleet, run through their standard dispatch paths. Built to drive routing decisions — especially the upcoming <strong>Ukrainian translation project</strong>. <strong>Caveats:</strong> most cells are single probes (n=1) — directionally strong, not statistical; the Ukrainian tasks are one writing prompt + one ~100-word translation (short — a model that passes short can still degrade on long modules, a known failure mode). Re-verify volatile facts (model slugs, caps) before relying on specifics; the roster churns.
+</div>
+
+<h2>1. Access paths &amp; effort control (verified)</h2>
+<div class="scroll">
+<table>
+<tr><th>Agent</th><th>Family</th><th>Invocation</th><th>Effort control</th><th>Cost / constraint</th></tr>
+<tr><td><strong>pool</strong> (laguna-m.1)</td><td>Poolside</td><td><code>opencode run -m poolside/poolside/laguna-m.1</code></td><td><code>--variant high|max</code></td><td class="g">FREE</td></tr>
+<tr><td><strong>glm</strong> (glm-5.2)</td><td>Zhipu</td><td><code>opencode run -m zai-coding-plan/glm-5.2</code></td><td>model/mode only</td><td class="b">China-hosted → local-only, NEVER in CI</td></tr>
+<tr><td><strong>cursor</strong> (auto)</td><td>Kimi/Moonshot</td><td><code>dispatch_smart --agent cursor --model auto</code></td><td><code>auto</code> tiering</td><td>Pro+ (3× volume)</td></tr>
+<tr><td><strong>deepseek</strong> (v4-pro)</td><td>DeepSeek</td><td><code>dispatch_smart --agent deepseek --model deepseek-v4-pro</code></td><td>tool_config effort</td><td class="g">cheap</td></tr>
+<tr><td><strong>grok-build</strong></td><td>xAI</td><td><code>dispatch_smart --agent grok</code></td><td>—</td><td>xAI sub; code-only</td></tr>
+<tr><td><strong>opus-4.8</strong></td><td>Anthropic</td><td><code>claude -p --model claude-opus-4-8 --effort xhigh</code> (raw)</td><td class="g"><code>--effort xhigh</code> ✔</td><td>premium/metered</td></tr>
+<tr><td><strong>gpt-5.5</strong></td><td>OpenAI</td><td><code>dispatch_smart draft --agent codex --model gpt-5.5 --worktree X</code></td><td class="g">xhigh (config default)</td><td>weekly cap</td></tr>
+</table>
+</div>
+<p class="muted" style="font-size:.86rem">Footguns: (a) <code>dispatch_smart</code> cannot plumb <code>xhigh</code> to claude — the effort-suffix regex only matches <code>-high|-medium|-low</code>; use the raw <code>claude -p --effort xhigh</code> path, run from a neutral dir so the repo SessionStart hook does not inject orientation chatter. (b) codex <strong>forces danger mode</strong> → needs a pinned <code>--worktree</code>; it refuses read-only/workspace-write. (c) web-verify needs the lightpanda MCP wired into opencode (<code>opencode.jsonc</code>). (d) pool at <code>--variant high</code> on a large diff exceeds the 2-min Bash default — background it or set a long timeout.</p>
+
+<h2>2. Core capability matrix</h2>
+<p class="muted" style="font-size:.86rem">🟢 strong · 🟢🟢 notably deep · 🟡 mediocre · 🔴 weak · — not tested. "Gen" 🟢 = the model's code was <strong>executed</strong> and asserts passed. "Review" graded vs 4 planted bugs + a correct decoy (no-fabrication check).</p>
+<div class="scroll">
+<table>
+<tr><th>Agent</th><th>Debug</th><th>Gen (run)</th><th>Review</th><th>Coherence¹</th><th>Web-verify²</th><th>Ukrainian³</th></tr>
+<tr><td><strong>pool</strong></td><td class="g">🟢</td><td class="g">🟢</td><td class="g">🟢 4/4</td><td class="g">🟢 3/3</td><td class="g">🟢 native</td><td class="b">🔴 bad</td></tr>
+<tr><td><strong>glm</strong></td><td class="g">🟢 sharp</td><td class="g">🟢</td><td class="g">🟢🟢 deep</td><td class="g">🟢 3/3</td><td class="g">🟢 native</td><td class="w">🟡 anglicizes</td></tr>
+<tr><td><strong>cursor</strong></td><td class="g">🟢</td><td class="g">🟢</td><td class="g">🟢🟢 deep</td><td class="g">🟢 3/3</td><td class="muted">⚪ harness</td><td class="w">🟡 russicism risk</td></tr>
+<tr><td><strong>deepseek</strong></td><td class="g">🟢</td><td class="g">🟢</td><td class="g">🟢 4/4*</td><td class="g">🟢 3/3</td><td class="g">🟢 via opencode</td><td class="g">🟢 good</td></tr>
+<tr><td><strong>grok-build</strong></td><td class="g">🟢</td><td class="g">🟢</td><td class="g">🟢🟢🟢 sharpest</td><td class="g">🟢 3/3</td><td class="muted">⚪ harness</td><td class="w">🟡 code-switch</td></tr>
+<tr><td><strong>opus-4.8-xhigh</strong></td><td class="muted">—</td><td class="muted">—</td><td class="muted">— (strongest inline elsewhere)</td><td class="muted">—</td><td class="muted">—</td><td class="g">🟢🟢 best</td></tr>
+<tr><td><strong>gpt-5.5-xhigh</strong></td><td class="muted">—</td><td class="muted">—</td><td class="muted">— (strong, tested #2234)</td><td class="muted">—</td><td class="muted">—</td><td class="g">🟢 good</td></tr>
+</table>
+</div>
+<ul style="font-size:.88rem">
+<li>* deepseek review missed the timing-attack finding that glm/cursor/grok caught; grok-build was the only agent to catch an undefined-name bug all others missed.</li>
+<li><strong>¹ Coherence</strong> = find 3 planted cross-file contradictions across 4 docs. All five found 3/3 with no fabrication → <strong>not a differentiator</strong>.</li>
+<li><strong>² Web-verify is a HARNESS property, not a model trait.</strong> Any opencode-hosted model + lightpanda MCP browses (deepseek proven). pool/glm get it in their standard path; cursor (proprietary) and grok-build (grok-CLI-only) can't be opencode-hosted, so their <em>native</em> fleet paths lack it. <strong>Do not call browsing any single model's "unique edge."</strong></li>
+<li><strong>³</strong> Ukrainian summarized here; full evaluation in §4.</li>
+</ul>
+
+<h2>3. Fleet routing (differentiators — coding floor is uniformly high)</h2>
+<ul>
+<li><strong>grok-build</strong> → sharpest <strong>final code-review gate</strong>.</li>
+<li><strong>glm</strong> → <strong>coherence audits</strong> + deep review. <span class="b">Local-only, never CI.</span></li>
+<li><strong>pool</strong> → <strong>free</strong> code + web-verify volume (browsing isn't unique; <em>free</em> is the edge).</li>
+<li><strong>deepseek</strong> → <strong>cheap</strong> all-rounder + <strong>best-value UK translator</strong>; browses when opencode-hosted. Ground-check its numbers.</li>
+<li><strong>cursor</strong> → high-throughput author/fixer/reviewer. <span class="w">Not a safe primary UK lane (russicism on longer text).</span></li>
+<li><strong>opus-4.8</strong> → hardest reviews + <strong>top-quality UK</strong> (premium). <strong>gpt-5.5</strong> → quality-critical author/review.</li>
+</ul>
+
+<h2>4. Ukrainian evaluation (for the translation project)</h2>
+<p class="muted" style="font-size:.86rem">Graded objectively against VESUM (415K-lemma morphological dictionary — is the word real Ukrainian?) and a Russian-shadow morphology detector (russicism = confidence toward 1.0). Two tasks: native writing (~120-word explainer of a K8s namespace) and translation (~100-word technical paragraph with churn-heavy terms).</p>
+
+<h3>Translation ranking (the discriminating task)</h3>
+<div class="scroll">
+<table>
+<tr><th>Rank</th><th>Model</th><th>Assessment</th><th>Objective defects</th></tr>
+<tr><td>🥇 1</td><td><strong>opus-4.8-xhigh</strong></td><td>Full translation <strong>+ English term in parentheses</strong> for every term (<span class="muted">поди (Pods), Поетапні оновлення (rolling updates), Горизонтальне автомасштабування подів (Horizontal Pod Autoscaling)</span>) — pedagogically ideal. Native flow.</td><td class="g">none</td></tr>
+<tr><td>🥈 2</td><td><strong>deepseek-v4-pro</strong></td><td>Near-opus; same parenthetical pattern for HPA/rolling; translated процесора / користувацьких метрик.</td><td class="w">1 mild anglicism («інкрементально»); some Latin leftover</td></tr>
+<tr><td>🥉 3</td><td><strong>gpt-5.5-xhigh</strong></td><td>Clean native term choices («поступові», «поетапно»); no russicism/anglicism.</td><td class="w">leaves Deployment / HPA / CPU in raw Latin</td></tr>
+<tr><td>4</td><td><strong>cursor</strong> (auto)</td><td>Fluent, but…</td><td class="b">RUSSICISM «перекатні» (VESUM-absent, russian-shadow 1.0) + heaviest Latin code-switching</td></tr>
+</table>
+</div>
+
+<h3>Native writing</h3>
+<p style="font-size:.9rem">All four wrote clean, fluent Ukrainian with <strong>no russicisms</strong> and native production terms (opus «робоча експлуатація», gpt-5.5 «виробництво», deepseek «промислове середовище», cursor «робоче навантаження»). Writing is uniformly strong; opus/gpt-5.5 slightly most polished. <strong>Writing is not the discriminator — translation is.</strong></p>
+
+<h3>Verdict for the translation project</h3>
+<ul>
+<li><strong>Quality ceiling: opus-4.8</strong> — the translate-and-keep-English-in-parentheses pattern is exactly right for learning modules. Use for the highest-stakes / reference translations (premium lane).</li>
+<li><strong>Volume workhorse: deepseek-v4-pro</strong> — near-opus quality, cheap, no russicism → confirms the standing "prefer deepseek for UK." The default translation lane.</li>
+<li><strong>gpt-5.5</strong> — usable; needs a post-pass to Ukrainize proper-noun terms it leaves in Latin.</li>
+<li><strong>cursor — NOT a safe primary UK lane.</strong> Passed the short paragraph earlier but produced a russicism on harder text. If used, it MUST clear the russicism gate (<code>check_uk_changed.py</code>).</li>
+<li><strong>pool — never for Ukrainian</strong> (bad); glm mediocre (anglicizes). Both are code models.</li>
+<li><strong>Every UK candidate still needs the russicism/calque gate</strong> — this test measured single short samples; long-module quality is not guaranteed by a short pass.</li>
+</ul>
+
+<h2>5. Methodology (reproducible)</h2>
+<ul style="font-size:.88rem">
+<li><strong>Debug:</strong> a binary-search with a planted infinite-loop bug (<code>lo = mid</code> vs <code>lo = mid + 1</code>) → bug id + fix + triggering input.</li>
+<li><strong>Gen:</strong> <code>longest_valid_parentheses</code> (LeetCode-Hard) + 5 asserts; the output was executed.</li>
+<li><strong>Review:</strong> a snippet with 4 planted bugs (mutable default arg, MD5 for passwords, shell=True injection, div-by-zero) + a correct decoy (<code>chunk</code>) + an undefined-name latent bug.</li>
+<li><strong>Coherence:</strong> 4 docs describing one product with 3 planted cross-file contradictions (auth method, rate limit, format support).</li>
+<li><strong>Web-verify:</strong> "latest stable Astro version?" — true answer 7.0.6 (postdates training cutoffs); must browse to get it right.</li>
+<li><strong>Ukrainian:</strong> VESUM word-verification + Russian-shadow detection via the <code>sources</code> MCP.</li>
+</ul>
+
+<p class="muted" style="margin-top:2.5em;font-size:.82rem">Generated by the claude-infra lane, 2026-07-04. Raw per-probe outputs were captured under <code>/tmp</code> and <code>logs/dispatch_responses/</code> during the run (not committed). Update this doc as the roster/models churn.</p>
+
+</div>
+</body>
+</html>
