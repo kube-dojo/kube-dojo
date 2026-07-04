@@ -528,9 +528,10 @@ def test_frontmatter_prose_deletion_requires_check(tmp_path: Path) -> None:
     assert "missing a '## Learner check' section" in result.stderr
 
 
-def test_structural_slug_order_change_is_allowed(tmp_path: Path) -> None:
-    """A change limited to structural keys (slug, sidebar.order) with an
-    unchanged body is metadata-only → no Learner check required."""
+def test_structural_slug_order_change_still_requires_check(tmp_path: Path) -> None:
+    """The metadata-only allowlist is deliberately minimal (`en_commit` only):
+    a slug / sidebar.order change is NOT skipped and keeps the learner check.
+    (Scope narrowed after the codex R4 reparenting finding.)"""
     base = "---\ntitle: Pods\nslug: k8s/pods\nsidebar:\n  order: 3\n---\n\nBody.\n"
     head = "---\ntitle: Pods\nslug: k8s/cka/pods\nsidebar:\n  order: 5\n---\n\nBody.\n"
     pr = {
@@ -548,7 +549,39 @@ def test_structural_slug_order_change_is_allowed(tmp_path: Path) -> None:
         base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
         tmp_path=tmp_path,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
+def test_reparented_frontmatter_label_requires_check(tmp_path: Path) -> None:
+    """Swapping `sidebar.label` and `prev.label` between sections leaves the
+    line SET identical but changes the visible sidebar label. The order-
+    sensitive remainder comparison catches the reparent → gate stays. (codex R4.)"""
+    base = (
+        "---\ntitle: Page\nsidebar:\n  label: Old sidebar label\n"
+        "prev:\n  label: Previous page label\n---\n\nBody stays.\n"
+    )
+    head = (
+        "---\ntitle: Page\nprev:\n  label: Old sidebar label\n"
+        "sidebar:\n  label: Previous page label\n---\n\nBody stays.\n"
+    )
+    pr = {
+        "body": "## Summary\n\nReparent the labels.\n",
+        "files": [{"path": "src/content/docs/k8s/cka/pods.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs: reparent labels",
+        "number": 9110,
+    }
+    result = run_hook(
+        "gh pr merge 9110 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/k8s/cka/pods.md": head},
+        base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
 
 
 def test_flow_style_sidebar_label_requires_check(tmp_path: Path) -> None:

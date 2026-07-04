@@ -26,12 +26,6 @@ import subprocess
 import sys
 
 
-# Any Cyrillic code point (U+0400–U+04FF). Kept identical to the CI-side twin
-# `scripts/quality/filter_content_changed.py`: a frontmatter line containing
-# Cyrillic counts as translated content, not metadata.
-_CYRILLIC_RE = re.compile("[\u0400-\u04FF]")
-
-
 def _fetch_file(path: str, head_oid: str, fixture_dir: str) -> str | None:
     if fixture_dir:
         candidate = os.path.join(fixture_dir, path)
@@ -96,12 +90,14 @@ def _split_frontmatter(text: str) -> tuple[str | None, str]:
     return m.group(1), text[m.end():]
 
 
-# Frontmatter keys that are pure structure/routing — NOT learner-facing prose.
-# A change limited to these (plus an unchanged body) is metadata-only. Anything
-# else — `title`, `description`, `sidebar.label`, or any unrecognized key — is
-# learner-facing (rendered H1 / nav / search snippet) and must keep the gate.
-# Allowlist, not denylist: an unknown key fails safe toward requiring the check.
-_STRUCTURAL_FM_KEYS = frozenset({"en_commit", "slug", "order", "sidebar", "draft"})
+# Frontmatter keys whose lines are pure provenance/structure metadata — safe to
+# ignore when deciding whether a content PR changed teaching prose. Deliberately
+# MINIMAL: only `en_commit` (the #2237 provenance backfill this hook change
+# targets). EVERYTHING else — title, description, slug, sidebar/nav labels and
+# ordering — is compared verbatim and IN ORDER, so any edit, reorder, or
+# reparent keeps the learner check. Extend this set only with a top-level scalar
+# key that provably cannot carry (or reorder) learner-facing prose.
+_METADATA_ONLY_FM_KEYS = frozenset({"en_commit"})
 
 
 def _fm_key(line: str) -> str | None:
@@ -114,13 +110,16 @@ def _fm_key(line: str) -> str | None:
 
 
 def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
-    """True iff head differs from base ONLY in structural frontmatter metadata:
-    the body is text-identical (after the fetchers' newline normalization) AND
-    every added-or-removed frontmatter line carries a key in
-    `_STRUCTURAL_FM_KEYS` and no Cyrillic. Same intent as the CI-side twin
-    `scripts/quality/filter_content_changed.py`, but blob-based (the hook has no
-    working tree at head). Fails toward "real content" (False) whenever it
-    cannot prove the change is structure-only."""
+    """True iff head differs from base ONLY in allowlisted provenance metadata.
+
+    The body must be text-identical (after the fetchers' newline normalization)
+    AND the frontmatter, with only `_METADATA_ONLY_FM_KEYS` lines removed, must
+    be byte-identical AND IN THE SAME ORDER. Order-sensitive is the point: a
+    moved or reparented prose line (e.g. a swapped `sidebar.label`) changes the
+    ordered remainder and keeps the gate — a set/line diff cannot see that.
+    Fails toward "real content" (False) whenever it cannot prove metadata-only.
+    Blob-based (the hook has no working tree at head); same intent as the
+    CI-side twin `scripts/quality/filter_content_changed.py`."""
     if base_text is None:
         return False  # new file → real content
     if base_text == head_text:
@@ -131,29 +130,11 @@ def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
         return False  # can't reason about frontmatter → treat as content
     if base_body != head_body:
         return False  # body prose changed
-    base_lines = set(base_fm.split("\n"))
-    head_lines = set(head_fm.split("\n"))
-    # Symmetric diff: lines added on the head side OR removed from the base side
-    # (so a DELETED `description:` is caught, not just an added one).
-    for line in (head_lines - base_lines) | (base_lines - head_lines):
-        if not line.strip():
-            continue  # pure blank-line shuffle
-        if _CYRILLIC_RE.search(line):
-            return False  # translated prose in frontmatter (any key)
-        key = _fm_key(line)
-        if key is None or key not in _STRUCTURAL_FM_KEYS:
-            return False  # learner-facing prose (title/description/…) or unknown
-        # The value must be a PLAIN SCALAR. A positive allowlist (not a
-        # blocklist of YAML indicators) closes the whole indirection class at
-        # once: flow maps `{…}`/`[…]`, aliases `*x`, anchors `&x`, tags `!x`,
-        # quotes, and trailing `#` comments all fail this match and keep the
-        # gate. Real structural values are a SHA, a slug path, an int, or a
-        # bool — plus empty for a bare block-parent `sidebar:` (its nested
-        # lines are checked on their own keys). Cyrillic already returned above.
-        value = line.split(":", 1)[1].strip() if ":" in line else ""
-        if not re.fullmatch(r"[A-Za-z0-9 ./_-]*", value):
-            return False
-    return True
+
+    def _remainder(fm: str) -> list[str]:
+        return [ln for ln in fm.split("\n") if _fm_key(ln) not in _METADATA_ONLY_FM_KEYS]
+
+    return _remainder(base_fm) == _remainder(head_fm)
 
 
 def _parse_pr(pr_json: str) -> dict | None:
