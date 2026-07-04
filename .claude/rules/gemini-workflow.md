@@ -4,6 +4,15 @@ description: How to work with Gemini via direct CLI dispatch
 
 # Gemini Multi-Agent Workflow
 
+> ## ⚠️ RETIRED — gemini-cli has no binary (#2125). The Google lane is now **agy** (Antigravity CLI).
+>
+> **Do NOT use `dispatch.py gemini` or `ab discuss --with …,gemini` — they route to a dead CLI.**
+> - **Authoritative agent routing:** the `dispatch-router` skill (`agents_extensions/shared/skills/dispatch-router/`).
+> - **General dispatch:** `python scripts/dispatch_smart.py <task> - --agent agy` (or legacy `python scripts/dispatch.py agy "prompt" [--github N] [--model M]`).
+> - **Ukrainian translation:** `python scripts/dispatch.py agy-translate "…"` (or `agy-translate-file` for long modules).
+> - **Deliberation:** `scripts/ab discuss <channel> --with claude,codex,agy`.
+> - The **roles / pipeline / workflow patterns** below still apply — read "Gemini" as "the agy Google lane". Full de-gemini rewrite of this file is tracked as the #2230 ab-bridge cleanup slice.
+
 ## Agent Orientation (first call)
 
 Before drafting or reviewing, pull the local-API briefing so Gemini's context is aligned with what's actually in flight:

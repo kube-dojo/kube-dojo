@@ -47,7 +47,7 @@ Full agent recipe: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
 ## Multi-agent deliberation (`ab discuss`)
 
-For high-leverage decisions only (architecture, threshold freezes, contested NEEDS CHANGES, bets affecting 100+ modules). Use `scripts/ab discuss <channel> --with claude,codex,gemini --max-rounds 3`. See `.claude/rules/decision-card.md` for the full protocol (deliberation not quorum; emit a Decision Card on disagreement only). Scan `docs/decisions/pending/` at cold start.
+For high-leverage decisions only (architecture, threshold freezes, contested NEEDS CHANGES, bets affecting 100+ modules). Use `scripts/ab discuss <channel> --with claude,codex,agy --max-rounds 3` (agy is the Google lane; gemini-cli is retired, #2125/#2230). See `.claude/rules/decision-card.md` for the full protocol (deliberation not quorum; emit a Decision Card on disagreement only). Scan `docs/decisions/pending/` at cold start.
 
 ## Project Overview
 

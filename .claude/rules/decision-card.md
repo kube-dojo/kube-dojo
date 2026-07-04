@@ -1,6 +1,6 @@
 # Decision Card Pattern — Multi-Agent Deliberation
 
-Convention for `scripts/ab discuss --with claude,codex,gemini`. Read this before participating in any `ab discuss` channel.
+Convention for `scripts/ab discuss --with claude,codex,agy` (agy is the Google lane; gemini-cli is retired, #2125/#2230). Read this before participating in any `ab discuss` channel.
 
 ## Framing: distributed deliberation, NOT quorum
 
@@ -11,12 +11,12 @@ LLM agents have correlated priors. "Voting" is theater. Frame `ab discuss` as mu
 **IN scope** (high-leverage decisions):
 - Architecture choices (e.g., volume-run lane count, batch shape, coherence-review cadence)
 - Threshold freezes (e.g., #388 verifier gate values)
-- Contested NEEDS CHANGES — codex defends + gemini blocks
+- Contested NEEDS CHANGES — codex defends + agy blocks
 - Strategic bets affecting 100+ modules
 - Curriculum scope decisions
 
 **OUT of scope**:
-- Per-PR review (current codex → gemini → merge pattern stays; would 3x latency)
+- Per-PR review (current codex → agy → merge pattern stays; would 3x latency)
 - One-line fixes (typos, dead URLs, redundant code lines — orchestrator fixes inline)
 - Single-module decisions
 - Decisions where agents will obviously converge
@@ -40,9 +40,9 @@ When `ab discuss` surfaces disagreement OR multi-option output, the orchestrator
 
 ```markdown
 ## DECISION REQUIRED — {question}
-**Agents:** claude, gemini, codex (R rounds)
+**Agents:** claude, agy, codex (R rounds)
 **Options:** A (proposed by ...), B (...), C (...)
-**Votes:** claude→A {rationale}; gemini→B {rationale}; codex→A {rationale}
+**Votes:** claude→A {rationale}; agy→B {rationale}; codex→A {rationale}
 **Disagreement:** {what they actually differ on}
 **Orchestrator recommendation:** A — {rationale 1-3 lines}
 **Awaiting:** user override or "go"
