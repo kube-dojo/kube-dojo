@@ -551,6 +551,30 @@ def test_structural_slug_order_change_is_allowed(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_flow_style_sidebar_label_requires_check(tmp_path: Path) -> None:
+    """Flow-style YAML `sidebar: { label: … }` inlines prose on the allowlisted
+    `sidebar` line — the `{`/`[` guard must keep the gate. (codex R2.)"""
+    base = "---\nsidebar: { label: Old visible label, order: 1 }\n---\n\nBody stays.\n"
+    head = "---\nsidebar: { label: New visible label, order: 1 }\n---\n\nBody stays.\n"
+    pr = {
+        "body": "## Summary\n\nReword the nav label.\n",
+        "files": [{"path": "src/content/docs/k8s/cka/pods.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs: reword nav label",
+        "number": 9108,
+    }
+    result = run_hook(
+        "gh pr merge 9108 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/k8s/cka/pods.md": head},
+        base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
 def test_gh_failure_fails_open(tmp_path: Path) -> None:
     # When `gh pr view` itself fails (auth, network, no PR on branch), the
     # hook must fail open — a quality gate should not trap the orchestrator
