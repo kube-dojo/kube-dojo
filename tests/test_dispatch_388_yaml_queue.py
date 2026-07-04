@@ -30,7 +30,7 @@ def test_yaml_queue_dispatch_writes_budget_sidecar_and_defaults_to_5000(tmp_path
 
     codex_result = MagicMock(ok=True, response="Opened PR: https://github.com/org/repo/pull/1")
     with patch.object(pilot, "dispatch_codex", return_value=codex_result) as mock_codex, \
-         patch.object(pilot, "dispatch_gemini_review", return_value=("VERDICT: APPROVE", "APPROVE")), \
+         patch.object(pilot, "dispatch_agy_review", return_value=("VERDICT: APPROVE", "APPROVE")), \
          patch.object(pilot, "merge_pr", return_value="abc123"), \
          patch.object(pilot, "dispatch_backfill", return_value=True), \
          patch.object(pilot, "make_worktree", return_value=tmp_path), \
