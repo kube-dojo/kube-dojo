@@ -195,13 +195,21 @@ def test_dispatch_smart_codex_review_no_worktree_required() -> None:
     assert "requires --worktree" not in merged_output
 
 
-def test_ci_guard_blocks_glm_but_allows_openrouter_deepseek(monkeypatch) -> None:
-    """The China-provider CI guard refuses GLM/z.ai but allows deepseek.
+def test_ci_marker_guard_matches_glm_markers_only_not_deepseek_slugs(monkeypatch) -> None:
+    """The marker guard fires on the GLM/z.ai markers and on nothing else here.
 
-    OpenRouter is a US-hosted proxy, so an OpenRouter-routed deepseek slug is
-    intentionally NOT China-blocked. The first-party ``deepseek`` slug is also
-    absent from the marker list (it is governed by the broader no-LLM-in-CI
-    policy, not this marker guard). Regression guard for #2240.
+    This asserts ONLY the mechanical behavior of ``_CI_BLOCKED_PROVIDER_MARKERS``
+    (GLM/z.ai/Zhipu direct-endpoint markers). It is NOT a residency claim:
+
+    - The ``deepseek/…`` (OpenRouter-slug) case merely shows the marker guard
+      does not match it. That is NOT an assertion that OpenRouter DeepSeek is
+      residency-safe — OpenRouter can still route to DeepSeek's China API unless
+      providers are pinned (see ``_resolve_provider`` in the deepseek adapter).
+    - The first-party ``deepseek-v4-pro`` case is China-hosted; it is absent from
+      the marker list and is governed by the broader no-LLM-in-CI policy, not by
+      this marker guard.
+
+    Regression guard for #2240.
     """
     sys.path.insert(0, str(SCRIPTS_DIR))
     import pytest
@@ -209,13 +217,13 @@ def test_ci_guard_blocks_glm_but_allows_openrouter_deepseek(monkeypatch) -> None
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
 
-    # GLM / z.ai local-only lane must be refused in CI.
+    # GLM / z.ai local-only lane carries a marker → refused in CI.
     with pytest.raises(SystemExit):
         guard_no_china_provider_in_ci("opencode", "zai-coding-plan/glm-5.2")
 
-    # OpenRouter-routed deepseek is US-hosted → must NOT be refused.
+    # Neither deepseek slug carries a China marker → guard does not fire.
+    # (Mechanical only; NOT a residency guarantee — see docstring.)
     guard_no_china_provider_in_ci("deepseek", "deepseek/deepseek-v3.2-exp")
-    # First-party deepseek slug also isn't in the marker list.
     guard_no_china_provider_in_ci("deepseek", "deepseek-v4-pro")
 
 
