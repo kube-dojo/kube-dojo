@@ -98,7 +98,7 @@ GEMINI_REVIEW_MODEL = "gemini-3.1-pro-preview"  # Pro for reviews — hallucinat
 GEMINI_FALLBACK_MODEL = "auto"
 # Reviews: NO gemini-family fallback. When the review model (gemini-3.1-pro-preview)
 # is rate-limited / capacity-out on every tier, return failure so the upstream
-# caller (e.g. scripts/quality/dispatch_388_pilot.py:dispatch_gemini_review)
+# caller (e.g. scripts/quality/dispatch_388_pilot.py:dispatch_agy_review)
 # can fall through to the cross-family claude-sonnet-4-6 path via
 # dispatch_claude_review.
 #

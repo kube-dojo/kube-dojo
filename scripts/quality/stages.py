@@ -187,10 +187,11 @@ def route_one(slug: str) -> None:
       ``ROUTED`` with track=structural.
     * Otherwise → ``ROUTED`` with track=rewrite.
 
-    Writer assignment is queue-driven (per #388 routing rule): Gemini
-    for beginner tracks, Codex for advanced, Claude as tertiary
-    fallback. Reviewer is the universal cross-family default — Claude
-    for any non-Claude writer, Codex when the writer is Claude.
+    Writer assignment is queue-driven (per #388 routing rule): agy (the
+    Google lane that replaced the retired gemini-cli, #2125) for beginner
+    tracks, Codex for advanced, Claude as tertiary fallback. Reviewer is
+    the universal cross-family default — Claude for any non-Claude writer,
+    agy when the writer is Claude.
     """
     # Phase 1 (no lease): read state + density + missing-section list to
     # decide the cleanup-only short-circuit. We skip ``queue.ensure_queued``
@@ -289,7 +290,10 @@ def route_one(slug: str) -> None:
         if claim_result.writer is None:
             return  # blocked, no transition; retry on next sweep
         agent, writer_model = queue.model_to_agent(claim_result.writer)
-        reviewer = "claude" if agent != "claude" else "gemini"
+        # Cross-family reviewer: claude reviews non-claude authors; when the
+        # author IS claude, route to agy (the Google lane that replaced the
+        # retired gemini-cli, #2125) so the review stays cross-family.
+        reviewer = "claude" if agent != "claude" else "agy"
 
         state.transition(
             st, "AUDITED", "ROUTED",

@@ -125,7 +125,7 @@ def test_main_chain_calls_backfill_after_merge_and_continues_on_failure(tmp_path
 
     with patch("scripts.quality.dispatch_388_pilot.make_worktree", return_value=tmp_path), \
          patch("scripts.quality.dispatch_388_pilot.dispatch_codex", return_value=codex_result), \
-         patch("scripts.quality.dispatch_388_pilot.dispatch_gemini_review", return_value=("VERDICT: APPROVE", "APPROVE")), \
+         patch("scripts.quality.dispatch_388_pilot.dispatch_agy_review", return_value=("VERDICT: APPROVE", "APPROVE")), \
          patch("scripts.quality.dispatch_388_pilot.merge_pr", return_value="abc123"), \
          patch("scripts.quality.dispatch_388_pilot.dispatch_backfill", side_effect=[False, True]) as mock_backfill, \
          patch("scripts.quality.dispatch_388_pilot.post_review_comment"), \
@@ -214,13 +214,14 @@ def test_dispatch_backfill_sha_regex_parses_ok_line():
 @pytest.mark.parametrize(
     ("primary", "expected"),
     [
-        ("claude", ["claude", "gemini", "qwen"]),
-        ("qwen", ["qwen", "gemini", "claude"]),
+        ("claude", ["claude", "agy", "qwen"]),
+        ("qwen", ["qwen", "agy", "claude"]),
         ("deepseek", ["deepseek", "claude", "qwen"]),
-        ("gemini", ["gemini", "claude", "qwen"]),
-        # #1350 Phase 1 carryover: agy is a peer-Google adapter post-2026-06-18
-        # and a viable primary reviewer; cascade skips gemini (shared OAuth)
-        # and falls to claude → qwen.
+        # gemini-cli is retired (#2125); a legacy "gemini" primary falls to the
+        # default cascade, which is now the agy (Google) lane → claude → qwen.
+        ("gemini", ["agy", "claude", "qwen"]),
+        # agy is the Google lane (replaced gemini-cli, #2125) and a viable
+        # primary reviewer; cascade falls to claude → qwen.
         ("agy", ["agy", "claude", "qwen"]),
     ],
 )
@@ -246,7 +247,7 @@ def test_dispatch_agy_review_uses_danger_mode(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(pilot, "invoke", fake_invoke)
     monkeypatch.setattr(pilot, "log", lambda _event: None)
-    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+    monkeypatch.setattr(pilot, "cross_family_review_prompt", lambda *_a, **_kw: "test prompt")
 
     text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-test")
 
@@ -295,7 +296,7 @@ def test_dispatch_agy_review_failure_paths(
 
     monkeypatch.setattr(pilot, "invoke", fake_invoke)
     monkeypatch.setattr(pilot, "log", lambda _event: None)
-    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+    monkeypatch.setattr(pilot, "cross_family_review_prompt", lambda *_a, **_kw: "test prompt")
 
     text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-fail")
 
@@ -314,7 +315,7 @@ def test_dispatch_agy_review_invoke_exception_returns_error(
 
     monkeypatch.setattr(pilot, "invoke", fake_invoke)
     monkeypatch.setattr(pilot, "log", lambda _event: None)
-    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+    monkeypatch.setattr(pilot, "cross_family_review_prompt", lambda *_a, **_kw: "test prompt")
 
     text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-exc")
 

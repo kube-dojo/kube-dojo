@@ -229,6 +229,23 @@ def test_route_rewrite_when_score_below_threshold(fake_repo, monkeypatch):
     assert st["reviewer"] == "claude"
 
 
+def test_route_reviewer_is_agy_when_author_is_claude(fake_repo, monkeypatch):
+    """When the queue assigns Claude as the writer, the cross-family reviewer
+    is agy (the Google lane that replaced the retired gemini-cli, #2125) — not
+    the dead gemini agent. Guards stages.route_one's reviewer selection (#2230)."""
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    # Force the queue to hand back a Claude author for this slug.
+    monkeypatch.setattr(
+        stages.queue, "model_to_agent",
+        lambda _writer: ("claude", "claude-opus-4-8"),
+    )
+    stages.route_one(slug)
+    st = state.load_state(slug)
+    assert st["writer"] == "claude"
+    assert st["reviewer"] == "agy"
+
+
 def test_route_skips_rewrite_when_score_high_and_structure_complete(fake_repo, monkeypatch):
     """Score ≥ 4.0 AND all structural sections present → CITATION_CLEANUP_ONLY."""
     slug = _bootstrap(fake_repo)

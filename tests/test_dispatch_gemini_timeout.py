@@ -231,7 +231,7 @@ def test_gemini_with_retry_review_no_gemini_fallback_on_exhaust():
     2026-05-16 multi-model calibration sweep (which measured flash at 0/2 lab
     bug-catch on PR #1229 + 0/2 on PR #1230 N=2 replication), reviews never
     fall back to a same-family cheaper-tier model. Instead, this function
-    returns False so the upstream caller (dispatch_388_pilot.dispatch_gemini_review)
+    returns False so the upstream caller (dispatch_388_pilot.dispatch_agy_review)
     can fall through to dispatch_claude_review (cross-family). See
     GEMINI_REVIEW_FALLBACK_MODEL docstring for full rationale."""
     assert dispatch.GEMINI_REVIEW_FALLBACK_MODEL is None, \
