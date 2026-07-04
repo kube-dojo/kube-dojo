@@ -143,6 +143,13 @@ def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
         key = _fm_key(line)
         if key is None or key not in _STRUCTURAL_FM_KEYS:
             return False  # learner-facing prose (title/description/…) or unknown
+        # Reject flow-style values that inline a nested mapping/sequence, e.g.
+        # `sidebar: { label: New visible label }` — the line's key is the
+        # allowlisted `sidebar`, but the inline `{…}` can carry prose (label).
+        # Structural values here are always scalars (a SHA, a slug, an int).
+        value = line.split(":", 1)[1] if ":" in line else ""
+        if "{" in value or "[" in value:
+            return False
     return True
 
 
