@@ -96,12 +96,31 @@ def _split_frontmatter(text: str) -> tuple[str | None, str]:
     return m.group(1), text[m.end():]
 
 
+# Frontmatter keys that are pure structure/routing — NOT learner-facing prose.
+# A change limited to these (plus an unchanged body) is metadata-only. Anything
+# else — `title`, `description`, `sidebar.label`, or any unrecognized key — is
+# learner-facing (rendered H1 / nav / search snippet) and must keep the gate.
+# Allowlist, not denylist: an unknown key fails safe toward requiring the check.
+_STRUCTURAL_FM_KEYS = frozenset({"en_commit", "slug", "order", "sidebar", "draft"})
+
+
+def _fm_key(line: str) -> str | None:
+    """The YAML key of a frontmatter line (`  order: 3` → `order`), or None if
+    the line carries no `key:` (blank, a bare list item, a continuation)."""
+    stripped = line.strip().lstrip("-").strip()
+    if ":" not in stripped:
+        return None
+    return stripped.split(":", 1)[0].strip().lower()
+
+
 def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
-    """True iff head differs from base ONLY in frontmatter metadata — i.e. the
-    body is byte-identical and no Cyrillic (translated prose) was added to the
-    frontmatter. Same rule as `scripts/quality/filter_content_changed.py`, but
-    blob-based (the hook has no working tree at the PR head). Fails toward
-    "real content" (False) whenever it cannot prove metadata-only."""
+    """True iff head differs from base ONLY in structural frontmatter metadata:
+    the body is text-identical (after the fetchers' newline normalization) AND
+    every added-or-removed frontmatter line carries a key in
+    `_STRUCTURAL_FM_KEYS` and no Cyrillic. Same intent as the CI-side twin
+    `scripts/quality/filter_content_changed.py`, but blob-based (the hook has no
+    working tree at head). Fails toward "real content" (False) whenever it
+    cannot prove the change is structure-only."""
     if base_text is None:
         return False  # new file → real content
     if base_text == head_text:
@@ -113,9 +132,17 @@ def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
     if base_body != head_body:
         return False  # body prose changed
     base_lines = set(base_fm.split("\n"))
-    for line in head_fm.split("\n"):
-        if line not in base_lines and _CYRILLIC_RE.search(line):
-            return False  # translated prose added inside frontmatter
+    head_lines = set(head_fm.split("\n"))
+    # Symmetric diff: lines added on the head side OR removed from the base side
+    # (so a DELETED `description:` is caught, not just an added one).
+    for line in (head_lines - base_lines) | (base_lines - head_lines):
+        if not line.strip():
+            continue  # pure blank-line shuffle
+        if _CYRILLIC_RE.search(line):
+            return False  # translated prose in frontmatter (any key)
+        key = _fm_key(line)
+        if key is None or key not in _STRUCTURAL_FM_KEYS:
+            return False  # learner-facing prose (title/description/…) or unknown
     return True
 
 
