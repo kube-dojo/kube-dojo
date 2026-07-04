@@ -34,17 +34,17 @@ Usage:
         --research-branch claude/394-ch06-research \
         --cap-words 5000 \
         --verdict-notes-pr 467 \
-        --phases gemini,codex            # default Codex pipeline
+        --phases agy,codex               # default Codex pipeline
 
     .venv/bin/python scripts/dispatch_chapter_prose.py 6 \
         --slug ch-06-the-cybernetics-movement \
         --research-branch claude/394-ch06-research \
         --cap-words 5000 \
         --verdict-notes-pr 467 \
-        --phases gemini,claude           # Claude-fallback pipeline
+        --phases agy,claude              # Claude-fallback pipeline
 
-Phases default to "gemini,codex" (the post-2026-04-29 pipeline). Use
-"gemini" alone to fire just the draft, "codex" or "claude" alone to
+Phases default to "agy,codex" (agy is the Google draft lane). Use
+"agy" alone to fire just the draft, "codex" or "claude" alone to
 expand a pre-drafted file.
 """
 from __future__ import annotations
@@ -164,8 +164,8 @@ this rule prevents the next batch from needing the same fix.
 """
 
 
-def gemini_prompt(*, slug: str, ch_num: int, cap_words: int,
-                  staged_paths: dict[str, str], prose_path: str) -> str:
+def agy_draft_prompt(*, slug: str, ch_num: int, cap_words: int,
+                     staged_paths: dict[str, str], prose_path: str) -> str:
     contract_listing = "\n".join(
         f"           - `{fn}` → `{p}`"
         for fn, p in staged_paths.items()
@@ -433,14 +433,15 @@ def fire_phase(*, agent: str, prompt: str, worktree: Path, task_id: str,
     from agent_runtime.runner import invoke
     from agent_runtime.errors import RateLimitedError, AgentTimeoutError
 
-    if agent == "gemini":
-        # gemini-3.1-pro-preview was unavailable on 2026-04-28 PM (server
-        # hung on both API key and OAuth paths). Override via
-        # KUBEDOJO_GEMINI_DRAFT_MODEL when pro capacity is out — sister
-        # var KUBEDOJO_GEMINI_REVIEW_MODEL exists in dispatch_prose_review.py.
+    if agent == "agy":
+        # agy pro draft lane (replaced the retired gemini-cli, #2125/#2230).
+        # Must be a valid agy model slug, NOT a gemini-cli model id. Override
+        # via KUBEDOJO_AGY_DRAFT_MODEL (legacy KUBEDOJO_GEMINI_DRAFT_MODEL still
+        # honored) — sister var KUBEDOJO_AGY_REVIEW_MODEL in dispatch_prose_review.py.
         import os
-        model = os.environ.get("KUBEDOJO_GEMINI_DRAFT_MODEL",
-                               "gemini-3.1-pro-preview")
+        model = (os.environ.get("KUBEDOJO_AGY_DRAFT_MODEL")
+                 or os.environ.get("KUBEDOJO_GEMINI_DRAFT_MODEL")
+                 or "gemini-3.1-pro-high")
         timeout = 2400
         mode = "workspace-write"
     elif agent == "codex":
@@ -510,9 +511,9 @@ def main() -> int:
     p.add_argument("--cap-words", type=int, required=True)
     p.add_argument("--verdict-notes-pr", type=int, default=None,
                    help="PR number to fetch codex+gemini verdict notes from")
-    p.add_argument("--phases", default="gemini,codex",
-                   help="comma-separated: gemini,codex (default post-2026-04-29) "
-                        "or gemini,claude (Claude-fallback) or any single phase")
+    p.add_argument("--phases", default="agy,codex",
+                   help="comma-separated: agy,codex (default; agy is the Google draft lane) "
+                        "or agy,claude (Claude-fallback) or any single phase")
     args = p.parse_args()
 
     verdicts = ""
@@ -540,16 +541,16 @@ def main() -> int:
 
     phases = [s.strip() for s in args.phases.split(",") if s.strip()]
     for phase in phases:
-        if phase == "gemini":
-            prompt = gemini_prompt(
+        if phase == "agy":
+            prompt = agy_draft_prompt(
                 slug=args.slug, ch_num=args.ch_num,
                 cap_words=args.cap_words, staged_paths=staged_paths,
                 prose_path=prose_path,
             )
-            log = Path(f"/tmp/prose-ch{args.ch_num:02d}-gemini.log")
+            log = Path(f"/tmp/prose-ch{args.ch_num:02d}-agy.log")
             ok = fire_phase(
-                agent="gemini", prompt=prompt, worktree=worktree,
-                task_id=f"prose-{args.slug}-gemini", log_path=log,
+                agent="agy", prompt=prompt, worktree=worktree,
+                task_id=f"prose-{args.slug}-agy", log_path=log,
                 prose_path=prose_path,
             )
             if not ok:

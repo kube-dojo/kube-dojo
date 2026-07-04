@@ -30,7 +30,7 @@ import fetch_citation  # noqa: E402
 from citation_backfill import (  # noqa: E402
     DispatcherUnavailable,
     dispatch_claude,
-    dispatch_gemini,
+    dispatch_agy,
     parse_agent_response,
 )
 from dispatch import dispatch_codex as dispatch_codex_cli  # noqa: E402
@@ -73,14 +73,14 @@ PHASE2_BUCKETS = (
 )
 
 
-def _dispatch_gemini_for_candidate(prompt: str) -> tuple[bool, str]:
-    """dispatch_gemini wrapper with the short per-finding timeout.
+def _dispatch_agy_for_candidate(prompt: str) -> tuple[bool, str]:
+    """dispatch_agy wrapper with the short per-finding timeout.
 
     Kept as the default dispatcher for request_candidates /
     resolve_module so research/inject paths in citation_backfill are
     unaffected by the pilot's per-finding budget.
     """
-    return dispatch_gemini(prompt, timeout=GEMINI_PER_FINDING_TIMEOUT)
+    return dispatch_agy(prompt, timeout=GEMINI_PER_FINDING_TIMEOUT)
 
 
 def _dispatch_claude_for_candidate(prompt: str) -> tuple[bool, str]:
@@ -98,7 +98,7 @@ def _dispatch_codex_for_residual(prompt: str) -> tuple[bool, str]:
 
 
 CANDIDATE_DISPATCHERS = {
-    "gemini": _dispatch_gemini_for_candidate,
+    "agy": _dispatch_agy_for_candidate,
     "claude": _dispatch_claude_for_candidate,
 }
 MIN_QUOTE_MATCH_LENGTH = 12
@@ -336,7 +336,7 @@ def head_check(
 def request_candidates(
     finding: dict[str, Any],
     *,
-    dispatcher=_dispatch_gemini_for_candidate,
+    dispatcher=_dispatch_agy_for_candidate,
     allowlist_tier=fetch_citation.allowlist_tier,
     head_checker=None,
 ) -> list[dict[str, Any]]:
@@ -653,7 +653,7 @@ def resolve_module(
     queue_path: Path,
     *,
     dry_run: bool = False,
-    dispatcher=_dispatch_gemini_for_candidate,
+    dispatcher=_dispatch_agy_for_candidate,
     fetcher=fetch_citation.fetch,
     cached_text_path=fetch_citation.cached_text_path,
     allowlist_tier=fetch_citation.allowlist_tier,
@@ -1408,10 +1408,10 @@ def main(argv: list[str] | None = None) -> int:
     p_resolve.add_argument(
         "--agent",
         choices=sorted(CANDIDATE_DISPATCHERS),
-        default="gemini",
+        default="agy",
         help=(
             "LLM backend for per-finding URL-candidate generation. "
-            "Default is gemini (historical). Use claude when Gemini is "
+            "Default is agy (historical). Use claude when agy is "
             "producing high false-timeout rates — see #373. The default "
             "budget differs per agent; both are short-prompt scoped and "
             "do not affect the research/inject write-path callers."

@@ -746,11 +746,11 @@ def _extract_bridge_response(stdout: str) -> tuple[bool, str]:
 GEMINI_DEFAULT_TIMEOUT = 900
 
 
-def dispatch_gemini(prompt: str, *, timeout: int = GEMINI_DEFAULT_TIMEOUT) -> tuple[bool, str]:
+def dispatch_agy(prompt: str, *, timeout: int = GEMINI_DEFAULT_TIMEOUT) -> tuple[bool, str]:
     cmd = [
         _VENV_PYTHON,
         str(REPO_ROOT / "scripts" / "dispatch.py"),
-        "gemini", "-", "--timeout", str(timeout),
+        "agy", "-", "--timeout", str(timeout),
     ]
     try:
         proc = subprocess.run(
@@ -1156,9 +1156,9 @@ def run_research(
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id)
         model = "gpt-5.3-codex-spark"  # codex default; bridge may override
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
-        model = "gemini-3-pro-preview"
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
+        model = "gemini-3.1-pro-high"
     else:
         raise ValueError(f"unknown agent: {agent}")
 
@@ -1926,8 +1926,8 @@ def run_inject(module_key: str, *, agent: str = "codex", dry_run: bool = False) 
     task_id = f"citation-inject-{normalized_key.replace('/', '-')}-{_dt.datetime.now(_dt.UTC).strftime('%Y%m%dT%H%M%SZ')}"
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id)
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         raise ValueError(f"unknown agent: {agent}")
     if not ok:
@@ -2054,7 +2054,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rp = subs.add_parser("research", help="Run the research step on one module")
     rp.add_argument("module_key", help="Module key under src/content/docs/")
-    rp.add_argument("--agent", default="codex", choices=["codex", "gemini"])
+    rp.add_argument("--agent", default="codex", choices=["codex", "agy"])
     rp.add_argument(
         "--section-pool-ref",
         help="Optional docs/citation-pools/<section>.json reference for shared sources",
@@ -2064,7 +2064,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ip = subs.add_parser("inject", help="Apply already-validated seed to one module")
     ip.add_argument("module_key", help="Module key under src/content/docs/")
-    ip.add_argument("--agent", default="codex", choices=["codex", "gemini"])
+    ip.add_argument("--agent", default="codex", choices=["codex", "agy"])
     ip.add_argument("--dry-run", action="store_true",
                     help="Print prompt + exit; no dispatch, no writes")
 

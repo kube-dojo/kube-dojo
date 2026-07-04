@@ -1120,16 +1120,16 @@ def test_candidate_dispatcher_passes_short_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The per-finding wrapper must forward GEMINI_PER_FINDING_TIMEOUT to
-    dispatch_gemini. Anchors the pilot's protection against a single
-    stuck Gemini call blocking the whole run."""
+    dispatch_agy. Anchors the pilot's protection against a single
+    stuck agy call blocking the whole run."""
     captured: dict[str, Any] = {}
 
     def fake_dispatch(prompt: str, *, timeout: int) -> tuple[bool, str]:
         captured["timeout"] = timeout
         return True, "{}"
 
-    monkeypatch.setattr(citation_residuals, "dispatch_gemini", fake_dispatch)
-    citation_residuals._dispatch_gemini_for_candidate("hi")
+    monkeypatch.setattr(citation_residuals, "dispatch_agy", fake_dispatch)
+    citation_residuals._dispatch_agy_for_candidate("hi")
     assert captured["timeout"] == citation_residuals.GEMINI_PER_FINDING_TIMEOUT
     assert captured["timeout"] <= 180
 
@@ -1137,7 +1137,7 @@ def test_candidate_dispatcher_passes_short_timeout(
 def test_resolve_module_default_dispatcher_is_short_timeout_wrapper() -> None:
     """Regression: the default dispatcher in resolve_module and
     request_candidates must be the short-timeout wrapper, not the
-    shared dispatch_gemini (which still defaults to 900s for
+    shared dispatch_agy (which still defaults to 900s for
     research/inject in citation_backfill and would reintroduce the
     15-min-per-finding hang if re-wired by accident)."""
     import inspect
@@ -1148,7 +1148,7 @@ def test_resolve_module_default_dispatcher_is_short_timeout_wrapper() -> None:
     ):
         sig = inspect.signature(fn)
         default = sig.parameters["dispatcher"].default
-        assert default is citation_residuals._dispatch_gemini_for_candidate, (
+        assert default is citation_residuals._dispatch_agy_for_candidate, (
             f"{fn.__name__} default dispatcher is {default!r}, expected "
             "the short-timeout wrapper"
         )
@@ -1161,10 +1161,10 @@ def test_candidate_dispatchers_registry_has_both_agents() -> None:
     """The --agent CLI choices must stay in sync with the wrapper
     registry. If either drifts the flag becomes a silent no-op for the
     missing agent."""
-    assert set(citation_residuals.CANDIDATE_DISPATCHERS) == {"gemini", "claude"}
+    assert set(citation_residuals.CANDIDATE_DISPATCHERS) == {"agy", "claude"}
     assert (
-        citation_residuals.CANDIDATE_DISPATCHERS["gemini"]
-        is citation_residuals._dispatch_gemini_for_candidate
+        citation_residuals.CANDIDATE_DISPATCHERS["agy"]
+        is citation_residuals._dispatch_agy_for_candidate
     )
     assert (
         citation_residuals.CANDIDATE_DISPATCHERS["claude"]
@@ -1269,7 +1269,7 @@ def test_main_resolve_routes_to_selected_agent(
 
     seen.clear()
     rc = citation_residuals.main(
-        ["resolve", "x/one", "--agent", "gemini", "--no-lock", "--dry-run"]
+        ["resolve", "x/one", "--agent", "agy", "--no-lock", "--dry-run"]
     )
     assert rc == 0
-    assert seen == [citation_residuals._dispatch_gemini_for_candidate]
+    assert seen == [citation_residuals._dispatch_agy_for_candidate]

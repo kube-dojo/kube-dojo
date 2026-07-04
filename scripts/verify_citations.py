@@ -30,7 +30,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from citation_backfill import (  # type: ignore  # noqa: E402
     CITED_DISPOSITIONS, DOCS_ROOT, REPO_ROOT,
-    dispatch_codex, dispatch_gemini, parse_agent_response,
+    dispatch_codex, dispatch_agy, parse_agent_response,
     resolve_claim_source_urls, resolve_module_path, seed_path_for,
     load_section_pool,
 )
@@ -133,8 +133,8 @@ def verify_claim(claim: dict[str, Any], *, agent: str,
     task_id = f"verify-{module_key.replace('/', '-')}-{claim_id}-{ts}"
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id)
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         return {"claim_id": claim_id, "verdict": "UNREADABLE",
                 "reason": f"unknown_agent:{agent}"}
@@ -152,7 +152,7 @@ def verify_claim(claim: dict[str, Any], *, agent: str,
     return parsed
 
 
-def run_verify(module_key: str, *, agent: str = "gemini",
+def run_verify(module_key: str, *, agent: str = "agy",
                dry_run: bool = False) -> dict[str, Any]:
     module_path = resolve_module_path(module_key)
     normalized_key = module_path.relative_to(DOCS_ROOT).with_suffix("").as_posix()
@@ -204,7 +204,7 @@ def run_verify(module_key: str, *, agent: str = "gemini",
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Gate B — semantic verification")
     p.add_argument("module_key")
-    p.add_argument("--agent", default="gemini", choices=["codex", "gemini"])
+    p.add_argument("--agent", default="agy", choices=["codex", "agy"])
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
     result = run_verify(args.module_key, agent=args.agent, dry_run=args.dry_run)

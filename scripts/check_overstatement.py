@@ -249,13 +249,13 @@ def llm_verdict(sentence: str, context: str, trigger: str,
                 agent: str = "codex", task_id: str | None = None) -> dict[str, Any]:
     # Lazy import to avoid pulling in heavy deps when --llm isn't used.
     from citation_backfill import (  # type: ignore
-        dispatch_codex, dispatch_gemini, parse_agent_response,
+        dispatch_codex, dispatch_agy, parse_agent_response,
     )
     prompt = build_llm_prompt(sentence, context, trigger)
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id or "overstatement-audit")
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         return {"verdict": "error", "reason": f"unknown_agent:{agent}"}
     if not ok:
@@ -356,7 +356,7 @@ def batched_llm_verdicts(candidates: list[dict[str, Any]], *,
     if not candidates:
         return []
     from citation_backfill import (  # type: ignore
-        dispatch_codex, dispatch_gemini, parse_agent_response,
+        dispatch_codex, dispatch_agy, parse_agent_response,
     )
     prompt = BATCH_LLM_PROMPT_TEMPLATE.format(
         count=len(candidates),
@@ -365,8 +365,8 @@ def batched_llm_verdicts(candidates: list[dict[str, Any]], *,
     )
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id or "overstatement-batch")
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         return [{"verdict": "error", "reason": f"unknown_agent:{agent}"}
                 for _ in candidates]
@@ -445,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("paths", nargs="+", help="module .md paths")
     p.add_argument("--llm", action="store_true",
                    help="dispatch each candidate to Codex for verdict")
-    p.add_argument("--agent", default="codex", choices=["codex", "gemini"])
+    p.add_argument("--agent", default="codex", choices=["codex", "agy"])
     p.add_argument("--json", action="store_true", help="emit JSON (default)")
     p.add_argument("--text", action="store_true",
                    help="emit human-readable table instead of JSON")

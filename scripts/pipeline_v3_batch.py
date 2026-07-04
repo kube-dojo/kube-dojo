@@ -35,8 +35,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="read module keys from FILE (one per line; '-' = stdin)")
     p.add_argument("--skip-research", action="store_true")
     p.add_argument("--no-auto-apply", action="store_true")
-    p.add_argument("--gate-agent", default="codex", choices=["codex", "gemini"])
-    p.add_argument("--coherence-agent", default="gemini", choices=["codex", "gemini"])
+    p.add_argument("--gate-agent", default="codex", choices=["codex", "agy"])
+    p.add_argument("--coherence-agent", default="agy", choices=["codex", "agy"])
     p.add_argument("--stop-on-failure", action="store_true",
                    help="abort the batch on the first non-clean module")
     args = p.parse_args(argv)
