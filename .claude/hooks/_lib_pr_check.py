@@ -143,12 +143,15 @@ def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
         key = _fm_key(line)
         if key is None or key not in _STRUCTURAL_FM_KEYS:
             return False  # learner-facing prose (title/description/…) or unknown
-        # Reject flow-style values that inline a nested mapping/sequence, e.g.
-        # `sidebar: { label: New visible label }` — the line's key is the
-        # allowlisted `sidebar`, but the inline `{…}` can carry prose (label).
-        # Structural values here are always scalars (a SHA, a slug, an int).
-        value = line.split(":", 1)[1] if ":" in line else ""
-        if "{" in value or "[" in value:
+        # The value must be a PLAIN SCALAR. A positive allowlist (not a
+        # blocklist of YAML indicators) closes the whole indirection class at
+        # once: flow maps `{…}`/`[…]`, aliases `*x`, anchors `&x`, tags `!x`,
+        # quotes, and trailing `#` comments all fail this match and keep the
+        # gate. Real structural values are a SHA, a slug path, an int, or a
+        # bool — plus empty for a bare block-parent `sidebar:` (its nested
+        # lines are checked on their own keys). Cyrillic already returned above.
+        value = line.split(":", 1)[1].strip() if ":" in line else ""
+        if not re.fullmatch(r"[A-Za-z0-9 ./_-]*", value):
             return False
     return True
 
