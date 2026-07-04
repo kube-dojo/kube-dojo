@@ -193,3 +193,38 @@ def test_dispatch_smart_codex_review_no_worktree_required() -> None:
     assert "worktree=(none — danger)" in result.stdout
     merged_output = (result.stdout or "") + (result.stderr or "")
     assert "requires --worktree" not in merged_output
+
+
+def test_ci_guard_blocks_glm_but_allows_openrouter_deepseek(monkeypatch) -> None:
+    """The China-provider CI guard refuses GLM/z.ai but allows deepseek.
+
+    OpenRouter is a US-hosted proxy, so an OpenRouter-routed deepseek slug is
+    intentionally NOT China-blocked. The first-party ``deepseek`` slug is also
+    absent from the marker list (it is governed by the broader no-LLM-in-CI
+    policy, not this marker guard). Regression guard for #2240.
+    """
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import pytest
+    from dispatch_smart import guard_no_china_provider_in_ci
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    # GLM / z.ai local-only lane must be refused in CI.
+    with pytest.raises(SystemExit):
+        guard_no_china_provider_in_ci("opencode", "zai-coding-plan/glm-5.2")
+
+    # OpenRouter-routed deepseek is US-hosted → must NOT be refused.
+    guard_no_china_provider_in_ci("deepseek", "deepseek/deepseek-v3.2-exp")
+    # First-party deepseek slug also isn't in the marker list.
+    guard_no_china_provider_in_ci("deepseek", "deepseek-v4-pro")
+
+
+def test_ci_guard_noop_outside_ci(monkeypatch) -> None:
+    """Outside CI the guard never fires, even for a China-hosted marker."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from dispatch_smart import guard_no_china_provider_in_ci
+
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    # No raise even for the GLM marker when not running in CI.
+    guard_no_china_provider_in_ci("opencode", "zai-coding-plan/glm-5.2")

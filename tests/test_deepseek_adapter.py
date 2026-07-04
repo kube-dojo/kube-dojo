@@ -87,6 +87,61 @@ def test_model_override(monkeypatch) -> None:
     assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek-v4-flash"
 
 
+def _provider_of(plan) -> str:
+    return plan.cmd[plan.cmd.index("--provider") + 1]
+
+
+def _build(monkeypatch, *, model=None, tool_config=None):
+    monkeypatch.setattr("agent_runtime.adapters.deepseek.shutil.which", lambda _: "hermes")
+    return DeepSeekAdapter().build_invocation(
+        prompt="p",
+        mode="read-only",
+        cwd=Path("/tmp"),
+        model=model,
+        task_id=None,
+        session_id=None,
+        tool_config=tool_config,
+    )
+
+
+def test_provider_default_is_first_party_deepseek(monkeypatch) -> None:
+    """No override + bare first-party slug → China-hosted ``deepseek`` provider."""
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    plan = _build(monkeypatch)
+    assert _provider_of(plan) == "deepseek"
+    assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek-v4-pro"
+
+
+def test_provider_openrouter_inferred_from_slug(monkeypatch) -> None:
+    """An OpenRouter-style ``vendor/model`` slug routes via ``openrouter``."""
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    plan = _build(monkeypatch, model="deepseek/deepseek-v3.2-exp")
+    assert _provider_of(plan) == "openrouter"
+    # The slug is forwarded verbatim to hermes -m.
+    assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek/deepseek-v3.2-exp"
+
+
+def test_provider_explicit_tool_config_wins(monkeypatch) -> None:
+    """Explicit tool_config provider is honored even with a first-party slug."""
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    plan = _build(monkeypatch, tool_config={"provider": "openrouter"})
+    assert _provider_of(plan) == "openrouter"
+
+
+def test_provider_env_override(monkeypatch) -> None:
+    """KUBEDOJO_HERMES_PROVIDER selects the provider for a default dispatch."""
+    monkeypatch.setenv("KUBEDOJO_HERMES_PROVIDER", "openrouter")
+    plan = _build(monkeypatch)
+    assert _provider_of(plan) == "openrouter"
+
+
+def test_provider_explicit_beats_env(monkeypatch) -> None:
+    """Explicit tool_config provider takes precedence over the env override."""
+    monkeypatch.setenv("KUBEDOJO_HERMES_PROVIDER", "openrouter")
+    plan = _build(monkeypatch, tool_config={"provider": "deepseek"})
+    assert _provider_of(plan) == "deepseek"
+
+
 def test_parse_response_strips_hermes_banner() -> None:
     adapter = DeepSeekAdapter()
     result = adapter.parse_response(
