@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run Ukrainian Russicism gate
+      - name: Compute changed Ukrainian files (drop metadata-only)
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -30,25 +30,41 @@ jobs:
           mapfile -t CHANGED_FILES < <(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
 
           if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
-            echo "No changed Ukrainian docs files detected; skipping russicism gate."
+            echo "No changed Ukrainian docs files detected."
+            : > "$RUNNER_TEMP/uk_content_files.txt"
             exit 0
           fi
 
-          echo "Checking ${#CHANGED_FILES[@]} changed Ukrainian files"
-          for path in "${CHANGED_FILES[@]}"; do
-            echo "- $path"
-          done
+          echo "Changed Ukrainian files: ${#CHANGED_FILES[@]}"
+          # Drop files whose diff only touches frontmatter metadata (e.g. the
+          # en_commit provenance backfill, #2237). The gates full-scan every file
+          # they receive, so re-scanning a metadata-only touch would surface a
+          # translation's PRE-EXISTING russicisms/structural issues that the PR
+          # never introduced. Both downstream gates read the filtered list.
+          python3 scripts/quality/filter_content_changed.py \
+            --base-ref "origin/${BASE_REF}" "${CHANGED_FILES[@]}" \
+            > "$RUNNER_TEMP/uk_content_files.txt"
 
-          python3 scripts/quality/check_uk_changed.py "${CHANGED_FILES[@]}"
+          CONTENT_COUNT=$(grep -c . "$RUNNER_TEMP/uk_content_files.txt" || true)
+          echo "Content-changed after metadata filter: ${CONTENT_COUNT}"
+          sed 's/^/- /' "$RUNNER_TEMP/uk_content_files.txt"
+
+      - name: Run Ukrainian Russicism gate
+        run: |
+          set -euo pipefail
+          mapfile -t CONTENT_FILES < "$RUNNER_TEMP/uk_content_files.txt"
+          if [ ${#CONTENT_FILES[@]} -eq 0 ]; then
+            echo "No content-changed Ukrainian files; skipping russicism gate."
+            exit 0
+          fi
+          python3 scripts/quality/check_uk_changed.py "${CONTENT_FILES[@]}"
 
       - name: Run calque detector (v2 — structural FAIL, calque advisory)
-        env:
-          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          mapfile -t CHANGED_FILES < <(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
-          if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
-            echo "No changed UK files; skipping calque detector."
+          mapfile -t CONTENT_FILES < "$RUNNER_TEMP/uk_content_files.txt"
+          if [ ${#CONTENT_FILES[@]} -eq 0 ]; then
+            echo "No content-changed UK files; skipping calque detector."
             exit 0
           fi
-          python3 scripts/checks/uk_calque_v2.py "${CHANGED_FILES[@]}"
+          python3 scripts/checks/uk_calque_v2.py "${CONTENT_FILES[@]}"
