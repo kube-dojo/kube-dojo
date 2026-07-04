@@ -1,5 +1,9 @@
 """Regression tests for scripts/quality/filter_content_changed.py.
 
+Guards the UK-quality-gate collision surfaced by the #2237 en_commit provenance
+backfill: a metadata-only frontmatter touch must not re-scan an untouched
+translation (fixed in PR #2238), while real content changes must still be gated.
+
 Drives a throwaway git repo so the git-diff plumbing is exercised end-to-end.
 """
 from __future__ import annotations
