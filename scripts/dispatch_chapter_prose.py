@@ -435,13 +435,12 @@ def fire_phase(*, agent: str, prompt: str, worktree: Path, task_id: str,
 
     if agent == "agy":
         # agy pro draft lane (replaced the retired gemini-cli, #2125/#2230).
-        # Must be a valid agy model slug, NOT a gemini-cli model id. Override
-        # via KUBEDOJO_AGY_DRAFT_MODEL (legacy KUBEDOJO_GEMINI_DRAFT_MODEL still
-        # honored) — sister var KUBEDOJO_AGY_REVIEW_MODEL in dispatch_prose_review.py.
+        # Must be a valid agy model slug, NOT a gemini-cli model id. Override via
+        # KUBEDOJO_AGY_DRAFT_MODEL. The legacy KUBEDOJO_GEMINI_DRAFT_MODEL is
+        # intentionally NOT honored — it would inject a retired gemini-cli slug.
+        # Sister var KUBEDOJO_AGY_REVIEW_MODEL in dispatch_prose_review.py.
         import os
-        model = (os.environ.get("KUBEDOJO_AGY_DRAFT_MODEL")
-                 or os.environ.get("KUBEDOJO_GEMINI_DRAFT_MODEL")
-                 or "gemini-3.1-pro-high")
+        model = os.environ.get("KUBEDOJO_AGY_DRAFT_MODEL", "gemini-3.1-pro-high")
         timeout = 2400
         mode = "workspace-write"
     elif agent == "codex":
@@ -554,7 +553,7 @@ def main() -> int:
                 prose_path=prose_path,
             )
             if not ok:
-                print("[main] Gemini phase FAILED, stopping pipeline")
+                print("[main] agy phase FAILED, stopping pipeline")
                 return 2
         elif phase == "codex":
             prompt = codex_prompt(

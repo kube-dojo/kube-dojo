@@ -1114,7 +1114,7 @@ def main(argv: list[str] | None = None) -> int:
     p_backfill.add_argument("--module", action="append", default=[], help="filter by a single slug (repeatable)")
     p_backfill.add_argument(
         "--agent",
-        choices=("codex", "gemini"),
+        choices=("codex", "agy"),
         default=None,
         help="override the agent used by citation_backfill",
     )
