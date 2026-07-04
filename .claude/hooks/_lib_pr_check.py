@@ -90,36 +90,30 @@ def _split_frontmatter(text: str) -> tuple[str | None, str]:
     return m.group(1), text[m.end():]
 
 
-# Frontmatter keys whose lines are pure provenance/structure metadata — safe to
-# ignore when deciding whether a content PR changed teaching prose. Deliberately
-# MINIMAL: only `en_commit` (the #2237 provenance backfill this hook change
-# targets). EVERYTHING else — title, description, slug, sidebar/nav labels and
-# ordering — is compared verbatim and IN ORDER, so any edit, reorder, or
-# reparent keeps the learner check. Extend this set only with a top-level scalar
-# key that provably cannot carry (or reorder) learner-facing prose.
-_METADATA_ONLY_FM_KEYS = frozenset({"en_commit"})
-
-
-def _fm_key(line: str) -> str | None:
-    """The YAML key of a frontmatter line (`  order: 3` → `order`), or None if
-    the line carries no `key:` (blank, a bare list item, a continuation)."""
-    stripped = line.strip().lstrip("-").strip()
-    if ":" not in stripped:
-        return None
-    return stripped.split(":", 1)[0].strip().lower()
+# The ONLY frontmatter line that is ignorable metadata: a TOP-LEVEL (column-0)
+# `en_commit:` provenance field (the #2237 backfill this hook change targets).
+# Anchored at start of line ON PURPOSE — an INDENTED `en_commit:` is not a key
+# but the block-scalar CONTENT of a prose field (e.g. `description: |`), so it
+# must NOT be stripped or a description edit could hide behind it (codex R5).
+# Deliberately minimal: title, description, slug, sidebar/nav labels + ordering
+# are all compared verbatim and IN ORDER, so any edit/reorder/reparent keeps the
+# learner check. `en_commit` is a SHA and is never learner-facing.
+_METADATA_ONLY_LINE_RE = re.compile(r"^en_commit\s*:")
 
 
 def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
-    """True iff head differs from base ONLY in allowlisted provenance metadata.
+    """True iff head differs from base ONLY in top-level `en_commit:` provenance.
 
     The body must be text-identical (after the fetchers' newline normalization)
-    AND the frontmatter, with only `_METADATA_ONLY_FM_KEYS` lines removed, must
-    be byte-identical AND IN THE SAME ORDER. Order-sensitive is the point: a
-    moved or reparented prose line (e.g. a swapped `sidebar.label`) changes the
-    ordered remainder and keeps the gate — a set/line diff cannot see that.
-    Fails toward "real content" (False) whenever it cannot prove metadata-only.
-    Blob-based (the hook has no working tree at head); same intent as the
-    CI-side twin `scripts/quality/filter_content_changed.py`."""
+    AND the frontmatter, with only top-level `en_commit:` lines removed, must be
+    byte-identical AND IN THE SAME ORDER. Order-sensitive is the point: a moved
+    or reparented prose line (e.g. a swapped `sidebar.label`) changes the ordered
+    remainder and keeps the gate — a set/line diff cannot see that. This is an
+    exact characterization: the only degree of freedom is top-level en_commit
+    lines, so no learner-facing frontmatter change can pass. Fails toward "real
+    content" (False) whenever it cannot prove metadata-only. Blob-based (the hook
+    has no working tree at head); same intent as the CI-side twin
+    `scripts/quality/filter_content_changed.py`."""
     if base_text is None:
         return False  # new file → real content
     if base_text == head_text:
@@ -132,7 +126,7 @@ def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
         return False  # body prose changed
 
     def _remainder(fm: str) -> list[str]:
-        return [ln for ln in fm.split("\n") if _fm_key(ln) not in _METADATA_ONLY_FM_KEYS]
+        return [ln for ln in fm.split("\n") if not _METADATA_ONLY_LINE_RE.match(ln)]
 
     return _remainder(base_fm) == _remainder(head_fm)
 
