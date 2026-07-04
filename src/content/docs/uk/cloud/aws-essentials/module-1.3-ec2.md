@@ -3,6 +3,7 @@ title: "Модуль 1.3: Elastic Compute Cloud (EC2) та основи обчи
 slug: uk/cloud/aws-essentials/module-1.3-ec2
 sidebar:
   order: 4
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 1.2
 

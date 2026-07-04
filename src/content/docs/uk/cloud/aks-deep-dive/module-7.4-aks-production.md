@@ -3,6 +3,7 @@ title: "Модуль 7.4: AKS у продакшні — Сховища, Спос
 slug: uk/cloud/aks-deep-dive/module-7.4-aks-production
 sidebar:
   order: 5
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 7.1 (Архітектура AKS)
 

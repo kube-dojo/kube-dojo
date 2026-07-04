@@ -3,6 +3,7 @@ title: "Модуль 10.6: Мультихмарний провіженінг з 
 slug: uk/cloud/enterprise-hybrid/module-10.6-cluster-api
 sidebar:
   order: 7
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Управління мультихмарним флотом (Модуль 10.5), Custom Resources у Kubernetes, основи Infrastructure as Code
 

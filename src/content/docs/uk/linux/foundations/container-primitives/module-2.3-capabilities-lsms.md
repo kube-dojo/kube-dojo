@@ -3,6 +3,7 @@ title: "Модуль 2.3: Capabilities та модулі безпеки (LSM)"
 slug: uk/linux/foundations/container-primitives/module-2.3-capabilities-lsms
 sidebar:
   order: 4
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Основи системи** | Складність: `[MEDIUM]` | Час: 25–30 хв
 

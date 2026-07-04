@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 1
   content_sha: "34cec570a46fdc984087785a2f2587bf01f50b73a75dcd41280401bed29f8fea"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Основи CI/CD, пакування застосунків з Helm та Kustomize, та стратегії випуску.
 

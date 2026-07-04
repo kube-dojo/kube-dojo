@@ -3,6 +3,7 @@ title: "Модуль 1.2: Virtual Private Cloud (VPC) та основні мер
 slug: uk/cloud/aws-essentials/module-1.2-vpc
 sidebar:
   order: 3
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 1.1, Мережі Linux
 

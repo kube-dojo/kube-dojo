@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "8d827ae6b9ca59caa9c809f7aeb03f8366f5603b0bd7ed04a57825dbc587cf7a"
+en_commit: ff4da3149e1a73385b64d44f4474388be845892f
 ---
 > **Kubernetes and Cloud Native Security Associate** - Сертифікація початкового рівня з основ безпеки хмарних технологій
 

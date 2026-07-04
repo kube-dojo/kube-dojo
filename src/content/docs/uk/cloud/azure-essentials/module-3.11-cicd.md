@@ -3,6 +3,7 @@ title: "Модуль 3.11: CI/CD: Azure DevOps та GitHub Actions"
 slug: uk/cloud/azure-essentials/module-3.11-cicd
 sidebar:
   order: 12
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 3.6 (ACR), Модуль 3.7 (Container Apps), Модуль 3.1 (Entra ID)
 

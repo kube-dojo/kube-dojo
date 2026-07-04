@@ -3,6 +3,7 @@ title: "Модуль 4.4: Cloud-Native мережі та топології VPC"
 slug: uk/cloud/architecture-patterns/module-4.4-vpc-topologies
 sidebar:
   order: 5
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3.5 год | **Передумови**: Модуль 4.1 (Керований vs Власний Kubernetes), Модуль 4.2 (Мультикластер)
 

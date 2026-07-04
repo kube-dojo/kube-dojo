@@ -3,6 +3,7 @@ title: "Модуль 3.12: Основи ARM та Bicep"
 slug: uk/cloud/azure-essentials/module-3.12-bicep
 sidebar:
   order: 13
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 1.5 год | **Передумови**: Модуль 3.1 (Entra ID), базовий Azure CLI
 

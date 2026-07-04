@@ -3,6 +3,7 @@ title: "Дисципліна Release Engineering"
 sidebar:
   order: 1
   label: "Release Engineering"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Як надійно доставляти програмне забезпечення у масштабі.**
 

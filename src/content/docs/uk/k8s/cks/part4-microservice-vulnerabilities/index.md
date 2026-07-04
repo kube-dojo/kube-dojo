@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "afa807c814dcdc46e71d1ec1df775dfdcf47418b218bffa34389b111b0fa5354"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Мінімізація вразливостей мікросервісів за допомогою контекстів безпеки, Pod Security Admission, управління секретами та ізоляції середовища виконання.

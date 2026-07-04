@@ -3,6 +3,7 @@ title: "Модуль 9.2: Керовані брокери повідомлень
 slug: uk/cloud/managed-services/module-9.2-message-brokers
 sidebar:
   order: 3
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 9.1 (Інтеграція реляційних БД), основи Kubernetes Deployments
 

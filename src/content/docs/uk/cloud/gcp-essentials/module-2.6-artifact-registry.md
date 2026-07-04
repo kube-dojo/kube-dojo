@@ -3,6 +3,7 @@ title: "Модуль 2.6: GCP Artifact Registry"
 slug: uk/cloud/gcp-essentials/module-2.6-artifact-registry
 sidebar:
   order: 7
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 1 год | **Передумови**: Модуль 2.1 (IAM та ієрархія ресурсів)
 

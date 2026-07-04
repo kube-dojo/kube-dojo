@@ -3,6 +3,7 @@ title: "Модуль 1.9: Управління секретами та конф�
 slug: uk/cloud/aws-essentials/module-1.9-secrets
 sidebar:
   order: 10
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність:** `[MEDIUM]` | **Час на виконання:** 1.5 години | **Трек:** Основи AWS DevOps
 

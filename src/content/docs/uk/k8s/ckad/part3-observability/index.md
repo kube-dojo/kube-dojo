@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "18333ecf5d3b135aff45826fe96e26d584f4612638ea85250237ee92a4cecbcf"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Спостерігайте, моніторте та налагоджуйте застосунки, що працюють у Kubernetes, за допомогою проб, логування, метрик та обробки застарілих API.

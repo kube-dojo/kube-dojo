@@ -3,6 +3,7 @@ title: "Модуль 1.12: Інфраструктура як код в AWS"
 slug: uk/cloud/aws-essentials/module-1.12-cloudformation
 sidebar:
   order: 13
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність:** `[MEDIUM]` | **Час на виконання:** 1.5 години | **Трек:** Основи AWS DevOps
 

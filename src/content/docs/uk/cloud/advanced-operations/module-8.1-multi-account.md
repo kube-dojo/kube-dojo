@@ -3,6 +3,7 @@ title: "Модуль 8.1: Мульти-акаунт архітектура та 
 slug: uk/cloud/advanced-operations/module-8.1-multi-account
 sidebar:
   order: 2
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Архітектурні патерни хмар, знайомство хоча б з одним гіперскейлером (AWS, GCP або Azure)
 

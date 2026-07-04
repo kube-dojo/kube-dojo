@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "9131e4e5d31dd47b73ba89d6984ae30e50dc5f1231693aefe536edff66ac4185"
+en_commit: 7c2d42a3825906bacc527d9b4edf210be04aed88
 ---
 
 # Історія ШІ

@@ -3,6 +3,7 @@ title: "Набір інструментів сховищ Kubernetes"
 sidebar:
   order: 1
   label: "Сховища"
+en_commit: 9da37a1d6ab83bf907291b9eb4d153ce184f73c3
 ---
 > **Трек інструментів** | 3 модулі | ~2.5 години загалом
 

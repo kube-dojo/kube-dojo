@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "d6e53c00c675c09cdf347d67914b4b63fceb1d0868a130055b2f848e06f9be7a"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Публікуйте застосунки та контролюйте мережевий трафік за допомогою Сервісів, ресурсів Ingress та NetworkPolicies.

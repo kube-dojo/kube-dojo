@@ -3,6 +3,7 @@ title: "Модуль 8.2: Просунуті хмарні мережі та тр
 slug: uk/cloud/advanced-operations/module-8.2-transit-hubs
 sidebar:
   order: 3
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Мульти-акаунт архітектура (Модуль 8.1), основи VPC/VNet та CIDR
 

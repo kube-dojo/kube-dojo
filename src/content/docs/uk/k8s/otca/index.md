@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "1d58722b079dec2193d74965bcbcd37bc66961016199981e5c4042816715d93a"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 > **Іспит із множинним вибором** | 90 хвилин | Прохідний бал: 75% | $250 USD | **Сертифікація CNCF**
 

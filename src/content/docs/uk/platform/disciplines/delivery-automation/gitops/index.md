@@ -3,6 +3,7 @@ title: "Дисципліна GitOps"
 sidebar:
   order: 1
   label: "GitOps"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 > Git як єдине джерело істини для інфраструктури та застосунків.
 

@@ -3,6 +3,7 @@ title: "Дисципліна DevSecOps"
 sidebar:
   order: 1
   label: "DevSecOps"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 > **Прикладна дисципліна** | 6 модулів | ~4 години загалом
 

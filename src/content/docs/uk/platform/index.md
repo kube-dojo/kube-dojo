@@ -3,6 +3,7 @@ title: "Трек Platform Engineering"
 sidebar:
   order: 1
   label: "Platform Engineering"
+en_commit: 01f46771f9f0d66255248d6220e72c5a84149417
 ---
 > **За межами сертифікацій** — глибокі знання практиків SRE, Platform Engineering, DevSecOps та MLOps.
 

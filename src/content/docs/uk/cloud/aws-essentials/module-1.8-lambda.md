@@ -3,6 +3,7 @@ title: "Модуль 1.8: AWS Lambda та безсерверні патерни"
 slug: uk/cloud/aws-essentials/module-1.8-lambda
 sidebar:
   order: 9
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 ## Складність: [MEDIUM]
 ## Час на виконання: 2 години

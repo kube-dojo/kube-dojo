@@ -9,6 +9,7 @@ lab:
   duration: "30 min"
   difficulty: intermediate
   environment: ubuntu
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Операції — LFCS** | Складність: `[MEDIUM]` | Час: 40–50 хв
 

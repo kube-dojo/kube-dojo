@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "d2d704060a74fb5ec17fe82121b9bad6586a3daf69f6bf126d1b3238ffa559b4"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Найбільший домен іспиту. Охоплює що таке Kubernetes, його архітектуру, основні ресурси та базове налагодження.
 

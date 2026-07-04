@@ -3,6 +3,7 @@ title: "Модуль 10.3: Безперервний комплаєнс та CSPM
 slug: uk/cloud/enterprise-hybrid/module-10.3-compliance
 sidebar:
   order: 4
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2 год | **Передумови**: Хмарне управління та Політика як код (Модуль 10.2), основи безпеки Kubernetes
 

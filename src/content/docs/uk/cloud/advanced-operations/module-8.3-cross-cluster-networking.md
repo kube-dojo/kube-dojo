@@ -3,6 +3,7 @@ title: "Модуль 8.3: Мережева взаємодія між класт�
 slug: uk/cloud/advanced-operations/module-8.3-cross-cluster-networking
 sidebar:
   order: 4
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Просунуті хмарні мережі (Модуль 8.2), знання Kubernetes Services та Ingress
 

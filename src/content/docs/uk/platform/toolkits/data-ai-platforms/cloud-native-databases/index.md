@@ -3,6 +3,7 @@ title: "Набір інструментів Cloud-Native баз даних"
 sidebar:
   order: 1
   label: "Cloud-Native БД"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 > **Трек інструментів** | 5 модулів | ~4 години загалом
 

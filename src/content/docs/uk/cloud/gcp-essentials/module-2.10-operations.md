@@ -3,6 +3,7 @@ title: "Модуль 2.10: GCP Cloud Operations (Моніторинг та Ло�
 slug: uk/cloud/gcp-essentials/module-2.10-operations
 sidebar:
   order: 11
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 2.3 (Compute Engine), Модуль 2.7 (Cloud Run)
 

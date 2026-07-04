@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 7
   content_sha: "9f14fa5987118025b34525ea9e089d635746a8383c464c0b2aee175a9aab902d"
+en_commit: 800195225743c0da61da38daa63f2c80f50a6bef
 ---
 > **Certified Kubernetes Security Specialist** — Продемонструйте свою здатність захищати контейнеризовані застосунки та платформи Kubernetes
 

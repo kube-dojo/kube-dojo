@@ -3,6 +3,7 @@ title: "Дисципліна Chaos Engineering"
 sidebar:
   order: 1
   label: "Chaos Engineering"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Проактивне впровадження відмов для побудови стійких систем.**
 

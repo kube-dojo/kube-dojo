@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 5
   content_sha: "6718381576d21e2fee9a36ad432d7995b91318aff48e47b4a69ca8020db1edc6"
+en_commit: ff4da3149e1a73385b64d44f4474388be845892f
 ---
 > **Kubernetes and Cloud Native Associate** - Сертифікація початкового рівня з основ Cloud Native
 

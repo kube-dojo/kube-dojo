@@ -3,6 +3,7 @@ title: "Модуль 7.1: Архітектура AKS та управління �
 slug: uk/cloud/aks-deep-dive/module-7.1-aks-architecture
 sidebar:
   order: 2
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Основи Azure, Архітектурні патерни хмар
 

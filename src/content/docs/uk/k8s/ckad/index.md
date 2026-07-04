@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "a7a10773951a2535d31f71338d3920033fc04451778e95b99611362982a2a704"
+en_commit: 800195225743c0da61da38daa63f2c80f50a6bef
 ---
 > **Certified Kubernetes Application Developer** — Продемонструйте свою здатність проєктувати, створювати та розгортати хмарні застосунки на Kubernetes
 

@@ -3,6 +3,7 @@ title: "Дисципліна FinOps"
 sidebar:
   order: 1
   label: "FinOps"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Перетворіть хмарні витрати на пріоритетне інженерне питання.**
 

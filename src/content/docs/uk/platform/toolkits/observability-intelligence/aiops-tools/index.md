@@ -3,6 +3,7 @@ title: "Набір інструментів AIOps"
 sidebar:
   order: 1
   label: "Інструменти AIOps"
+en_commit: 9da37a1d6ab83bf907291b9eb4d153ce184f73c3
 ---
 > **Трек інструментів** | 4 модулі | ~3 години загалом
 

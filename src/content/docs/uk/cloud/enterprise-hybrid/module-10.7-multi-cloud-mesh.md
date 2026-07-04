@@ -3,6 +3,7 @@ title: "Модуль 10.7: Мультихмарний Service Mesh (Istio Multi-
 slug: uk/cloud/enterprise-hybrid/module-10.7-multi-cloud-mesh
 sidebar:
   order: 8
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Мережі Kubernetes, основи Service Mesh, Гібридна хмарна архітектура (Модуль 10.4)
 

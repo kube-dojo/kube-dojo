@@ -3,6 +3,7 @@ title: "Дисципліна Data Engineering на Kubernetes"
 sidebar:
   order: 1
   label: "Data Engineering"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Запуск інфраструктури даних на Kubernetes — бази даних, черги, потокова обробка та аналітика.**
 

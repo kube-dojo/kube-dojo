@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "587aba537cb32ef8148410883e6f60eb83c5b24bb3140b65798c7ad9f1ab2b3a"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Безпечне налаштування кластера, включаючи мережеві політики, CIS benchmarks, зміцнення ingress та захист метаданих вузлів.

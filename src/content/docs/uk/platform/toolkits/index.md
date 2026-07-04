@@ -2,6 +2,7 @@
 title: "Набори інструментів"
 sidebar:
   order: 1
+en_commit: 6cb611e76014f79a2243a94868193189607ac4d6
 ---
 > **Поточні інструменти для platform engineering** — практичні посібники з найважливіших cloud-native інструментів
 

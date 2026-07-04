@@ -3,6 +3,7 @@ title: "Модуль 1.7: Elastic Container Service (ECS) та Fargate"
 slug: uk/cloud/aws-essentials/module-1.7-ecs-fargate
 sidebar:
   order: 8
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 ## Складність: [COMPLEX]
 ## Час на виконання: 3 години

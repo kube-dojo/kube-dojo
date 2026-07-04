@@ -3,6 +3,7 @@ title: "Модуль 5.3: Ідентифікація в EKS: IRSA vs Pod Identit
 slug: uk/cloud/eks-deep-dive/module-5.3-eks-identity
 sidebar:
   order: 4
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [QUICK] | **Час на виконання**: 1.5 год | **Передумови**: Модуль 5.1 (Архітектура та Control Plane EKS)
 

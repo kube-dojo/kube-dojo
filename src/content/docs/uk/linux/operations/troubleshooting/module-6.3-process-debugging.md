@@ -9,6 +9,7 @@ lab:
   duration: "35 min"
   difficulty: advanced
   environment: ubuntu
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Вирішення проблем** | Складність: `[COMPLEX]` | Час: 30–35 хв
 
