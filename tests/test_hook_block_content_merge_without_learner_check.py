@@ -30,6 +30,7 @@ def run_hook(
     pr_json: dict | None,
     fixture_files: dict[str, str] | None,
     tmp_path: Path,
+    base_fixture_files: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
@@ -44,6 +45,13 @@ def run_hook(
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(contents)
         env["KUBEDOJO_HOOK_FILE_FIXTURE_DIR"] = str(fixture_dir)
+    if base_fixture_files is not None:
+        base_dir = tmp_path / "base_fixtures"
+        for rel, contents in base_fixture_files.items():
+            target = base_dir / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(contents)
+        env["KUBEDOJO_HOOK_BASE_FIXTURE_DIR"] = str(base_dir)
     payload = {
         "tool_name": "Bash",
         "tool_input": {"command": command, "cwd": str(tmp_path)},
@@ -359,6 +367,117 @@ def test_no_pr_ref_resolves_cwd_via_cd_segments(tmp_path: Path) -> None:
     assert recorded == str(worktree.resolve()), (
         f"Expected gh invoked from worktree {worktree.resolve()}, got {recorded!r}"
     )
+
+
+# --- metadata-only awareness (#2237 gate-collision follow-up) -----------------
+
+_META_BASE = (
+    "---\ntitle: Модуль 8.2\nslug: uk/cloud/x\nsidebar:\n  order: 3\n---\n\n"
+    "Тіло документа, яке не змінюється у цьому PR. Достатньо довгий рядок.\n"
+)
+# same body, one ASCII `en_commit` provenance line added to frontmatter
+_META_HEAD = _META_BASE.replace(
+    "  order: 3\n---",
+    "  order: 3\nen_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869\n---",
+)
+
+
+def test_metadata_only_content_change_is_allowed(tmp_path: Path) -> None:
+    """An en_commit-style frontmatter-only touch changes no teaching prose, so
+    no Learner check section is required."""
+    pr = {
+        "body": "## Summary\n\nBackfill en_commit provenance.\n",
+        "files": [{"path": "src/content/docs/uk/cloud/x.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "chore(uk): backfill provenance",
+        "number": 9101,
+    }
+    result = run_hook(
+        "gh pr merge 9101 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/uk/cloud/x.md": _META_HEAD},
+        base_fixture_files={"src/content/docs/uk/cloud/x.md": _META_BASE},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_cyrillic_frontmatter_edit_still_requires_check(tmp_path: Path) -> None:
+    """Editing translated frontmatter prose (title) adds Cyrillic → NOT
+    metadata-only → the Learner check is still required."""
+    base = "---\ntitle: Модуль 8.2\n---\n\nТіло.\n"
+    head = "---\ntitle: Модуль 8.2 та мережі\n---\n\nТіло.\n"
+    pr = {
+        "body": "## Summary\n\nRetitle.\n",
+        "files": [{"path": "src/content/docs/uk/cloud/x.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs(uk): retitle",
+        "number": 9102,
+    }
+    result = run_hook(
+        "gh pr merge 9102 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/uk/cloud/x.md": head},
+        base_fixture_files={"src/content/docs/uk/cloud/x.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
+def test_mixed_metadata_and_real_content_requires_check(tmp_path: Path) -> None:
+    """One metadata-only file + one real body change → still gated."""
+    real_base = "---\ntitle: A\n---\n\nOld body prose line long enough here.\n"
+    real_head = "---\ntitle: A\n---\n\nNEW body prose line long enough here now.\n"
+    pr = {
+        "body": "## Summary\n\nMixed change.\n",
+        "files": [
+            {"path": "src/content/docs/uk/cloud/x.md"},
+            {"path": "src/content/docs/uk/cloud/y.md"},
+        ],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs(uk): mixed",
+        "number": 9103,
+    }
+    result = run_hook(
+        "gh pr merge 9103 --rebase",
+        pr_json=pr,
+        fixture_files={
+            "src/content/docs/uk/cloud/x.md": _META_HEAD,
+            "src/content/docs/uk/cloud/y.md": real_head,
+        },
+        base_fixture_files={
+            "src/content/docs/uk/cloud/x.md": _META_BASE,
+            "src/content/docs/uk/cloud/y.md": real_base,
+        },
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
+def test_new_content_file_still_requires_check(tmp_path: Path) -> None:
+    """A NEW content file has no base blob → treated as real content → gated."""
+    pr = {
+        "body": "## Summary\n\nNew module.\n",
+        "files": [{"path": "src/content/docs/uk/cloud/new.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs(uk): new module",
+        "number": 9104,
+    }
+    result = run_hook(
+        "gh pr merge 9104 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/uk/cloud/new.md": _META_HEAD},
+        base_fixture_files={},  # base dir exists but file absent → new file
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
 
 
 def test_gh_failure_fails_open(tmp_path: Path) -> None:

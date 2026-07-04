@@ -26,6 +26,12 @@ import subprocess
 import sys
 
 
+# Any Cyrillic code point (U+0400–U+04FF). Kept identical to the CI-side twin
+# `scripts/quality/filter_content_changed.py`: a frontmatter line containing
+# Cyrillic counts as translated content, not metadata.
+_CYRILLIC_RE = re.compile("[\u0400-\u04FF]")
+
+
 def _fetch_file(path: str, head_oid: str, fixture_dir: str) -> str | None:
     if fixture_dir:
         candidate = os.path.join(fixture_dir, path)
@@ -50,6 +56,69 @@ def _fetch_file(path: str, head_oid: str, fixture_dir: str) -> str | None:
     return proc.stdout
 
 
+def _fetch_base_file(path: str, base_ref: str, base_fixture_dir: str) -> str | None:
+    """Fetch a file's content at the PR's BASE (pre-merge) state.
+
+    Mirrors `_fetch_file` but reads the base blob so the caller can tell a
+    metadata-only touch from a real content change. Returns None when the file
+    does not exist at base (a new file) or cannot be resolved.
+    """
+    if base_fixture_dir:
+        candidate = os.path.join(base_fixture_dir, path)
+        if os.path.isfile(candidate):
+            with open(candidate, encoding="utf-8") as fp:
+                return fp.read()
+        return None
+    if not base_ref:
+        return None
+    for ref in (f"origin/{base_ref}", base_ref):
+        try:
+            proc = subprocess.run(
+                ["git", "show", f"{ref}:{path}"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode == 0:
+            return proc.stdout
+    return None
+
+
+def _split_frontmatter(text: str) -> tuple[str | None, str]:
+    """Return (frontmatter_body, rest). frontmatter_body is None when the file
+    has no leading YAML frontmatter block."""
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return None, text
+    return m.group(1), text[m.end():]
+
+
+def _is_metadata_only_change(base_text: str | None, head_text: str) -> bool:
+    """True iff head differs from base ONLY in frontmatter metadata — i.e. the
+    body is byte-identical and no Cyrillic (translated prose) was added to the
+    frontmatter. Same rule as `scripts/quality/filter_content_changed.py`, but
+    blob-based (the hook has no working tree at the PR head). Fails toward
+    "real content" (False) whenever it cannot prove metadata-only."""
+    if base_text is None:
+        return False  # new file → real content
+    if base_text == head_text:
+        return True  # no change at all
+    base_fm, base_body = _split_frontmatter(base_text)
+    head_fm, head_body = _split_frontmatter(head_text)
+    if base_fm is None or head_fm is None:
+        return False  # can't reason about frontmatter → treat as content
+    if base_body != head_body:
+        return False  # body prose changed
+    base_lines = set(base_fm.split("\n"))
+    for line in head_fm.split("\n"):
+        if line not in base_lines and _CYRILLIC_RE.search(line):
+            return False  # translated prose added inside frontmatter
+    return True
+
+
 def _parse_pr(pr_json: str) -> dict | None:
     try:
         return json.loads(pr_json)
@@ -57,7 +126,9 @@ def _parse_pr(pr_json: str) -> dict | None:
         return None
 
 
-def check_learner_quote(pr_json: str, fixture_dir: str) -> tuple[str, str]:
+def check_learner_quote(
+    pr_json: str, fixture_dir: str, base_fixture_dir: str = ""
+) -> tuple[str, str]:
     """Validate a PR body's Learner check section against touched modules."""
     pr = _parse_pr(pr_json)
     if pr is None:
@@ -73,6 +144,29 @@ def check_learner_quote(pr_json: str, fixture_dir: str) -> tuple[str, str]:
 
     body = pr.get("body") or ""
     head_oid = pr.get("headRefOid") or ""
+    base_ref = pr.get("baseRefName") or ""
+
+    # A metadata-only touch (e.g. an `en_commit` provenance backfill, or a
+    # `slug:`/`sidebar.order` fix) changes no teaching prose, so a Learner-check
+    # quote proves nothing. Skip the requirement only when EVERY touched content
+    # file is metadata-only vs base. If base can't be resolved (no baseRefName /
+    # new file / unreadable head) the file is treated as real content, so this
+    # is strictly additive — the gate never gets weaker than before.
+    real_content_files = []
+    for path in content_files:
+        head_text = _fetch_file(path, head_oid, fixture_dir)
+        if head_text is None:
+            real_content_files.append(path)
+            continue
+        base_text = _fetch_base_file(path, base_ref, base_fixture_dir)
+        if not _is_metadata_only_change(base_text, head_text):
+            real_content_files.append(path)
+    if not real_content_files:
+        return (
+            "PASS",
+            "all touched src/content/docs files are metadata-only "
+            "(no teaching prose changed)",
+        )
 
     lines = body.splitlines()
     section_quotes: list[str] = []
@@ -213,8 +307,9 @@ def main() -> int:
     mode = sys.argv[1]
     pr_json = sys.argv[2]
     fixture_dir = os.environ.get("KUBEDOJO_HOOK_FILE_FIXTURE_DIR") or ""
+    base_fixture_dir = os.environ.get("KUBEDOJO_HOOK_BASE_FIXTURE_DIR") or ""
     if mode == "learner":
-        kind, msg = check_learner_quote(pr_json, fixture_dir)
+        kind, msg = check_learner_quote(pr_json, fixture_dir, base_fixture_dir)
     elif mode == "regression":
         kind, msg = check_regression_test(pr_json, fixture_dir)
     else:

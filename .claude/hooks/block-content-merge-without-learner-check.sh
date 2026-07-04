@@ -11,11 +11,19 @@ set -euo pipefail
 # markdown blockquote (`> ...`) whose text appears verbatim in at least one
 # of the `src/content/docs/**` files the PR touches.
 #
+# A metadata-only touch of content files (e.g. an `en_commit` provenance
+# backfill) changes no teaching prose, so the Learner-check requirement is
+# skipped when EVERY touched `src/content/docs/**` file is metadata-only vs the
+# PR base. If the base can't be resolved the file is treated as real content, so
+# the gate is never weaker than before.
+#
 # Test overrides:
 #   KUBEDOJO_HOOK_GH_JSON           Path to JSON file replacing `gh pr view`.
-#   KUBEDOJO_HOOK_FILE_FIXTURE_DIR  Directory holding fixture file contents
-#                                   keyed by the same relative path the PR
-#                                   reports (replaces `git show <oid>:<path>`).
+#   KUBEDOJO_HOOK_FILE_FIXTURE_DIR  Directory holding HEAD file contents keyed by
+#                                   the PR's relative paths (replaces
+#                                   `git show <headOid>:<path>`).
+#   KUBEDOJO_HOOK_BASE_FIXTURE_DIR  Same, but for BASE contents (replaces
+#                                   `git show origin/<baseRefName>:<path>`).
 
 RAW_PAYLOAD=$(cat)
 
@@ -46,7 +54,7 @@ else
     exit 0
   fi
   if [ -n "$PR_REF" ]; then
-    PR_JSON=$(gh pr view "$PR_REF" --json body,files,headRefOid,title,number 2>/dev/null || true)
+    PR_JSON=$(gh pr view "$PR_REF" --json body,files,headRefOid,baseRefName,title,number 2>/dev/null || true)
   else
     # No explicit PR ref: gh auto-detects from the current branch. Resolve the
     # effective cwd by walking `cd X` segments — the harness-reported cwd can
@@ -54,13 +62,14 @@ else
     # `cd .worktrees/X && gh pr merge` from a worktree. Same bug class as
     # #1321 (false-negative-allow direction instead of false-positive-deny).
     EFFECTIVE_DIR=$(python3 "$HOOK_DIR/_lib_resolve_cwd.py" "$COMMAND" "$CWD" gh 2>/dev/null || printf '%s' "$CWD")
-    PR_JSON=$(cd "$EFFECTIVE_DIR" 2>/dev/null && gh pr view --json body,files,headRefOid,title,number 2>/dev/null || true)
+    PR_JSON=$(cd "$EFFECTIVE_DIR" 2>/dev/null && gh pr view --json body,files,headRefOid,baseRefName,title,number 2>/dev/null || true)
   fi
   if [ -z "$PR_JSON" ]; then
     exit 0
   fi
 fi
 VERDICT=$(KUBEDOJO_HOOK_FILE_FIXTURE_DIR="${KUBEDOJO_HOOK_FILE_FIXTURE_DIR:-}" \
+  KUBEDOJO_HOOK_BASE_FIXTURE_DIR="${KUBEDOJO_HOOK_BASE_FIXTURE_DIR:-}" \
   python3 "$HOOK_DIR/_lib_pr_check.py" learner "$PR_JSON" || true)
 
 VERDICT_KIND=${VERDICT%%$'\t'*}
