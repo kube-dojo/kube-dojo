@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "83c267450c10da80d5dbda3ab1d27dfb02219b5e787a2c41d179a4e4a6768daa"
+en_commit: f5818b32b6fe612e822ee4ff03ddeac95606e7ff
 ---
 > **Іспит із множинним вибором** | 90 хвилин | Прохідний бал: 75% | $250 USD
 

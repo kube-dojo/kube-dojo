@@ -3,6 +3,7 @@ title: "Модуль 6.5: Спостережуваність GKE та Fleet Mana
 slug: uk/cloud/gke-deep-dive/module-6.5-gke-fleet
 sidebar:
   order: 6
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 6.1 (Архітектура GKE)
 

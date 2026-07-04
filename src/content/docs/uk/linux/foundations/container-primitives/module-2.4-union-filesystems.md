@@ -3,6 +3,7 @@ title: "Модуль 2.4: Шаруваті файлові системи (UnionF
 slug: uk/linux/foundations/container-primitives/module-2.4-union-filesystems
 sidebar:
   order: 5
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Основи системи** | Складність: `[MEDIUM]` | Час: 25–30 хв
 

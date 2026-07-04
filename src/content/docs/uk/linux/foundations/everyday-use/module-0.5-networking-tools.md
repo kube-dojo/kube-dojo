@@ -9,6 +9,7 @@ lab:
   duration: "35 min"
   difficulty: "intermediate"
   environment: "ubuntu"
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Щоденне використання** | Складність: `[QUICK]` | Час: 45 хв
 

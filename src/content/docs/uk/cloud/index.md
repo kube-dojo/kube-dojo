@@ -2,6 +2,7 @@
 title: "Хмара"
 sidebar:
   order: 1
+en_commit: b01dffe14654117b93fa2e1b888b76bb919a1e9a
 ---
 **Опануйте гіперскейлери, на яких працюють ваші кластери Kubernetes.**
 

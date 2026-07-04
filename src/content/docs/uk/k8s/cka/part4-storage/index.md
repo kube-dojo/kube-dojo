@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "55eeee74b158544e21f1c0f251614dd00693efe70eff437f0baba852be610b0f"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 ## Модулі
 

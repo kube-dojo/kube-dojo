@@ -3,6 +3,7 @@ title: "Основи Azure DevOps"
 sidebar:
   order: 0
   label: "Основи Azure"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Все, що вам потрібно для продуктивної роботи в Microsoft Azure — перш ніж торкатися AKS.**
 

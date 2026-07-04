@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "f1e75d1632130ae79c1c3dd4c02036edfc97af1689108bd558e659ca1fd01776"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Ця частина охоплює вимоги відповідності та фреймворки безпеки, що стосуються середовищ Kubernetes.
 

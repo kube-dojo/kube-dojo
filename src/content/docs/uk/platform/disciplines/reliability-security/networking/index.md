@@ -3,6 +3,7 @@ title: "Дисципліна Kubernetes Networking"
 sidebar:
   order: 1
   label: "Kubernetes Networking"
+en_commit: 47bf257c3ec7632099185c630faf64d73e48caea
 ---
 **Від пакетів до політик — як дані рухаються у кластері та за його межами.**
 

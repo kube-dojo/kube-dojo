@@ -3,6 +3,7 @@ title: "Модуль 5.4: Сховища та управління даними 
 slug: uk/cloud/eks-deep-dive/module-5.4-eks-storage
 sidebar:
   order: 5
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 5.1 (Архітектура та Control Plane EKS)
 

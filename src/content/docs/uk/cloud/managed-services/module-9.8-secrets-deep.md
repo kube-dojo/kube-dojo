@@ -3,6 +3,7 @@ title: "Модуль 9.8: Глибоке занурення в управлін�
 slug: uk/cloud/managed-services/module-9.8-secrets-deep
 sidebar:
   order: 9
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2 год | **Передумови**: Модуль 9.1 (Бази даних), Kubernetes RBAC, основи хмарного IAM
 

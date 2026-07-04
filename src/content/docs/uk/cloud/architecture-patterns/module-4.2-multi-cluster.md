@@ -3,6 +3,7 @@ title: "Модуль 4.2: Мультикластерні та мультирег
 slug: uk/cloud/architecture-patterns/module-4.2-multi-cluster
 sidebar:
   order: 3
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 4.1 (Керований vs Власний Kubernetes)
 

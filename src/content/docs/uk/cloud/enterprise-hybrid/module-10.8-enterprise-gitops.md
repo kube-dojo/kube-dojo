@@ -3,6 +3,7 @@ title: "Модуль 10.8: Корпоративний GitOps та платфор
 slug: uk/cloud/enterprise-hybrid/module-10.8-enterprise-gitops
 sidebar:
   order: 9
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Основи GitOps (ArgoCD/Flux), Kubernetes RBAC, Управління мультихмарним флотом (Модуль 10.5)
 

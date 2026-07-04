@@ -3,6 +3,7 @@ title: "Модуль 3.9: Azure Key Vault"
 slug: uk/cloud/azure-essentials/module-3.9-key-vault
 sidebar:
   order: 10
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 1.5 год | **Передумови**: Модуль 3.1 (Entra ID та RBAC)
 

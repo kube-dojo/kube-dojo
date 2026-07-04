@@ -3,6 +3,7 @@ title: "Модуль 5.1: Архітектура та Control Plane EKS"
 slug: uk/cloud/eks-deep-dive/module-5.1-eks-architecture
 sidebar:
   order: 2
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2.5 год | **Передумови**: Основи AWS, Архітектурні патерни хмар
 

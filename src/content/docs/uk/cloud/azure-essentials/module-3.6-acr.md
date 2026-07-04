@@ -3,6 +3,7 @@ title: "Модуль 3.6: Azure Container Registry (ACR)"
 slug: uk/cloud/azure-essentials/module-3.6-acr
 sidebar:
   order: 7
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 1 год | **Передумови**: Модуль 3.1 (Entra ID та RBAC), Основи Docker
 

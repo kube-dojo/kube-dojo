@@ -3,6 +3,7 @@ title: "Модуль 2.12: Архітектурні патерни GCP"
 slug: uk/cloud/gcp-essentials/module-2.12-patterns
 sidebar:
   order: 13
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 1.5 год | **Передумови**: Модулі 1-11 (усі попередні модулі основ GCP)
 

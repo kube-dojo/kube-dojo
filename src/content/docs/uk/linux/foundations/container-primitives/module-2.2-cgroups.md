@@ -3,6 +3,7 @@ title: "Модуль 2.2: Контрольні групи (cgroups)"
 slug: uk/linux/foundations/container-primitives/module-2.2-cgroups
 sidebar:
   order: 3
+en_commit: 107527e3a699d752e71f3eaaa6b9ff3efb3d9f87
 ---
 > **Основи системи** | Складність: `[MEDIUM]` | Час: 30–35 хв
 

@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 1
   content_sha: "fb97ebb367a573441ba6053c78bd8c17c01aeaa5d75ec4235e531bcda5278b6a"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Опануйте техніки розгортання застосунків, включаючи Deployments, Helm, Kustomize та стратегії поступового оновлення.

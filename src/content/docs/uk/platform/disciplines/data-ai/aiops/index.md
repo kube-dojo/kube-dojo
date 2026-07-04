@@ -3,6 +3,7 @@ title: "Дисципліна AIOps"
 sidebar:
   order: 1
   label: "AIOps"
+en_commit: 9da37a1d6ab83bf907291b9eb4d153ce184f73c3
 ---
 > **Прикладна дисципліна** | 6 модулів | ~4 години загалом
 

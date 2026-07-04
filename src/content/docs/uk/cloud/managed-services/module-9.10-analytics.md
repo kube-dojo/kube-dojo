@@ -3,6 +3,7 @@ title: "Модуль 9.10: Data Warehousing та аналітика з Kubernete
 slug: uk/cloud/managed-services/module-9.10-analytics
 sidebar:
   order: 11
+en_commit: 01f46771f9f0d66255248d6220e72c5a84149417
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 9.4 (Об'єктні сховища), Модуль 9.7 (Стрімінгові дані), основи SQL
 

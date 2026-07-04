@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 0
   content_sha: "23355e69e4e032ec994f890f1feb06b08e0b0a4bd2c9e63a8bdf8ba7275a0bb4"
+en_commit: 43ab1229039cda3ce89e4ba4817aa10823e2f360
 ---
 > **Complexity**: `[COMPLEX]` - Повностековий TypeScript-проєкт з інструментами монорепозиторію
 >

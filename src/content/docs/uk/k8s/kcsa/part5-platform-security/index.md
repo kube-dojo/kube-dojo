@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "e389ae5c2ad5bc8a01fd12b55b1d054e08f9405b123cf586a6292b0e6c0f3a69"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Ця частина охоплює засоби безпеки на рівні платформи, включно з безпекою образів, спостережуваністю та інструментами безпеки.
 

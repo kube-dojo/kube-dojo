@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "f03bbfa349c33f6027b6852a09e879fe59d43e8e774e8c091930726fb3d3db76"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Налаштуйте лабораторію безпеки CKS, опануйте основні інструменти безпеки та сплануйте стратегію іспиту.

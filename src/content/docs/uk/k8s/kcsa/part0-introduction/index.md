@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "fb862ece1a4e78ad36befc7274e5995ab374da870f6336cf42524ec28095c37d"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Ознайомтесь із форматом іспиту KCSA, доменами та розвиньте мислення, орієнтоване на безпеку.
 

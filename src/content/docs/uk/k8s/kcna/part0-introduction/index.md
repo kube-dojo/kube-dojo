@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 1
   content_sha: "b3113e329a0c5b8bf73a8ca5c42a179f3cbace4d1b0ed156f1ed87dbb6f5295f"
+en_commit: a9a7711a029a31a25db59ad0e3781b5aed0cf6d0
 ---
 Ознайомтеся з форматом іспиту KCNA, доменами та стратегією підготовки для ефективного складання.
 

@@ -9,6 +9,7 @@ lab:
   duration: "40 min"
   difficulty: "advanced"
   environment: "ubuntu"
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Безпека Linux** | Складність: `[COMPLEX]` | Час: 35–40 хв
 

@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 6
   content_sha: "b0f46d9b4e5740fc2457ba7f3a56df35ff74992a1eb2c66f855e0f503f5eeac2"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 Принципи Cloud Native, екосистема CNCF, архітектурні патерни, спостережуваність, безпека та нові теми.
 

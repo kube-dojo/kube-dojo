@@ -3,6 +3,7 @@ title: "Модуль 2.7: GCP Cloud Run (Безсерверні контейне
 slug: uk/cloud/gcp-essentials/module-2.7-cloud-run
 sidebar:
   order: 8
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Модуль 2.1 (IAM), Модуль 2.6 (Artifact Registry)
 

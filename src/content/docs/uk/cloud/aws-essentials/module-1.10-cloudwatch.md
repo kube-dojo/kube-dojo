@@ -3,6 +3,7 @@ title: "Модуль 1.10: CloudWatch та спостережуваність"
 slug: uk/cloud/aws-essentials/module-1.10-cloudwatch
 sidebar:
   order: 11
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність:** `[MEDIUM]` | **Час на виконання:** 2 години | **Трек:** Основи AWS DevOps
 

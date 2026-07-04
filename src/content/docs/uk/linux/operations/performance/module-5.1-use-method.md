@@ -9,6 +9,7 @@ lab:
   duration: "30 min"
   difficulty: advanced
   environment: ubuntu
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Продуктивність Linux** | Складність: `[MEDIUM]` | Час: 25–30 хв
 

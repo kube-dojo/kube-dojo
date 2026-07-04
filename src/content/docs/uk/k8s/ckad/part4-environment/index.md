@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "7c306c002f940f11fdd3e7c14e0203313be3348c2576e2737a970533f3631cc4"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Налаштовуйте середовище та безпеку застосунків за допомогою ConfigMaps, Secrets, керування ресурсами, SecurityContexts, ServiceAccounts та CRDs.

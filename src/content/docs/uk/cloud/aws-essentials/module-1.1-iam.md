@@ -3,6 +3,7 @@ title: "Модуль 1.1: Глибоке занурення в AWS Identity & Ac
 slug: uk/cloud/aws-essentials/module-1.1-iam
 sidebar:
   order: 2
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Cloud Native 101
 

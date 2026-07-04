@@ -3,6 +3,7 @@ title: "Модуль 3.7: ACI та Azure Container Apps"
 slug: uk/cloud/azure-essentials/module-3.7-aci-aca
 sidebar:
   order: 8
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 3.6 (ACR), Модуль 3.1 (Entra ID)
 

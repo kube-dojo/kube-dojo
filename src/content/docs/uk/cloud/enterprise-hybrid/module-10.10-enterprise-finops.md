@@ -3,6 +3,7 @@ title: "Модуль 10.10: FinOps у корпоративному масшта�
 slug: uk/cloud/enterprise-hybrid/module-10.10-enterprise-finops
 sidebar:
   order: 11
+en_commit: 0bce98f8a37c22409915f39deda679531be75aab
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2 год | **Передумови**: Основи хмар (AWS/Azure/GCP), Управління ресурсами Kubernetes, Enterprise Landing Zones (Модуль 10.1)
 

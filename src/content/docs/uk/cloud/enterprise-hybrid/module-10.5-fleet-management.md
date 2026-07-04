@@ -3,6 +3,7 @@ title: "Модуль 10.5: Управління мультихмарним фл�
 slug: uk/cloud/enterprise-hybrid/module-10.5-fleet-management
 sidebar:
   order: 6
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Гібридна хмарна архітектура (Модуль 10.4), основи мультикластерності Kubernetes
 

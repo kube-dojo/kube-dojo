@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "0885f56c803f4831332dc42100d68157f35b58a1145439a46925214882f688ea"
+en_commit: c3f114f7916e540ed03c3ee92fc03b50ca3e4629
 ---
 **Шлях Kubestronaut** — усі 5 сертифікацій, потрібних для статусу [Kubestronaut](https://www.cncf.io/training/kubestronaut/), відзнаки CNCF за складання KCNA, KCSA, CKAD, CKA та CKS.
 

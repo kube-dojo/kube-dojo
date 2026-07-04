@@ -3,6 +3,7 @@ title: "Модуль 6.2: Мережа GKE: Dataplane V2 та Gateway API"
 slug: uk/cloud/gke-deep-dive/module-6.2-gke-networking
 sidebar:
   order: 3
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 6.1 (Архітектура GKE)
 

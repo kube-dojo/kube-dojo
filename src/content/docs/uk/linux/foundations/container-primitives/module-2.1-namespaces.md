@@ -3,6 +3,7 @@ title: "Модуль 2.1: Простори імен Linux (Namespaces)"
 slug: uk/linux/foundations/container-primitives/module-2.1-namespaces
 sidebar:
   order: 2
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 > **Основи системи** | Складність: `[MEDIUM]` | Час: 30–35 хв
 

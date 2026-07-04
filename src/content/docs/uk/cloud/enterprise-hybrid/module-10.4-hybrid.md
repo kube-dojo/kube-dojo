@@ -3,6 +3,7 @@ title: "Модуль 10.4: Гібридна хмарна архітектура 
 slug: uk/cloud/enterprise-hybrid/module-10.4-hybrid
 sidebar:
   order: 5
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Архітектурні патерни хмар, основи мереж, Enterprise Landing Zones (Модуль 10.1)
 

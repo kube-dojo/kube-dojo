@@ -3,6 +3,7 @@ title: "Модуль 9.4: Патерни об'єктних сховищ (S3 / GC
 slug: uk/cloud/managed-services/module-9.4-object-storage
 sidebar:
   order: 5
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 9.1 (Бази даних), основи Kubernetes PersistentVolumes
 

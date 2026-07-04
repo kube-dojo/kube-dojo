@@ -9,6 +9,7 @@ calque_review:
   status: "clean"
   flags_resolved: 0
   content_sha: "3e93365edc0def4503b9c4f79772c83941a8a3c0c58f741c538ba3627b9aa2ba"
+en_commit: 8c1b215867a1671cb56d8793c708b73cf0b23560
 ---
 
 Зміцнення операційної системи хоста за допомогою AppArmor, Seccomp, модулів безпеки ядра та мережевого захисту.

@@ -3,6 +3,7 @@ title: "Поглиблене вивчення Linux"
 sidebar:
   order: 1
   label: "Поглиблене вивчення Linux"
+en_commit: b01dffe14654117b93fa2e1b888b76bb919a1e9a
 ---
 
 **Необхідні знання Linux для практиків Kubernetes та DevOps.**

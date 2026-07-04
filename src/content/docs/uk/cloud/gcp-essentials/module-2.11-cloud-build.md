@@ -3,6 +3,7 @@ title: "Модуль 2.11: Cloud Build та CI/CD"
 slug: uk/cloud/gcp-essentials/module-2.11-cloud-build
 sidebar:
   order: 12
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 2.6 (Artifact Registry), Модуль 2.7 (Cloud Run)
 

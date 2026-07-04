@@ -3,6 +3,7 @@ title: "Модуль 3.8: Azure Functions та Serverless"
 slug: uk/cloud/azure-essentials/module-3.8-functions
 sidebar:
   order: 9
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 3.4 (Blob Storage), Модуль 3.1 (Entra ID)
 

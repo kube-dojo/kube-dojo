@@ -3,6 +3,7 @@ title: "Модуль 5.5: EKS у продакшні — Масштабуванн
 slug: uk/cloud/eks-deep-dive/module-5.5-eks-production
 sidebar:
   order: 6
+en_commit: bf9159a224c23a4dd04882b23d9e86af3e985c98
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 3 год | **Передумови**: Модуль 5.1 (Архітектура EKS), Модуль 5.2 (Мережа EKS)
 

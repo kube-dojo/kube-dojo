@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 5
   content_sha: "8a700f67b1ce5109344a28b6c17adfeb89506a5db08181e4cef7a001b93d72a2"
+en_commit: 2741315011c360ac4a63a8abe4d4d1bd7200e7d5
 ---
 Як Kubernetes планує, масштабує, зберігає дані та керує конфігурацією.
 

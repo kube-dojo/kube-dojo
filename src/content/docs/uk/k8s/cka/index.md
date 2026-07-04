@@ -9,6 +9,7 @@ calque_review:
   status: "reviewed"
   flags_resolved: 3
   content_sha: "22d9903450305f76a05a8bba476202022207d3025b936574c47235b70a9b35a5"
+en_commit: 800195225743c0da61da38daa63f2c80f50a6bef
 ---
 > **Certified Kubernetes Administrator** — Продемонструйте свою здатність встановлювати, налаштовувати та керувати кластерами Kubernetes промислового рівня
 

@@ -3,6 +3,7 @@ title: "Модуль 2.8: Cloud Functions та Event-Driven архітектур
 slug: uk/cloud/gcp-essentials/module-2.8-cloud-functions
 sidebar:
   order: 9
+en_commit: a4a4935b266ce46eefb0682ff97beb7279f2f869
 ---
 **Складність**: [MEDIUM] | **Час на виконання**: 2 год | **Передумови**: Модуль 2.4 (GCS), Модуль 2.7 (Cloud Run)
 

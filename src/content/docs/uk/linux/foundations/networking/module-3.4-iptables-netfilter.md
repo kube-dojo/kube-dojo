@@ -9,6 +9,7 @@ lab:
   duration: "45 min"
   difficulty: "advanced"
   environment: "ubuntu"
+en_commit: b926c99c877ec72e09c13cc106eb7181dfbe7287
 ---
 > **Основи мереж** | Складність: `[COMPLEX]` | Час: 35–40 хв
 

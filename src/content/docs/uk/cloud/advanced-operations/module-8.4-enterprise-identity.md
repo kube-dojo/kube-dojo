@@ -3,6 +3,7 @@ title: "Модуль 8.4: Крос-акаунт IAM та корпоративн�
 slug: uk/cloud/advanced-operations/module-8.4-enterprise-identity
 sidebar:
   order: 5
+en_commit: a14248f2de3ba9b4b532e474881ea7cc5e1eb22c
 ---
 **Складність**: [COMPLEX] | **Час на виконання**: 2.5 год | **Передумови**: Мульти-акаунт архітектура (Модуль 8.1), базове розуміння ролей та політик IAM
 
