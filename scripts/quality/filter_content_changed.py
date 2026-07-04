@@ -75,13 +75,19 @@ def added_new_side_lines(base_ref: str, path: Path) -> list[tuple[int, str]] | N
 
     added: list[tuple[int, str]] = []
     new_lineno = 0
+    in_hunk = False
     for line in proc.stdout.splitlines():
         hunk = _HUNK_RE.match(line)
         if hunk:
             new_lineno = int(hunk.group(1))
+            in_hunk = True
             continue
-        if line.startswith("+++") or line.startswith("---"):
-            continue  # file headers, not content
+        if not in_hunk:
+            # Pre-hunk header block (`diff --git`, `index`, `--- a/…`, `+++ b/…`,
+            # `new file mode`, …). Skipping only here avoids mis-reading a body
+            # addition whose content starts with `++`/`--` — inside a hunk it
+            # appears as `+++…`/`---…` but IS content, not a header.
+            continue
         if line.startswith("+"):
             added.append((new_lineno, line[1:]))
             new_lineno += 1
@@ -96,7 +102,10 @@ def is_metadata_only(base_ref: str, path: Path) -> bool:
     if added is None:
         return False  # cannot determine → scan in full
     if not added:
-        return True  # only deletions (or no additions) → nothing new to gate
+        # Only deletions (no added lines). A body deletion can still introduce a
+        # structural FAIL (e.g. making two `##` headings adjacent), so we cannot
+        # prove it safe from the new side alone — fail toward a full scan.
+        return False
 
     try:
         text = path.read_text(encoding="utf-8")

@@ -140,6 +140,34 @@ def test_new_file_is_kept(repo, tmp_path, capsys):
     assert capsys.readouterr().out.strip() == str(new)
 
 
+# --- bypass regressions (codex R1 findings) ----------------------------------
+
+
+def test_plus_prefixed_body_line_is_kept(repo, tmp_path):
+    """A body addition whose content starts with `++` shows as `+++…` in the
+    diff and must NOT be mistaken for a file header and skipped (bypass)."""
+    base_sha, f = repo
+    f.write_text(
+        f.read_text(encoding="utf-8") + "\n++ самий ы тест\n", encoding="utf-8"
+    )
+    _commit(tmp_path, "body line starting with ++")
+    added = fc.added_new_side_lines(base_sha, f)
+    assert any("++ самий" in text for _, text in (added or [])), added
+    assert fc.is_metadata_only(base_sha, f) is False
+
+
+def test_pure_deletion_is_kept(repo, tmp_path):
+    """A body-only deletion (no added lines) can create a structural FAIL
+    (e.g. adjacent `##` headings); fail toward scan, not skip."""
+    base_sha, f = repo
+    lines = f.read_text(encoding="utf-8").splitlines(keepends=True)
+    # drop the last body line (a deletion, zero additions)
+    f.write_text("".join(lines[:-1]), encoding="utf-8")
+    _commit(tmp_path, "delete a body line")
+    assert fc.added_new_side_lines(base_sha, f) == []
+    assert fc.is_metadata_only(base_sha, f) is False
+
+
 # --- fail-safe: no base ref → emit everything unchanged ----------------------
 
 
