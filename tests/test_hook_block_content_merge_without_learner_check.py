@@ -480,6 +480,77 @@ def test_new_content_file_still_requires_check(tmp_path: Path) -> None:
     assert "missing a '## Learner check' section" in result.stderr
 
 
+def test_ascii_description_edit_still_requires_check(tmp_path: Path) -> None:
+    """An EN module's `description:` (learner-facing: nav/search prose) edited
+    with body unchanged is NOT structural metadata → gate stays. (codex R1.)"""
+    base = "---\ntitle: Pods\ndescription: Intro to Pods\n---\n\nBody stays.\n"
+    head = "---\ntitle: Pods\ndescription: A gentle intro to Pods\n---\n\nBody stays.\n"
+    pr = {
+        "body": "## Summary\n\nTweak the description.\n",
+        "files": [{"path": "src/content/docs/k8s/cka/pods.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs: reword pod description",
+        "number": 9105,
+    }
+    result = run_hook(
+        "gh pr merge 9105 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/k8s/cka/pods.md": head},
+        base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
+def test_frontmatter_prose_deletion_requires_check(tmp_path: Path) -> None:
+    """Deleting a learner-facing frontmatter line (`description:`) is caught by
+    the symmetric diff → gate stays. (codex R1.)"""
+    base = "---\ntitle: Pods\ndescription: Intro to Pods\n---\n\nBody stays.\n"
+    head = "---\ntitle: Pods\n---\n\nBody stays.\n"
+    pr = {
+        "body": "## Summary\n\nDrop the description.\n",
+        "files": [{"path": "src/content/docs/k8s/cka/pods.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "docs: drop description",
+        "number": 9106,
+    }
+    result = run_hook(
+        "gh pr merge 9106 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/k8s/cka/pods.md": head},
+        base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 2
+    assert "missing a '## Learner check' section" in result.stderr
+
+
+def test_structural_slug_order_change_is_allowed(tmp_path: Path) -> None:
+    """A change limited to structural keys (slug, sidebar.order) with an
+    unchanged body is metadata-only → no Learner check required."""
+    base = "---\ntitle: Pods\nslug: k8s/pods\nsidebar:\n  order: 3\n---\n\nBody.\n"
+    head = "---\ntitle: Pods\nslug: k8s/cka/pods\nsidebar:\n  order: 5\n---\n\nBody.\n"
+    pr = {
+        "body": "## Summary\n\nFix slug + order.\n",
+        "files": [{"path": "src/content/docs/k8s/cka/pods.md"}],
+        "headRefOid": "head1",
+        "baseRefName": "main",
+        "title": "chore: fix slug + sidebar order",
+        "number": 9107,
+    }
+    result = run_hook(
+        "gh pr merge 9107 --rebase",
+        pr_json=pr,
+        fixture_files={"src/content/docs/k8s/cka/pods.md": head},
+        base_fixture_files={"src/content/docs/k8s/cka/pods.md": base},
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_gh_failure_fails_open(tmp_path: Path) -> None:
     # When `gh pr view` itself fails (auth, network, no PR on branch), the
     # hook must fail open — a quality gate should not trap the orchestrator
