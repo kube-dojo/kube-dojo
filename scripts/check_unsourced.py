@@ -231,13 +231,13 @@ Return the JSON now.
 def llm_verdict(paragraph: str, *, agent: str = "codex",
                 task_id: str | None = None) -> dict[str, Any]:
     from citation_backfill import (  # type: ignore
-        dispatch_codex, dispatch_gemini, parse_agent_response,
+        dispatch_codex, dispatch_agy, parse_agent_response,
     )
     prompt = LLM_PROMPT_TEMPLATE.format(paragraph=paragraph)
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id or "unsourced-audit")
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         return {"verdict": "error", "reason": f"unknown_agent:{agent}"}
     if not ok:
@@ -312,7 +312,7 @@ def batched_llm_verdicts(items: list[dict[str, Any]], *,
     if not items:
         return []
     from citation_backfill import (  # type: ignore
-        dispatch_codex, dispatch_gemini, parse_agent_response,
+        dispatch_codex, dispatch_agy, parse_agent_response,
     )
     prompt = BATCH_LLM_PROMPT_TEMPLATE.format(
         count=len(items),
@@ -320,8 +320,8 @@ def batched_llm_verdicts(items: list[dict[str, Any]], *,
     )
     if agent == "codex":
         ok, raw = dispatch_codex(prompt, task_id=task_id or "unsourced-batch")
-    elif agent == "gemini":
-        ok, raw = dispatch_gemini(prompt)
+    elif agent == "agy":
+        ok, raw = dispatch_agy(prompt)
     else:
         return [{"verdict": "error", "reason": f"unknown_agent:{agent}"}
                 for _ in items]
@@ -385,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Gate C — unsourced-assertion detector")
     p.add_argument("paths", nargs="+")
     p.add_argument("--llm", action="store_true")
-    p.add_argument("--agent", default="codex", choices=["codex", "gemini"])
+    p.add_argument("--agent", default="codex", choices=["codex", "agy"])
     p.add_argument("--text", action="store_true")
     p.add_argument("--aggressive", action="store_true",
                    help="flag weak single-signal paragraphs too")

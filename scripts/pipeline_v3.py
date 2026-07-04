@@ -586,7 +586,7 @@ def _remove_paragraph(body: str, paragraph: dict[str, Any]) -> str:
 def run_pipeline(module_key: str, *, skip_research: bool = False,
                  auto_apply: bool = True,
                  gate_agent_text: str = "codex",
-                 gate_agent_coherence: str = "gemini",
+                 gate_agent_coherence: str = "agy",
                  section_pool_ref: str | None = None) -> dict[str, Any]:
     module_path = resolve_module_path(module_key)
     normalized_key = module_path.relative_to(DOCS_ROOT).with_suffix("").as_posix()
@@ -620,7 +620,7 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
                 return _finalize(run_record, "research_schema_issues", flat_key)
 
     # Stage 2: verify (Gate B) ---------------------------------------------
-    v = run_verify(normalized_key, agent="gemini")
+    v = run_verify(normalized_key, agent="agy")
     run_record["stages"]["verify"] = v
     if not v.get("ok"):
         return _finalize(run_record, "verify_failed", flat_key)
@@ -780,10 +780,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="reuse the existing seed (skip research dispatch)")
     p.add_argument("--no-auto-apply", action="store_true",
                    help="audit only; queue everything")
-    p.add_argument("--gate-agent", default="codex", choices=["codex", "gemini"],
+    p.add_argument("--gate-agent", default="codex", choices=["codex", "agy"],
                    help="LLM for Gates A and C (default: codex)")
-    p.add_argument("--coherence-agent", default="gemini", choices=["codex", "gemini"],
-                   help="LLM for Gate D (default: gemini)")
+    p.add_argument("--coherence-agent", default="agy", choices=["codex", "agy"],
+                   help="LLM for Gate D (default: agy)")
     args = p.parse_args(argv)
 
     record = run_pipeline(

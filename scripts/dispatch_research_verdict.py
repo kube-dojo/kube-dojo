@@ -240,11 +240,11 @@ def claude_anchor_prompt(*, slug: str, contract: str) -> str:
         """)
 
 
-def gemini_prompt(*, slug: str, contract: str) -> str:
+def agy_verdict_prompt(*, slug: str, contract: str) -> str:
     return dedent(f"""\
-        # Verdict Pass — Gemini Structural Gap Audit (`{slug}`)
+        # Verdict Pass — Structural Gap Audit (`{slug}`)
 
-        You are the cross-family Gemini reviewer for an AI History
+        You are the cross-family reviewer (agy lane) for an AI History
         chapter research contract. Your lane is **structural gap
         analysis** — what scenes are thin, what arguments lack
         scaffolding, where the contract over- or under-claims relative
@@ -287,7 +287,7 @@ def gemini_prompt(*, slug: str, contract: str) -> str:
         ## Output (Markdown, ≤700 words)
 
         ```
-        ## Gemini Structural Gap Audit — `{slug}`
+        ## Structural Gap Audit — `{slug}`
 
         ### Scenes
         - <gap or strength, no URLs>
@@ -327,8 +327,10 @@ def fire(agent: str, *, prompt: str, slug: str) -> tuple[bool, str]:
     elif agent == "claude":
         model = "claude-opus-4-8"
         timeout = 1500
-    elif agent == "gemini":
-        model = "gemini-3-flash-preview"
+    elif agent == "agy":
+        # agy flash lane (replaced the retired gemini-cli, #2125/#2230).
+        # Must be a valid agy model slug, NOT a gemini-cli model id.
+        model = "gemini-3.5-flash-high"
         timeout = 900
     else:
         raise ValueError(agent)
@@ -383,8 +385,8 @@ def _prompt_for(agent: str, *, slug: str, contract: str) -> str:
         return codex_prompt(slug=slug, contract=contract)
     if agent == "claude":
         return claude_anchor_prompt(slug=slug, contract=contract)
-    if agent == "gemini":
-        return gemini_prompt(slug=slug, contract=contract)
+    if agent == "agy":
+        return agy_verdict_prompt(slug=slug, contract=contract)
     raise ValueError(agent)
 
 
@@ -398,7 +400,7 @@ def process_one(pr_num: int, *, only: str | None) -> None:
     contract = gather_contract(branch, slug)
 
     if only is None:
-        agents = [anchor_agent, "gemini"]
+        agents = [anchor_agent, "agy"]
     else:
         agents = [only]
 
@@ -426,7 +428,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("prs", type=int, nargs="+",
                    help="PR numbers to verdict-pass")
-    p.add_argument("--only", choices=["codex", "claude", "gemini"],
+    p.add_argument("--only", choices=["codex", "claude", "agy"],
                    default=None,
                    help="Run only one reviewer family (overrides "
                         "branch-based anchor routing)")

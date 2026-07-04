@@ -64,10 +64,10 @@ def test_venv_python_points_at_primary_even_when_loaded_from_worktree() -> None:
     )
 
 
-def test_dispatch_gemini_launches_dispatch_with_venv_python_and_absolute_path(
+def test_dispatch_agy_launches_dispatch_with_venv_python_and_absolute_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: dispatch_gemini must launch dispatch.py with the
+    """Regression: dispatch_agy must launch dispatch.py with the
     primary-checkout venv's Python (AGENTS.md §3 forbids sys.executable
     — it misses venv-only deps) and an absolute path to dispatch.py.
 
@@ -91,7 +91,7 @@ def test_dispatch_gemini_launches_dispatch_with_venv_python_and_absolute_path(
 
     monkeypatch.setattr(subprocess, "run", _fake_run)
 
-    ok, _ = citation_backfill.dispatch_gemini("hello")
+    ok, _ = citation_backfill.dispatch_agy("hello")
 
     assert ok is True
     cmd = captured["cmd"]
@@ -103,20 +103,20 @@ def test_dispatch_gemini_launches_dispatch_with_venv_python_and_absolute_path(
         f"must use .venv python (AGENTS.md §3 bans sys.executable), got {cmd[0]!r}"
     )
     assert cmd[0] != sys.executable or sys.executable.endswith("/.venv/bin/python"), (
-        "dispatch_gemini must not use sys.executable (AGENTS.md §3)"
+        "dispatch_agy must not use sys.executable (AGENTS.md §3)"
     )
     dispatch_arg = Path(cmd[1])
     assert dispatch_arg.is_absolute(), f"dispatch.py path must be absolute, got {cmd[1]!r}"
     assert dispatch_arg.name == "dispatch.py"
-    assert "gemini" in cmd
+    assert "agy" in cmd
 
 
-def test_dispatch_gemini_default_timeout_unchanged_for_research_inject(
+def test_dispatch_agy_default_timeout_unchanged_for_research_inject(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """run_research / run_inject still use the original 900s budget.
 
-    citation_backfill.dispatch_gemini is shared between whole-module
+    citation_backfill.dispatch_agy is shared between whole-module
     work (research/inject — legitimately long prompts) and the short
     per-finding URL-candidate path. The former must NOT get the short
     timeout: a content-generation call can legitimately run 5-10 min,
@@ -136,7 +136,7 @@ def test_dispatch_gemini_default_timeout_unchanged_for_research_inject(
         return _Completed()
 
     monkeypatch.setattr(subprocess, "run", _fake_run)
-    citation_backfill.dispatch_gemini("hello")  # no explicit timeout
+    citation_backfill.dispatch_agy("hello")  # no explicit timeout
 
     cmd = captured["cmd"]
     assert isinstance(cmd, list)
@@ -152,7 +152,7 @@ def test_dispatch_gemini_default_timeout_unchanged_for_research_inject(
     )
 
 
-def test_dispatch_gemini_honors_explicit_timeout(
+def test_dispatch_agy_honors_explicit_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Per-finding callers must be able to pass a short timeout.
@@ -175,7 +175,7 @@ def test_dispatch_gemini_honors_explicit_timeout(
         return _Completed()
 
     monkeypatch.setattr(subprocess, "run", _fake_run)
-    citation_backfill.dispatch_gemini("hello", timeout=120)
+    citation_backfill.dispatch_agy("hello", timeout=120)
 
     cmd = captured["cmd"]
     ti = cmd.index("--timeout")
@@ -183,7 +183,7 @@ def test_dispatch_gemini_honors_explicit_timeout(
     assert captured["timeout"] == 120
 
 
-def test_dispatch_gemini_timeout_error_message_reflects_value(
+def test_dispatch_agy_timeout_error_message_reflects_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When the outer watchdog fires, the error string must name the
@@ -194,7 +194,7 @@ def test_dispatch_gemini_timeout_error_message_reflects_value(
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout") or 0)
 
     monkeypatch.setattr(subprocess, "run", _raise_timeout)
-    ok, msg = citation_backfill.dispatch_gemini("hello", timeout=120)
+    ok, msg = citation_backfill.dispatch_agy("hello", timeout=120)
     assert ok is False
     assert "120" in msg, f"error should name the budget; got {msg!r}"
 

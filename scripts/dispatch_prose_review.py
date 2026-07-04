@@ -277,14 +277,14 @@ def codex_prose_quality_prompt(*, slug: str, pr_num: int,
         """)
 
 
-def gemini_prose_quality_prompt(*, slug: str, pr_num: int,
+def prose_quality_prompt(*, slug: str, pr_num: int,
                                  prose_path: str, prose: str,
                                  research_branch: str,
                                  contract: str) -> str:
     return dedent(f"""\
-        # Gemini Prose Review — `{slug}` (PR #{pr_num})
+        # Prose Review — `{slug}` (PR #{pr_num})
 
-        You are the cross-family Gemini reviewer on a Codex- or
+        You are the cross-family reviewer (agy lane) on a Codex- or
         Claude-expanded prose chapter. Your lane is **contract-
         traceability sampling + readability + boundary discipline** —
         does the prose stay inside the approved contract, does it read
@@ -329,7 +329,7 @@ def gemini_prose_quality_prompt(*, slug: str, pr_num: int,
         ## Output (Markdown, ≤700 words)
 
         ```
-        ## Gemini Prose Review — {slug}
+        ## Prose Review — {slug}
 
         ### Sampled contract traces
         | Claim | Status | Contract row |
@@ -376,15 +376,16 @@ def fire(reviewer: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         # gpt-5.5 + model_reasoning_effort=high pinned in ~/.codex/config.toml
         model = "gpt-5.5"
         timeout = 1500
-    elif reviewer == "gemini":
-        # gemini-3-flash-preview hit persistent 429 "No capacity available"
-        # on 2026-04-28 PM during the Part 6 prose batch. Pro-preview was
-        # not capacity-constrained on the same auth path, so switch the
-        # review lane to pro (drafting already uses pro). Override via
-        # KUBEDOJO_GEMINI_REVIEW_MODEL if needed.
+    elif reviewer == "agy":
+        # agy pro lane (replaced the retired gemini-cli, #2125/#2230). Pro
+        # tier for prose review — drafting already uses pro; the flash lane
+        # historically hit persistent 429 "No capacity available". Must be a
+        # valid agy model slug, NOT a gemini-cli model id. Override via
+        # KUBEDOJO_AGY_REVIEW_MODEL (legacy KUBEDOJO_GEMINI_REVIEW_MODEL still honored).
         import os
-        model = os.environ.get("KUBEDOJO_GEMINI_REVIEW_MODEL",
-                               "gemini-3.1-pro-preview")
+        model = (os.environ.get("KUBEDOJO_AGY_REVIEW_MODEL")
+                 or os.environ.get("KUBEDOJO_GEMINI_REVIEW_MODEL")
+                 or "gemini-3.1-pro-high")
         timeout = 900
     else:
         raise ValueError(reviewer)
@@ -419,7 +420,7 @@ def post_comment(pr_num: int, body: str) -> None:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("pr_num", type=int)
-    p.add_argument("--reviewer", choices=["claude", "codex", "gemini"],
+    p.add_argument("--reviewer", choices=["claude", "codex", "agy"],
                    required=True)
     p.add_argument("--no-post", action="store_true",
                    help="print review to stdout instead of posting")
@@ -466,12 +467,16 @@ def main() -> int:
         marker = "_Codex (gpt-5.5) prose review (cross-family)_"
         header = "<!-- prose review codex (cross-family, prose-quality) -->"
     else:
-        # Gemini
-        prompt = gemini_prose_quality_prompt(
+        # agy (the Google lane; reviewer=="agy")
+        prompt = prose_quality_prompt(
             slug=slug, pr_num=args.pr_num,
             prose_path=prose_path, prose=prose,
             research_branch=research_branch, contract=contract,
         )
+        # NOTE: the marker/header strings intentionally keep the "gemini"
+        # token — audit_review_coverage.py matches `<!-- prose review gemini`
+        # for coverage tracking. Renaming them is coupled to that matcher and
+        # is deferred to the final #2230 marker-rename cleanup.
         marker = "_Gemini prose review (cross-family, lane-disciplined per #421)_"
         header = "<!-- prose review gemini (cross-family, prose-quality) -->"
 

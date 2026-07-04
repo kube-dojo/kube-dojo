@@ -32,7 +32,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from citation_backfill import (  # type: ignore  # noqa: E402
-    dispatch_codex, dispatch_gemini, parse_agent_response,
+    dispatch_codex, dispatch_agy, parse_agent_response,
 )
 
 
@@ -225,12 +225,12 @@ def _format_sections_block(sections: list[dict[str, Any]]) -> str:
 def _dispatch_one(prompt: str, *, agent: str, task_id: str) -> tuple[bool, str]:
     if agent == "codex":
         return dispatch_codex(prompt, task_id=task_id)
-    if agent == "gemini":
-        return dispatch_gemini(prompt)
+    if agent == "agy":
+        return dispatch_agy(prompt)
     return False, f"unknown_agent:{agent}"
 
 
-def check_coherence(path: Path, *, agent: str = "gemini",
+def check_coherence(path: Path, *, agent: str = "agy",
                     dry_run: bool = False, batch: bool = True) -> dict[str, Any]:
     body = path.read_text(encoding="utf-8")
     sections = split_into_sections(body)
@@ -316,7 +316,7 @@ def check_coherence(path: Path, *, agent: str = "gemini",
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Gate D — topical-coherence auditor")
     p.add_argument("paths", nargs="+")
-    p.add_argument("--agent", default="gemini", choices=["codex", "gemini"])
+    p.add_argument("--agent", default="agy", choices=["codex", "agy"])
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--text", action="store_true")
     args = p.parse_args(argv)
