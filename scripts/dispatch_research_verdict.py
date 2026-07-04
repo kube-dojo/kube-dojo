@@ -7,21 +7,22 @@ For each PR:
    - `claude/394-chNN-research` -> Codex (gpt-5.5, reasoning=high)
    - `codex/394-chNN-research`  -> Claude (claude-opus-4-8)
    Both have shell access and can curl/pdftotext/grep page anchors.
-3. Fire Gemini structural gap-audit on both (lane-disciplined per
-   feedback_gemini_hallucinates_anchors.md — NO URL citations from
-   Gemini; structural gaps only).
+3. Fire an agy (Google lane) structural gap-audit on both (lane-disciplined
+   per feedback_gemini_hallucinates_anchors.md — NO URL citations from the
+   Google lane; structural gaps only). agy replaced the retired gemini-cli
+   (#2125/#2230).
 4. Post both reviews as PR comments.
 
-Codex/Claude and Gemini run on different families, so an anchor queue
-and a Gemini queue can run in parallel. Within a family, dispatches
-are sequential per feedback_codex_dispatch_sequential.md and
-reference_gemini_collab.md.
+Codex/Claude and the agy (Google) lane run on different families, so an
+anchor queue and a structural-gap queue can run in parallel. Within a
+family, dispatches are sequential per feedback_codex_dispatch_sequential.md
+and reference_gemini_collab.md.
 
 Usage:
     .venv/bin/python scripts/dispatch_research_verdict.py 456 459 460 ...
     .venv/bin/python scripts/dispatch_research_verdict.py --only codex 456
     .venv/bin/python scripts/dispatch_research_verdict.py --only claude 456
-    .venv/bin/python scripts/dispatch_research_verdict.py --only gemini 456
+    .venv/bin/python scripts/dispatch_research_verdict.py --only agy 456
 
 Posts comments via `gh pr comment <pr> --body-file ...`.
 """
@@ -421,7 +422,12 @@ def process_one(pr_num: int, *, only: str | None) -> None:
 
     for agent, (ok, body) in out.items():
         marker = "OK" if ok else "FAILED"
-        post_comment(pr_num, f"<!-- verdict {agent} -->\n\n_{marker}_\n\n{body}")
+        # Keep the "gemini" marker TOKEN for the agy lane: audit_review_coverage.py
+        # maps `<!-- verdict gemini -->` → gemini_gap (matching existing chapter
+        # status files). Renaming the marker/schema is a coupled cleanup deferred
+        # to the final #2230 slice — same deferral as dispatch_prose_review.py.
+        comment_agent = "gemini" if agent == "agy" else agent
+        post_comment(pr_num, f"<!-- verdict {comment_agent} -->\n\n_{marker}_\n\n{body}")
 
 
 def main() -> int:

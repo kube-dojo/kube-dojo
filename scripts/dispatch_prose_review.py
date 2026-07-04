@@ -381,11 +381,10 @@ def fire(reviewer: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         # tier for prose review — drafting already uses pro; the flash lane
         # historically hit persistent 429 "No capacity available". Must be a
         # valid agy model slug, NOT a gemini-cli model id. Override via
-        # KUBEDOJO_AGY_REVIEW_MODEL (legacy KUBEDOJO_GEMINI_REVIEW_MODEL still honored).
+        # KUBEDOJO_AGY_REVIEW_MODEL. The legacy KUBEDOJO_GEMINI_REVIEW_MODEL is
+        # intentionally NOT honored — it would inject a retired gemini-cli slug.
         import os
-        model = (os.environ.get("KUBEDOJO_AGY_REVIEW_MODEL")
-                 or os.environ.get("KUBEDOJO_GEMINI_REVIEW_MODEL")
-                 or "gemini-3.1-pro-high")
+        model = os.environ.get("KUBEDOJO_AGY_REVIEW_MODEL", "gemini-3.1-pro-high")
         timeout = 900
     else:
         raise ValueError(reviewer)
