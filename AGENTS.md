@@ -1,7 +1,7 @@
 # AGENTS.md — Rules for AI Coding Agents
 
 > This file is read by Codex, Jules, and other AI coding agents working on this repository.
-> For Claude-specific instructions see `CLAUDE.md`. For Gemini-specific, see `.claude/rules/gemini-workflow.md`.
+> For Claude-specific instructions see `CLAUDE.md`. For the agy (Google lane) workflow, see `.claude/rules/agy-workflow.md` (gemini-cli retired, #2125/#2230).
 
 ---
 
