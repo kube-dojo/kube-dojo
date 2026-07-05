@@ -337,8 +337,8 @@ command -v ollama >/dev/null 2>&1 && ollama list || true
 
 Звідси переходьте до:
 
-- [ШІ/ML Інженерія: Генеративний ШІ](../../ai-ml-engineering/generative-ai/)
-- [ШІ/ML Інженерія: ШІ-інфраструктура](../../ai-ml-engineering/ai-infrastructure/)
+- [Інженерія ШІ/МН: Генеративний ШІ](../../ai-ml-engineering/generative-ai/)
+- [Інженерія ШІ/МН: ШІ-інфраструктура](../../ai-ml-engineering/ai-infrastructure/)
 - або поверніться до [Вибір між Ollama, MLX, Transformers і vLLM](./module-1.6-choosing-between-ollama-mlx-transformers-vllm/)
 
 ## Джерела
