@@ -105,7 +105,7 @@ Optional but recommended:
 
 ## STATUS.md update protocol
 
-After writing the handoff HTML, update the **LIVE index: `.agent/STATUS.md`**
+After writing the handoff `.md`, update the **LIVE index: `.agent/STATUS.md`**
 (machine-local, gitignored — the briefing API + `cold-start.sh` prefer it when
 present; seed it from the tracked `STATUS.md` if missing). Do NOT edit the
 tracked `STATUS.md` at session end — it holds the durable sections and changes
@@ -114,7 +114,7 @@ via PR only:
 1. **Promote previous "Latest handoff" row to "Predecessor chain"** (move the row down a section).
 2. **Insert new row** at the top of "## Latest handoff":
    ```
-   | YYYY-MM-DD | **NN** | <one-line summary> | [session-NN](./docs/session-state/<file>.html) |
+   | YYYY-MM-DD | **NN** | <one-line summary> | [session-NN](./docs/session-state/<file>.md) |
    ```
 3. **Refresh "## Current state"** — module counts, readiness, in-flight PRs.
 4. **Refresh "## TODO"** — unchecked `- [ ]` items the next session should pick up. The briefing API parses these.
@@ -122,7 +122,7 @@ via PR only:
 6. **Refresh "## Active policies"** — add new Decision Cards / policy locks.
 7. **Date-bound items** — add expiry-bound TODOs (claude-throttle window, agentic-pool flip, agent retirements).
 
-Cap `.agent/STATUS.md` at ~100 lines (the compression target — commit `dcd86360`). Anything narrative-y belongs in the handoff HTML, not here.
+Cap `.agent/STATUS.md` at ~100 lines (the compression target — commit `dcd86360`). Anything narrative-y belongs in the handoff file, not here.
 
 ## Serving the handoff
 
@@ -166,7 +166,7 @@ The handoff cites/links to these; it does not duplicate them.
 
 ## Anti-patterns
 
-- Inlining the full handoff into the index — `.agent/STATUS.md` is the index, dated handoff HTML is the log (see commit `dcd86360` compression).
+- Inlining the full handoff into the index — `.agent/STATUS.md` is the index, the dated handoff file is the log (see commit `dcd86360` compression).
 - Skipping the dispatch ledger — that's the audit trail, not optional.
 - Writing an HTML handoff — handoffs are Markdown since s196 (AI→AI local agent state); HTML is for human-facing reports only.
 - Forgetting to refresh `## TODO` / `## Blockers` — the briefing API will surface stale data.
