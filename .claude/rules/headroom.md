@@ -40,11 +40,12 @@ user explicitly asks — it can rewrite `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`.
 
 ## Handoffs — on-disk files stay SSOT
 
-KubeDojo session handoffs (`docs/session-state/YYYY-MM-DD-<topic>.html`, indexed in
-the live `.agent/STATUS.md`, parsed by the briefing API at cold-start) **remain the
-durable cross-session source of truth — as ON-DISK files.** (Since s196 new handoffs
-are gitignored local agent state — user directive s190b; git holds only the
-pre-s190b history.) The proxy's memory store is local-only with no MCP
+KubeDojo session handoffs (lean MD briefs at
+`.agent/session-state/YYYY-MM-DD-session-NN-<topic>.md`, indexed in the live
+`.agent/STATUS.md`, parsed by the briefing API at cold-start) **remain the durable
+cross-session source of truth — as ON-DISK files.** (s196 convention: handoffs are
+gitignored local agent state, never through git/PRs — user directives s190b + s196;
+`docs/session-state/` holds only the tracked pre-s196 history.) The proxy's memory store is local-only with no MCP
 write tool yet (`native_tool`/`bridge` off) — it auto-injects context but cannot
 carry the handoff across sessions. So keep the on-disk files as the backstop and push bulky
 evidence behind Headroom hashes rather than pasting it. **Migrate the handoff body

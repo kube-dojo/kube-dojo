@@ -69,7 +69,7 @@ elif [ "$PCT" -ge 75 ]; then
   MSG=$(printf '%s\n%s\n%s\n' \
     "HEADS UP: Context at ${PCT}% of auto-compact window [~${TOKENS}/${WINDOW} tokens]." \
     "" \
-    "Wrap up your current logical unit of work soon. Once it lands, prepare the lean MD handoff brief .agent/session-state/YYYY-MM-DD-session-NN-<topic>.md (and update .agent/STATUS.md as the live index), so we can hand off to a fresh session before auto-compact triggers. The brief costs ~3KB; compaction costs a full model summarization call.")
+    "Wrap up your current logical unit of work soon. Once it lands, prepare the lean MD handoff brief .agent/session-state/YYYY-MM-DD-session-NN-<topic>.md (and update .agent/STATUS.md as the live index) — NO git add/commit/PR, handoffs are local agent state — so we can hand off to a fresh session before auto-compact triggers. The brief costs ~3KB; compaction costs a full model summarization call.")
 else
   exit 0
 fi
