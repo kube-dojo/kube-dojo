@@ -30,7 +30,14 @@ def _hermes_binary() -> str:
 
 
 def _detect_provider(model: str) -> str:
-    """Infer the Hermes provider from the model name."""
+    """Infer the Hermes provider from the model name.
+
+    NO silent metered fallback: the old catch-all returned ``openrouter``,
+    which billed the OpenRouter account for any model without an explicit
+    branch (``ask-hermes --to-model deepseek-v4-pro`` silently drained
+    OpenRouter instead of hitting the first-party DeepSeek API — incident
+    #2245, 2026-07-07). Unknown models now raise.
+    """
     override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
     if override:
         return override
@@ -40,11 +47,28 @@ def _detect_provider(model: str) -> str:
         return "anthropic"
     if model.startswith("grok-"):
         return "xai"
-    return "openrouter"
+    if model.startswith("deepseek"):
+        # First-party DeepSeek API (api.deepseek.com) — NEVER the OpenRouter
+        # proxy unless the caller opts in explicitly (#2245).
+        return "deepseek"
+    if model.startswith("qwen"):
+        # The documented metered qwen lane rides OpenRouter deliberately
+        # ([[reference_qwen_hermes_openrouter]]) — explicit, not a fallback.
+        return "openrouter"
+    raise ValueError(
+        f"No Hermes provider mapping for model {model!r} — refusing to fall "
+        "back to a metered proxy (incident #2245). Set "
+        "KUBEDOJO_HERMES_PROVIDER or use an explicit 'openrouter/<vendor>/"
+        "<model>' slug."
+    )
 
 
 def _cli_model(model: str) -> str:
     """Map KubeDojo's route labels to Hermes v0.14 CLI model IDs."""
+    if model.startswith("openrouter/"):
+        # The ``openrouter/`` prefix is only the explicit provider opt-in
+        # marker (#2245); OpenRouter's catalog ids are ``vendor/model``.
+        return model.removeprefix("openrouter/")
     if model.startswith("qwen-"):
         return f"qwen/qwen{model.removeprefix('qwen-')}"
     return model
