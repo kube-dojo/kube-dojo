@@ -21,7 +21,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 2. **Run cold-start** — `KUBEDOJO_ISSUE=N bash scripts/cold-start.sh`
 3. **Claim if assigned** — `gh issue comment N --body "Claiming — worktree .worktrees/<name>"`
 4. **Worktree only** — never commit on primary `main`
-5. **Handoff on demand** — read `docs/session-state/*` only when orient/briefing leave a narrative gap
+5. **Handoff on demand** — read the latest `.agent/session-state/*` brief (pre-s196 history: `docs/session-state/*`) only when orient/briefing leave a narrative gap
 
 ## Script output sections
 
