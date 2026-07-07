@@ -63,14 +63,14 @@ For high-leverage decisions only (architecture, threshold freezes, contested NEE
 
 **Ukrainian translation**: ~40% (Prerequisites, CKA, CKAD). Files in `src/content/docs/uk/`.
 
-> **HTML-first artifact policy:** see [`docs/migrations/html-first/plan.html`](docs/migrations/html-first/plan.html) — orchestrator artifacts (audit reports, dispatch briefs, bug autopsies, batch summaries, PR review explainers, session handoffs) default to HTML; STATUS.md / CLAUDE.md / `.claude/rules/` / memory stay Markdown.
+> **HTML-first artifact policy:** see [`docs/migrations/html-first/plan.html`](docs/migrations/html-first/plan.html) — HUMAN-FACING orchestrator artifacts (audit reports, bug autopsies, batch summaries, PR review explainers) default to HTML. AI-consumed artifacts stay Markdown: dispatch briefs, **session handoffs** (re-reclassified AI→AI 2026-07-07 s196 — local agent state since PR #2247), STATUS.md / CLAUDE.md / `.claude/rules/` / memory.
 
 ## Session Workflow
 
 1. **Orient via `/api/briefing/session`** (see *Agent Orientation* above). `STATUS.md` is the fallback when the API is down.
 2. Use `scripts/prompts/module-writer.md` for new modules
 3. Send completed work to the designated cross-family reviewer (see `docs/review-protocol.md`) before closing issues
-4. **At session end**: write the full handoff to a new `docs/session-state/YYYY-MM-DD-<topic>.{md,html}` file (gitignored — handoffs are LOCAL agent state, never committed; user directive s190b). Prefer `.html` per the HTML-first artifact policy (see `docs/migrations/html-first/plan.html`); use `.md` only if the handoff is brief and a markdown sidecar (`.notes.md`) is not warranted. Then update the LIVE index **`.agent/STATUS.md`** (machine-local, gitignored; preferred by the briefing API — seed from the tracked `STATUS.md` if missing) — promote the new file to "Latest handoff", shift the previous Latest into "Predecessor chain", refresh "Cross-thread notes" / `## TODO` / `## Blockers`. The tracked `STATUS.md` holds durable sections and changes via PR only. **Do NOT inline the full handoff into STATUS.md** — it is an index, not a log. The briefing API (`scripts/local_api.py:_parse_status_md`) parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md, so keep those headings populated.
+4. **At session end**: write the full handoff to a new `docs/session-state/YYYY-MM-DD-<topic>.md` file — **Markdown** (handoffs are AI→AI local agent state: gitignored, never committed, read by the next agent — user directives s190b + s196). Then update the LIVE index **`.agent/STATUS.md`** (machine-local, gitignored; preferred by the briefing API — seed from the tracked `STATUS.md` if missing) — promote the new file to "Latest handoff", shift the previous Latest into "Predecessor chain", refresh "Cross-thread notes" / `## TODO` / `## Blockers`. The tracked `STATUS.md` holds durable sections and changes via PR only. **Do NOT inline the full handoff into STATUS.md** — it is an index, not a log. The briefing API (`scripts/local_api.py:_parse_status_md`) parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md, so keep those headings populated.
 
 ## Build & Serve
 
