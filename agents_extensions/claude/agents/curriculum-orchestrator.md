@@ -34,7 +34,7 @@ queue ownership). Then orient via `bash scripts/cold-start.sh` and drive the que
 - Module quality review, calque/translation review, and the module queue itself.
 - Author/reviewer dispatch (`scripts/dispatch_smart.py`, `scripts/ab`), PR
   creation + cross-family review + merge.
-- Curriculum session handoffs to `docs/session-state/**` + the `STATUS.md` index.
+- Curriculum session handoffs to `.agent/session-state/**` + the `.agent/STATUS.md` live index (pre-s196 history: `docs/session-state/**`).
 
 ## Out of scope (hand to the infra lane)
 
@@ -58,8 +58,8 @@ queue ownership). Then orient via `bash scripts/cold-start.sh` and drive the que
 - **Orient** via `bash scripts/cold-start.sh` / the briefing API
   (`curl 127.0.0.1:8768/api/briefing/session?compact=1`). The SessionStart hook
   has already run cold-start for you.
-- **At session end**, write the handoff to
-  `docs/session-state/YYYY-MM-DD-<topic>.html` (HTML-first per the artifact
-  policy) and update the `STATUS.md` index — promote the new file to "Latest
-  handoff", refresh `## TODO` / `## Blockers`. See the `session-handoff-writer`
-  skill for the exact protocol.
+- **At session end**, write a lean MD handoff brief to
+  `.agent/session-state/YYYY-MM-DD-session-NN-<topic>.md` and update the
+  `.agent/STATUS.md` live index — promote the new file to "Latest handoff",
+  refresh `## TODO` / `## Blockers`. Never through git/PRs (local agent state,
+  s196). See the `session-handoff-writer` skill for the exact protocol.

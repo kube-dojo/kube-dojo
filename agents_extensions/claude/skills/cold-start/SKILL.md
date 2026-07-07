@@ -29,7 +29,7 @@ Parse the labeled blocks from stdout:
 
 - `kubedojo:orient` — **start here** for "what to do now" (primary + up to 3 alternatives)
 - `kubedojo:briefing` — full compact snapshot (`actions`, `top_modules`, blockers)
-- `kubedojo:session` — latest handoff path (do not read the HTML file unless needed)
+- `kubedojo:session` — latest handoff path (do not read the handoff file unless needed)
 - `kubedojo:pending-decisions` — blocking Decision Cards in `docs/decisions/pending/`
 
 Optional: `bash scripts/cold-start.sh --manifest` for route discovery via `/api/state/manifest`.
