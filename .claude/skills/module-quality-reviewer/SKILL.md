@@ -1,12 +1,12 @@
 ---
 name: module-quality-reviewer
-description: Review KubeDojo modules against the 7-dim pedagogical rubric. For ANY agent acting as reviewer (codex, composer-2.5, gemini, agy, claude). Use when reviewing, scoring, or checking modules. Triggers on "review module", "check quality", "score module".
+description: Review KubeDojo modules against the 7-dim pedagogical rubric. For ANY agent acting as reviewer (codex, composer-2.5, agy, claude). Use when reviewing, scoring, or checking modules. Triggers on "review module", "check quality", "score module".
 last_calibrated: 2026-05-24
 ---
 
 # Module Quality Reviewer Skill
 
-Review KubeDojo modules against the quality rubric at `docs/quality-rubric.md`. **Agent-agnostic** — applies whether you are codex gpt-5.5, composer-2.5, gemini-3.1-pro-preview, agy on Claude tier, or claude headless.
+Review KubeDojo modules against the quality rubric at `docs/quality-rubric.md`. **Agent-agnostic** — applies whether you are codex gpt-5.5, composer-2.5, agy (gemini or Claude models), or claude headless.
 
 ## Who reviews what (cross-family routing, Decision Card C, 2026-05-24)
 
@@ -120,7 +120,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 | codex (gpt-5.5) | Fabricating GitHub Actions / Dependabot schema claims ([[feedback_deepseek_hallucinates_on_gh_schemas]] applies here too). Verify CLI/YAML schema before flagging. |
 | composer-2.5 | Hallucinated file paths in findings (e.g. claimed PR #1487 path that did not exist). Always quote the exact line from the diff. Verifier-pass ≠ runnability — run the bash. |
 | deepseek-v4-pro | Same as codex on schema facts; also rule attribution slippage (SC2236 vs SC2230, semver exact, expansion order). |
-| gemini-3-flash-preview | DO NOT use as a code/lab reviewer ([[feedback_never_flash_for_code_review]]). Calibrated 0/2 bugs caught on PR #1229. Use gemini-3.1-pro-preview instead. |
+| gemini-flash-class (via agy) | DO NOT use as a code/lab reviewer ([[feedback_never_flash_for_code_review]]). Calibrated 0/2 bugs caught on PR #1229. Use agy `--model gemini-3.1-pro-high` instead (gemini-cli retired). |
 | agy (Claude tier) | 0 hallucinations on code review historically — strong default. Surfaces 100% Claude quota independently of Anthropic chat cap ([[feedback_agy_claude_route_during_throttle]]). |
 | claude headless | Yes-man drift on close reads ([[feedback_no_yes_man]]); be deliberate about flagging weaknesses, not just strengths. |
 
@@ -130,7 +130,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 |---|---|
 | Review claude-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent cursor --model composer-2.5` (headless cursor-agent CLI; review-class default mode is read-only). OR open in cursor IDE with composer-2.5 selected. |
 | Review composer-2.5-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent codex --mode danger --worktree <pr-slug>` ([[feedback_codex_review_danger_mode]]) |
-| Review codex-authored | Same as claude-authored (composer-2.5 cross-family) OR `dispatch_smart review --agent gemini --model gemini-3.1-pro-preview` if cursor unavailable. **During Anthropic throttle window, claude headless is OFF rotation** (Decision Card C, `docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md:11`) — prefer codex / agy (Claude tier) / gemini. Post-throttle, `dispatch_smart review --agent claude` is a documented Gemini-503 fallback ([[feedback_headless_claude_gemini_fallback]]). |
+| Review codex-authored | Same as claude-authored (composer-2.5 cross-family) OR `dispatch_smart review --agent agy --model gemini-3.1-pro-high` if cursor unavailable. **During Anthropic throttle window, claude headless is OFF rotation** (Decision Card C, `docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md:11`) — prefer codex / agy (Claude tier). Post-throttle, `dispatch_smart review --agent claude` is a documented Gemini-503 fallback ([[feedback_headless_claude_gemini_fallback]]). |
 | Review agy-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent codex` (different family). |
 
 After R1, if NEEDS_CHANGES, dispatch the original author for a fix-pass, then re-run review (R2). On APPROVE/APPROVE_WITH_NITS, merge (orchestrator-driven; cursor does NOT self-merge per session-51 directive).

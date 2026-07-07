@@ -39,12 +39,7 @@ if [ "$RAG_STATUS" = "000" ]; then
   INFO+=("MCP RAG server not running (127.0.0.1:8766) — Ukrainian translation tools unavailable")
 fi
 
-# 4. Check gemini-cli
-if ! command -v gemini >/dev/null 2>&1; then
-  INFO+=("gemini-cli not found — pipeline WRITE step unavailable")
-fi
-
-# 5. Pipeline status
+# 4. Pipeline status
 if [ -f "$PROJECT_DIR/.pipeline/state.yaml" ]; then
   DONE=$("$PROJECT_DIR/.venv/bin/python" -c "
 import yaml
@@ -60,7 +55,7 @@ print(f'{done}/{total} done, {failed} with errors')
   fi
 fi
 
-# 6. Open GH issues (top 5)
+# 5. Open GH issues (top 5)
 if command -v gh >/dev/null 2>&1; then
   ISSUES_LIST=$(gh issue list --state open --limit 5 --json number,title 2>/dev/null | jq -r '.[] | "  #\(.number): \(.title)"' 2>/dev/null)
   if [ -n "$ISSUES_LIST" ]; then
@@ -70,7 +65,7 @@ $ISSUES_LIST")
   fi
 fi
 
-# 7. Check MEMORY.md size
+# 6. Check MEMORY.md size
 MEMORY_FILE="$HOME/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/MEMORY.md"
 if [ -f "$MEMORY_FILE" ]; then
   MEMORY_LINES=$(wc -l < "$MEMORY_FILE" | tr -d ' ')
@@ -79,7 +74,7 @@ if [ -f "$MEMORY_FILE" ]; then
   fi
 fi
 
-# 8. Stale `astro dev` server check. Vite/Astro dev servers leak memory over
+# 7. Stale `astro dev` server check. Vite/Astro dev servers leak memory over
 # long uptimes — a forgotten one reached ~5.4 GB after 2.5 days (s182). RSS
 # under-reports it (mostly compressed), so flag by UPTIME: any astro dev whose
 # elapsed time shows days (etime contains '-') is almost certainly stale.
