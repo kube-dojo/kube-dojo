@@ -24,7 +24,7 @@ Author skill for new KubeDojo curriculum modules. Ensures consistent structure, 
 | T0 primary author (codex cap thin / throttle) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Codex weekly cap throttled | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]). |
 | Bug fixer (any cap state) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Bug fix PRs — separate lane from T0 author | Proven 3/3 first-commit on session 51 bug PRs per [[feedback_cursor_is_strong_bug_fixer]]. Use regardless of codex cap state. |
 | T0 off-load (spread author load) | deepseek-v4-pro | When 3+ codex authors already in-flight (parallel-cap discipline per [[feedback_parallel_rewrite_cap_three]]) | Pair with vigilant code-domain reviewer; hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]). |
-| Drafter (needs Claude expansion) | gemini-3.1-pro-preview | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
+| Drafter (needs Claude expansion) | agy (gemini-3.1-pro-high) | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
 | Source-fidelity expansion | claude opus (post-2026-06-15 inline) OR codex (pre, danger mode) | Strict-source rewrites | [[feedback_codex_default_prose_expander]] |
 
 **Important**: every author lane is bound by the same density gates and 7-dim rubric below. The agent identity changes the dispatch wrapper, not the content contract.

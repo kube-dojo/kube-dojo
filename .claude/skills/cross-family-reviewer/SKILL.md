@@ -1,7 +1,7 @@
 ---
 name: cross-family-reviewer
-description: Cross-family PR review protocol for KubeDojo. Different model family than the author per docs/review-protocol.md. For ANY agent acting as reviewer (codex, composer-2.5, gemini, agy, claude). Triggers on "review PR", "R1 review", "R2 review", "cross-family review".
-last_calibrated: 2026-05-24
+description: Cross-family PR review protocol for KubeDojo. Different model family than the author per docs/review-protocol.md. For ANY agent acting as reviewer (codex, composer-2.5, agy, claude). Triggers on "review PR", "R1 review", "R2 review", "cross-family review".
+last_calibrated: 2026-07-07
 ---
 
 # Cross-family Reviewer Skill
@@ -12,18 +12,18 @@ Run a rigorous PR review on KubeDojo code or content. **Different model family t
 
 This skill describes the **review contract**. For pedagogical content scoring against the 7-dim rubric, layer in [[module-quality-reviewer]].
 
-## Routing table (Decision Card C, 2026-05-24)
+## Routing table (Decision Card C, 2026-05-24; gemini-cli retired ~2026-06-15 → the Google seat is agy)
 
 | Author family | Cross-family reviewer (primary) | Fallback |
 |---|---|---|
 | claude (orchestrator inline OR headless) | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 |
-| composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 (danger mode, worktree) | gemini-3.1-pro-preview |
-| codex (gpt-5.5 / spark / mini) | composer-2.5 | gemini-3.1-pro-preview, agy (Claude tier) |
-| deepseek-v4-pro | composer-2.5 OR codex | gemini-3.1-pro-preview |
-| gemini-3.1-pro-preview | composer-2.5 OR codex | agy |
+| composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 (danger mode, worktree) | agy (gemini-3.1-pro-high) |
+| codex (gpt-5.5 / spark / mini) | composer-2.5 | agy (gemini-3.1-pro-high or Claude tier) |
+| deepseek-v4-pro | composer-2.5 OR codex | agy (gemini-3.1-pro-high) |
+| agy (gemini models) | composer-2.5 OR codex | — |
 | agy (Claude tier) | codex OR composer-2.5 | — |
 
-**Do NOT use `gemini-3-flash-preview` as a code/lab reviewer** — calibrated 0/2 bugs caught on PR #1229 ([[feedback_never_flash_for_code_review]]).
+**Do NOT use a gemini-flash-class model (via agy) as a code/lab reviewer** — calibrated 0/2 bugs caught on PR #1229 ([[feedback_never_flash_for_code_review]]).
 
 ## How to run a review (R1)
 
@@ -78,7 +78,7 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 |---|---|---|
 | codex gpt-5.5 | Fabricating GitHub Actions / Dependabot schema claims, fabricating commands ([[feedback_deepseek_hallucinates_on_gh_schemas]]) | Verify CLI schema via `--help` before flagging |
 | composer-2.5 | Verifier-pass ≠ runnability gap; hallucinated paths in findings | Quote exact lines from diff; run the bash |
-| gemini-3.1-pro-preview | Mixing legit findings with cosmetic over-corrections ([[feedback_gemini_review_partial_apply]]); calling a REAL recent feature "fabricated" because it postdates your cutoff (e.g. Dependabot `cooldown` — it is real; PR #1825, 2026-06-07) | Only flag findings you'd defend in a re-review; never assert a recent schema/feature is fake — mark it unverifiable |
+| agy (gemini models) | Mixing legit findings with cosmetic over-corrections ([[feedback_gemini_review_partial_apply]]); calling a REAL recent feature "fabricated" because it postdates your cutoff (e.g. Dependabot `cooldown` — it is real; PR #1825, 2026-06-07) | Only flag findings you'd defend in a re-review; never assert a recent schema/feature is fake — mark it unverifiable |
 | deepseek-v4-pro | Rule attribution slippage (shellcheck rule numbers, semver exact, version-specific behavior) | Verify version-specific claims against current docs |
 | agy (Claude tier) | Historically 0 hallucinations on code review — strong default | — |
 | claude headless | Yes-man drift; favoring author's framing | Frame your read independent of the PR description |
@@ -104,7 +104,7 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 
 ## When to escalate to a Decision Card
 
-For contested NEEDS_CHANGES (author defends, reviewer blocks, repeat), trigger `scripts/ab discuss --with claude,codex,gemini` per [[.claude/rules/decision-card]]. Do NOT just hold the PR hostage — escalate cleanly.
+For contested NEEDS_CHANGES (author defends, reviewer blocks, repeat), trigger `scripts/ab discuss --with claude,codex,agy` per [[.claude/rules/decision-card]]. Do NOT just hold the PR hostage — escalate cleanly.
 
 ## References
 

@@ -76,8 +76,9 @@ When agy is the designated cross-family reviewer:
 - If agy says NEEDS CHANGES, address feedback before closing.
 - Post agy's review as a comment on the issue.
 
-**2. Translator (Ukrainian)**
-- Produces good Ukrainian translations (99-100% of original length)
+**2. Translator (Ukrainian) — the RAG-reviewer seat, NOT the volume author (roster tested 2026-07-04)**
+- Volume UK translation is **deepseek-led** (`feedback_uk_translation_roster_tested_2026_07`); agy's UK seat is the **RAG reviewer** (`sources` MCP: russicism / lemma / quote checks).
+- agy CAN author single-chunk translations; multi-chunk `agy -p` intermittently hangs (`feedback_agy_translation_authoring_blocked_by_dispatch_gaps`).
 - Must follow glossary at `src/content/docs/glossary.md`
 
 **3. Content Drafter (with expansion)**

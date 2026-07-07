@@ -1,7 +1,7 @@
 ---
 name: curriculum-orchestrator
 description: KubeDojo orchestrator role. Drives the module queue, dispatches authors/reviewers, owns PR hygiene, owns session handoffs. Use as primary role for any standalone session on this repo. Triggers on "orchestrate", "drive the queue", "main session", "standalone session".
-last_calibrated: 2026-05-24
+last_calibrated: 2026-07-07
 ---
 
 # Curriculum Orchestrator Skill
@@ -54,7 +54,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 - Mix agents for 3+ parallel reviews to avoid single-OAuth burst limit ([[feedback_parallel_review_oauth_burst]]).
 
 ### Before any dispatch
-1. Verify the agent's auth is alive (codex 403 = `codex login` needed; gemini OAuth rotation; agy panel quota).
+1. Verify the agent's auth is alive (codex 403 = `codex login` needed; agy panel quota).
 2. WARN the user before 3+ parallel or 5+ sequential to any single agent in 10 min ([[feedback_warn_before_gemini_quota_burn]]).
 3. Pick the lowest-tier model that can do the job ([[feedback_codex_model_routing]], [[feedback_dispatch_smart_for_sweeps]]).
 4. **Make fix briefs literal-complete.** Opus-4.8-class authors follow instructions literally and do not generalize from one listed item to its siblings. Every fix brief MUST say: *"Find and fix ALL occurrences of this pattern in the file, not just the listed line(s) — issue listings are sampled, not exhaustive. Apply the change to every instance, not just the first one."* ([[feedback_class_a_fix_includes_sibling_grep]]).
@@ -77,12 +77,12 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 | Activity | Primary | Cross-family reviewer(s) / fallback | Notes |
 |---|---|---|---|
-| Curriculum content — WRITE | cursor `--model auto` ‖ codex gpt-5.5 (quality-critical) | opus(≤1/wave) + agy + gemini + deepseek + grok-4.20-reasoning (pick ≥1 diff family) | ≤3 concurrent authors; codex content fixes via `draft`+gpt-5.5+`--timeout 3600` |
-| Curriculum content — REVIEW | — | opus / cursor / agy / gemini / deepseek / grok-4.20-reasoning | mix ≥2 families, ≤2/OAuth, ground-check ALL |
+| Curriculum content — WRITE | cursor `--model auto` ‖ codex gpt-5.5 (quality-critical) | opus(≤1/wave) + agy + deepseek + grok-4.20-reasoning (pick ≥1 diff family) | ≤3 concurrent authors; codex content fixes via `draft`+gpt-5.5+`--timeout 3600` |
+| Curriculum content — REVIEW | — | opus / cursor / agy / deepseek / grok-4.20-reasoning | mix ≥2 families, ≤2/OAuth, ground-check ALL |
 | Code / tooling — WRITE & FIX | cursor `--model auto` (strongest fixer) | codex (danger+worktree) / opus / grok-build-0.1 / deepseek | [[feedback_cursor_is_strong_bug_fixer]]; feed grok-build COMPLETE diffs |
 | Code / tooling — REVIEW | — | codex (danger+worktree) / opus (best code-correctness) / grok-build-0.1 / deepseek | cross-family to author |
 | Code-heavy MODULE content | codex gpt-5.5 | opus (route ≥1 here) + grok-build-0.1 + deepseek | brief: build-against-pinned-version ([[feedback_code_heavy_review_buildability]]) |
-| Research / architecture / decision | codex (architect) + opus | `ab discuss --with claude,codex,gemini` ([[.claude/rules/decision-card]]) | consult codex on non-trivial scope ([[feedback_consult_codex_on_decisions]]) |
+| Research / architecture / decision | codex (architect) + opus | `ab discuss --with claude,codex,agy` ([[.claude/rules/decision-card]]) | consult codex on non-trivial scope ([[feedback_consult_codex_on_decisions]]) |
 | Mechanical / deterministic | cursor or codex (cheap tier) | self-verify | gate/link fixes, batched edits |
 | External primary-source fetch | `mcp__claude-in-chrome__*` | hermes grok-4.3 (x.com only) | Browser BEFORE writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
 
@@ -90,7 +90,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 **During Anthropic throttle window** (2026-05-23/24 instance, recurs):
 - CUT sonnet headless (review/edit/draft/judge1) to preserve shared cap for opus orchestrator.
-- Route review → codex/agy/gemini.
+- Route review → codex/agy.
 - Opus orchestration (this session) stays unchanged — that's what's being preserved.
 
 ## Decision Card C — symmetric routing (locked 2026-05-24)
@@ -124,22 +124,24 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 - Pending Decision Cards live in `docs/decisions/pending/`. On user decision, move to `docs/decisions/{date}-{slug}.md`.
 - Per [[.claude/rules/decision-card]]: cards emitted on disagreement only. Don't emit on consensus.
 
-## Headroom — compress big context, keep handoffs tight
+## Headroom — ROUTING DISABLED (s181, 2026-06-24); manage context manually
 
-Headroom (the `headroom` MCP, shared compression + memory layer) is ON — the session
-and every `dispatch_smart` agent route through the proxy (`127.0.0.1:8787`). Use it:
+Headroom proxy routing is OFF and the `headroom` MCP is NOT in `.mcp.json` —
+`headroom_compress` / `headroom_retrieve` are unavailable in sessions; do not plan
+around them. The proxy's pre-upstream compression tripped stream-idle timeouts on
+large model outputs and made large Reads silently lossy
+([[feedback_never_translate_from_compressed_read]]). Re-enable only when the
+buffered-read-timeout fix ships ([[feedback_headroom_disabled_reenable_when_readtimeout_fix_ships]]).
 
-- **Large content** (`npm run build` output, codex/cursor/deepseek review verdicts,
-  dispatch responses, search/grep bundles, validation output — roughly >200 lines /
-  20 KB): call `headroom_compress` FIRST, reason over the hash + a one-line summary,
-  and `headroom_retrieve` only the exact detail. Single biggest context-saver on a
-  long orchestration session — default to it instead of letting big outputs truncate.
+Context discipline in the meantime:
+
+- **Large content** (`npm run build` output, review verdicts, dispatch responses,
+  search/grep bundles): pipe to a file and grep/tail the file — never Read raw
+  ([[feedback_never_read_build_logs]]).
 - **Handoffs:** `docs/session-state/YYYY-MM-DD-<topic>.html` (indexed in `STATUS.md`,
-  parsed by the briefing API) stays the durable cross-session SSOT. The proxy memory
-  store is local-only with no MCP write tool yet — keep git as the backstop and push
-  bulky evidence behind Headroom hashes. Migrate the handoff body to Headroom only
-  once the durable memory-write tool lands (#2024).
-- Full rule: [[.claude/rules/headroom]]. Never run `headroom learn --apply`.
+  parsed by the briefing API) is the durable cross-session SSOT (#2024).
+- Full rule + re-enable procedure: [[.claude/rules/headroom]]. Never run
+  `headroom learn --apply`.
 
 ## Service troubleshooting
 
