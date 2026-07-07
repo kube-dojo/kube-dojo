@@ -24,7 +24,7 @@ briefing + orient punch-line + session handoff pointer. It exits 0 with a `STATU
 fallback when the API is down. Full ritual: [`scripts/prompts/cold-start.md`](scripts/prompts/cold-start.md).
 Individual curl recipes: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
-Only read the underlying `docs/session-state/<date>-*.{md,html}` file when briefing/orient
+Only read the underlying handoff file (`.agent/session-state/<date>-*.md`; pre-s196 history in `docs/session-state/`) when briefing/orient
 leave a real narrative-why gap. Respect `.claude/rules/decision-card.md` for pending decisions.
 
 **Before you claim/fix/re-review work**:

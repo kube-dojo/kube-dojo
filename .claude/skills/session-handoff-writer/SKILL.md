@@ -88,19 +88,17 @@ next: "<the single DO-NEXT for the successor session>"
 - <memory entries added-updated; notable files — one line each>
 ```
 
-## Required sections
+## Required sections (match the lean skeleton above)
 
-1. **Headline / TLDR** — 2-3 sentences. The next agent should be able to read just this and know what happened.
-2. **PRs** — table of PRs (merged + in-flight) with cycle annotations.
-3. **Policy moves** — what conventions changed. Quote the user where load-bearing.
-4. **Headline data** — numbers from `/api/briefing/session`, `/api/quality/scores`, etc.
-5. **Dispatch ledger** — every dispatch fired, agent, outcome. This is the audit trail.
-6. **What's next** — top priorities for the next session.
+1. **YAML frontmatter** — session, date, lane, prs_merged, issues, `next` (the single DO-NEXT).
+2. **TLDR** — 2-3 sentences. The next agent should be able to read just this and know what happened.
+3. **Shipped** — one bullet per PR/issue (cite; the PR body carries the detail).
+4. **Decisions / policy moves** — what changed; quote the user where load-bearing.
+5. **Dispatch ledger** — one line per dispatch (agent → outcome). The audit trail.
+6. **What's next** — top priorities + watch items.
 
-Optional but recommended:
-- **Files touched** — list with one-line "what changed" each.
-- **Decisions made / Decision Cards moved** — link to `docs/decisions/`.
-- **Memory entries added/updated** — list with one-line "why".
+Optional (one line each, only when non-obvious): memory entries added/updated, notable files.
+No "Headline data" dumps — the briefing API serves live numbers; don't snapshot them into the brief.
 
 ## STATUS.md update protocol
 
