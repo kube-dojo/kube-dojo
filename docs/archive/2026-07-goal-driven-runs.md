@@ -1,3 +1,10 @@
+> **ARCHIVED 2026-07-07 (s196; lu-parity — lu archived its twin the same day, lu#4704).**
+> Dormant: no `/goal` run in recent sessions, yet this ~7KB rule loaded into EVERY
+> session's context. The `/goal` grammar below is intact for revival — to revive, move
+> this file back to `.claude/rules/goal-driven-runs.md` and restore the references in
+> `agents_extensions/claude/skills/curriculum-orchestrator/SKILL.md` +
+> `agents_extensions/claude/agents/infra-orchestrator.md`.
+
 # `/goal` Run Vocabulary for Completion-Condition-Driven Orchestration
 
 ## 1. What `/goal` is (≤6 lines)

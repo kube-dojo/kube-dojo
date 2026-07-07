@@ -65,3 +65,25 @@ def test_session_briefing_reads_live_copy(tmp_path: Path) -> None:
     focus_blob = " ".join(str(x) for x in briefing.get("focus", []))
     assert "live item" in focus_blob
     assert "stale tracked item" not in focus_blob
+
+
+def test_current_session_scans_agent_dir_and_history(tmp_path: Path) -> None:
+    """build_current_session scans BOTH .agent/session-state (live, gitignored)
+    and docs/session-state (tracked pre-s196 history); the newest date-prefixed
+    filename wins regardless of dir (s196 agent-dir handoff convention)."""
+    hist = tmp_path / "docs" / "session-state"
+    hist.mkdir(parents=True)
+    (hist / "2026-07-05-session-195-old-topic.html").write_text(
+        "<h1>Session 195 — old</h1>", encoding="utf-8"
+    )
+    live = tmp_path / ".agent" / "session-state"
+    live.mkdir(parents=True)
+    (live / "2026-07-07-session-196-new-topic.md").write_text(
+        "# Session 196 — new\n\nTLDR sentence here.\n", encoding="utf-8"
+    )
+
+    session = local_api.build_current_session(tmp_path)
+    assert session["latest"] is not None
+    assert session["latest"]["filename"] == "2026-07-07-session-196-new-topic.md"
+    assert session["latest"]["path"] == ".agent/session-state/2026-07-07-session-196-new-topic.md"
+    assert session["total_handoffs"] == 2

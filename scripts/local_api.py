@@ -4358,6 +4358,7 @@ _BENCHMARK_LEDGER_REL = "calibration/v1/ledger.db"
 _BENCHMARK_REPORT_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 _ARTIFACT_ALLOWED_DIRS = (
+    ".agent/session-state",
     "audit",
     "calibration/v1/reports",
     "docs/architecture",
@@ -4388,7 +4389,8 @@ _ARTIFACT_SECTION_SPECS = (
     ("Calibration reports", "calibration/v1/reports", ("**/*.html",)),
     ("Architecture", "docs/architecture", ("**/*.html",)),
     ("Migrations", "docs/migrations", ("**/*.html", "**/*.md")),
-    ("Handoffs", "docs/session-state", ("*.html", "*.md")),
+    ("Handoffs (live, local)", ".agent/session-state", ("*.html", "*.md")),
+    ("Handoffs (pre-s196 history)", "docs/session-state", ("*.html", "*.md")),
     ("Decisions", "docs/decisions", ("**/*.html", "**/*.md")),
     ("Sessions", "docs/sessions", ("**/*.html", "**/*.md")),
     ("Research", "docs/research", ("**/*.html", "**/*.md")),
@@ -5355,7 +5357,11 @@ def _handoff_metadata(repo_root: Path, path: Path, *, include_detail: bool) -> d
     is_html = metadata["format"] == "html"
     title = _extract_html_h1(text) if is_html else _extract_markdown_h1(text)
     tldr = _extract_html_tldr(text) if is_html else _extract_markdown_tldr(text)
-    raw_url = f"/artifacts/{rel}" if rel.startswith("docs/session-state/") else None
+    raw_url = (
+        f"/artifacts/{rel}"
+        if rel.startswith(("docs/session-state/", ".agent/session-state/"))
+        else None
+    )
     metadata.update(
         {
             "render_url": f"http://127.0.0.1:8910/{rel}",
@@ -5368,28 +5374,36 @@ def _handoff_metadata(repo_root: Path, path: Path, *, include_detail: bool) -> d
 
 
 def build_current_session(repo_root: Path) -> dict[str, Any]:
-    handoff_dir = repo_root / "docs" / "session-state"
-    handoffs: list[dict[str, Any]] = []
-    if handoff_dir.is_dir():
+    # Live handoffs are LOCAL agent state in the gitignored ``.agent/session-state/``
+    # (s196, user 2026-07-07 — learn-ukrainian parity #3768/#4704: handoffs never go
+    # through git/PRs); ``docs/session-state/`` holds the tracked pre-s196 history.
+    # Scan BOTH; date-prefixed filenames sort chronologically across dirs.
+    handoff_dirs = (
+        repo_root / ".agent" / "session-state",
+        repo_root / "docs" / "session-state",
+    )
+    entries: list[tuple[dict[str, Any], Path]] = []
+    for handoff_dir in handoff_dirs:
+        if not handoff_dir.is_dir():
+            continue
         for path in handoff_dir.iterdir():
             if not path.is_file() or path.suffix.lower() not in {".md", ".html"}:
                 continue
             metadata = _handoff_metadata(repo_root, path, include_detail=False)
             if metadata is not None:
-                handoffs.append(metadata)
+                entries.append((metadata, path))
 
-    handoffs.sort(key=lambda item: item["filename"], reverse=True)
+    entries.sort(key=lambda item: item[0]["filename"], reverse=True)
     latest = None
     predecessors: list[dict[str, Any]] = []
-    if handoffs:
-        latest_path = handoff_dir / handoffs[0]["filename"]
-        latest = _handoff_metadata(repo_root, latest_path, include_detail=True)
-        predecessors = handoffs[1:11]
+    if entries:
+        latest = _handoff_metadata(repo_root, entries[0][1], include_detail=True)
+        predecessors = [meta for meta, _ in entries[1:11]]
 
     return {
         "latest": latest,
         "predecessors": predecessors,
-        "total_handoffs": len(handoffs),
+        "total_handoffs": len(entries),
     }
 
 

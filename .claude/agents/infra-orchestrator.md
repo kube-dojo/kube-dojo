@@ -85,6 +85,6 @@ work to the default lane and vice versa.
 ## Key references
 
 - `CLAUDE.md`, `STATUS.md`, `.claude/rules/**` (decision-card, github-actions-
-  security, headroom, goal-driven-runs, code-editing-safety).
+  security, headroom, code-editing-safety).
 - `agents_extensions/deploy.sh`, `scripts/lib/handoff_identity.sh`,
   `.claude/hooks/session-setup.sh` — the lane plumbing you maintain.

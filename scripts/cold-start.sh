@@ -173,7 +173,7 @@ echo "--- kubedojo:handoff-path ---"
 handoff_path=$(awk '
   /^## Latest handoff/ { in_section=1; next }
   in_section && /^## / { exit }
-  in_section && match($0, /docs\/session-state\/[A-Za-z0-9._\/-]+\.(html|md)/) {
+  in_section && match($0, /(\.agent|docs)\/session-state\/[A-Za-z0-9._\/-]+\.(html|md)/) {
     print substr($0, RSTART, RLENGTH)
     exit
   }
