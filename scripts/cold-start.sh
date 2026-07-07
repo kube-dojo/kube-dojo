@@ -158,9 +158,15 @@ echo "--- kubedojo:api-down ---" >&2
 echo "API down — falling back to STATUS.md" >&2
 echo ""
 
+# Live status index: .agent/STATUS.md (gitignored local agent state) is
+# preferred when present — mirrors local_api._live_status_path. The tracked
+# STATUS.md is the fallback (fresh clone / CI / worktrees).
+STATUS_FILE="STATUS.md"
+[ -f ".agent/STATUS.md" ] && STATUS_FILE=".agent/STATUS.md"
+
 echo "--- kubedojo:fallback ---"
-echo "# STATUS.md (first 40 lines)"
-head -n 40 STATUS.md
+echo "# ${STATUS_FILE} (first 40 lines)"
+head -n 40 "$STATUS_FILE"
 echo ""
 
 echo "--- kubedojo:handoff-path ---"
@@ -171,7 +177,7 @@ handoff_path=$(awk '
     print substr($0, RSTART, RLENGTH)
     exit
   }
-' STATUS.md)
+' "$STATUS_FILE")
 if [ -z "$handoff_path" ]; then
   handoff_path="(could not parse Latest handoff path from STATUS.md)"
 fi

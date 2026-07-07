@@ -38,13 +38,15 @@ retrieve the original or inspect the repo/source when exact claims matter (same 
 the anti-fabrication conventions). Never run `headroom learn --apply` unless the
 user explicitly asks — it can rewrite `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`.
 
-## Handoffs — git stays SSOT for now
+## Handoffs — on-disk files stay SSOT
 
 KubeDojo session handoffs (`docs/session-state/YYYY-MM-DD-<topic>.html`, indexed in
-`STATUS.md`, parsed by the briefing API at cold-start) **remain the durable
-cross-session source of truth.** The proxy's memory store is local-only with no MCP
+the live `.agent/STATUS.md`, parsed by the briefing API at cold-start) **remain the
+durable cross-session source of truth — as ON-DISK files.** (Since s196 new handoffs
+are gitignored local agent state — user directive s190b; git holds only the
+pre-s190b history.) The proxy's memory store is local-only with no MCP
 write tool yet (`native_tool`/`bridge` off) — it auto-injects context but cannot
-carry the handoff across sessions. So keep git as the backstop and push bulky
+carry the handoff across sessions. So keep the on-disk files as the backstop and push bulky
 evidence behind Headroom hashes rather than pasting it. **Migrate the handoff body
 to Headroom (and cut git to a thin pointer) only once the durable memory-write tool
 lands** — tracked in #2024. Do not drop the git handoff before the cold-start
