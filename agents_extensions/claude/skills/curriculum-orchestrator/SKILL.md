@@ -18,7 +18,7 @@ This skill is intentionally concrete: it names the agents on the roster as of `l
    - `kubedojo:briefing` — actions/top_modules/blockers
    - `kubedojo:session` — latest handoff path
    - `kubedojo:pending-decisions` — blocking Decision Cards in `docs/decisions/pending/`
-3. Read the latest handoff (`docs/session-state/...`) only if briefing/orient leave a real narrative-why gap.
+3. Read the latest handoff (`.agent/session-state/...`; pre-s196 history in `docs/session-state/`) only if briefing/orient leave a real narrative-why gap.
 4. Check `docs/decisions/pending/` — pending Decision Cards block only their declared Scope; surface them before starting other work.
 5. If the local API is down, `cold-start.sh` exits 0 with a STATUS.md fallback. Don't treat API failure as a hard stop.
 
@@ -120,7 +120,7 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 ## Operational rules
 
 - Quality-gate numbers live in `scripts/quality/verify_module.py` and `scripts/config.py`. Change the test fixture in the same commit as the gate ([[feedback_three_way_rule_agreement]]).
-- `STATUS.md` is an INDEX, not a log. Full handoffs go in `docs/session-state/YYYY-MM-DD-<topic>.html` per HTML-first artifact policy ([[feedback_html_over_markdown_for_artifacts]]).
+- `.agent/STATUS.md` (live, gitignored) is an INDEX, not a log. Handoffs = lean MD briefs in `.agent/session-state/` — never through git/PRs ([[session-handoff-writer]]). The tracked `STATUS.md` holds durable sections, PR-only.
 - HTML artifacts MUST be served via `http://127.0.0.1:8768/`, never `open <file>` or `file://` ([[feedback_html_artifacts_via_local_api]]).
 - Briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md. Keep those headings populated.
 - Pending Decision Cards live in `docs/decisions/pending/`. On user decision, move to `docs/decisions/{date}-{slug}.md`.
@@ -140,8 +140,8 @@ Context discipline in the meantime:
 - **Large content** (`npm run build` output, review verdicts, dispatch responses,
   search/grep bundles): pipe to a file and grep/tail the file — never Read raw
   ([[feedback_never_read_build_logs]]).
-- **Handoffs:** `docs/session-state/YYYY-MM-DD-<topic>.html` (indexed in `STATUS.md`,
-  parsed by the briefing API) is the durable cross-session SSOT (#2024).
+- **Handoffs:** `.agent/session-state/YYYY-MM-DD-session-NN-<topic>.md` (indexed in
+  `.agent/STATUS.md`, parsed by the briefing API) is the durable cross-session SSOT (#2024).
 - Full rule + re-enable procedure: [[.claude/rules/headroom]]. Never run
   `headroom learn --apply`.
 
