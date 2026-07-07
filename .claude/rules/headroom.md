@@ -23,7 +23,7 @@ than reinvents. Tracking issue: #2024.
 
 ## Usage rule — compress big context (INOPERATIVE while routing is disabled)
 
-If content is roughly over **200 lines or 20 KB**, call `headroom_compress` FIRST,
+Once re-enabled: if content is roughly over **200 lines or 20 KB**, call `headroom_compress` FIRST,
 reason over the returned **hash + a one-line summary**, and `headroom_retrieve`
 only the exact detail you need. This is the single biggest context-saver on a long
 orchestration session — **default to it instead of letting big outputs truncate.**

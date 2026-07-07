@@ -97,7 +97,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 ```
 Author                                  →  Reviewer
-codex / deepseek / gemini / claude /
+codex / deepseek / claude /
 agy / anyone else                       →  composer-2.5
 composer-2.5                            →  codex
 orchestrator inline edits               →  composer-2.5

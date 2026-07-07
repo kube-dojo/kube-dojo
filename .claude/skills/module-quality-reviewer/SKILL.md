@@ -12,7 +12,7 @@ Review KubeDojo modules against the quality rubric at `docs/quality-rubric.md`. 
 
 ```
 Author                                  →  Cross-family reviewer
-codex / deepseek / gemini / claude /
+codex / deepseek / claude /
 agy / anyone else                       →  composer-2.5 (cursor-agent CLI or cursor IDE)
 composer-2.5                            →  codex (gpt-5.5, danger mode, worktree)
 orchestrator inline edits               →  composer-2.5
