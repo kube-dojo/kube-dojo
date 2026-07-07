@@ -76,6 +76,39 @@ def test_hermes_router_argv_handles_flag_like_prompt() -> None:
     assert "-z" not in argv
 
 
+def test_hermes_provider_deepseek_routes_first_party(monkeypatch) -> None:
+    """deepseek-* via --agent hermes must hit the first-party DeepSeek API —
+    the old catch-all sent it to OpenRouter and drained the account (#2245)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from dispatch_smart import _hermes_provider_for_model
+
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    assert _hermes_provider_for_model("deepseek-v4-pro") == "deepseek"
+    assert _hermes_provider_for_model("deepseek-v4-flash") == "deepseek"
+
+
+def test_hermes_provider_unknown_model_raises(monkeypatch) -> None:
+    """Unknown models raise instead of silently billing a metered proxy (#2245)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import pytest
+
+    from dispatch_smart import _hermes_provider_for_model
+
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    with pytest.raises(ValueError, match="2245"):
+        _hermes_provider_for_model("kimi-k2.6")
+
+
+def test_hermes_provider_openrouter_prefix_is_the_explicit_opt_in(monkeypatch) -> None:
+    """openrouter/ prefix selects the proxy; the prefix is stripped for -m."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from dispatch_smart import _hermes_cli_model, _hermes_provider_for_model
+
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    assert _hermes_provider_for_model("openrouter/deepseek/deepseek-v4-pro") == "openrouter"
+    assert _hermes_cli_model("openrouter/deepseek/deepseek-v4-pro") == "deepseek/deepseek-v4-pro"
+
+
 def test_opencode_router_argv_uses_json_format() -> None:
     sys.path.insert(0, str(SCRIPTS_DIR))
     from dispatch_smart import _router_command

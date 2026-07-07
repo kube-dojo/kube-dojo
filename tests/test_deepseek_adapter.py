@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from agent_runtime.adapters.deepseek import DeepSeekAdapter
 
 
@@ -112,13 +114,22 @@ def test_provider_default_is_first_party_deepseek(monkeypatch) -> None:
     assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek-v4-pro"
 
 
-def test_provider_openrouter_inferred_from_slug(monkeypatch) -> None:
-    """An OpenRouter-style ``vendor/model`` slug routes via ``openrouter``."""
+def test_provider_openrouter_requires_explicit_prefix(monkeypatch) -> None:
+    """ONLY an explicit ``openrouter/…`` prefix selects the OpenRouter proxy;
+    the prefix is stripped so hermes -m gets the catalog id (#2245)."""
     monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
-    plan = _build(monkeypatch, model="deepseek/deepseek-v3.2-exp")
+    plan = _build(monkeypatch, model="openrouter/deepseek/deepseek-v4-pro")
     assert _provider_of(plan) == "openrouter"
-    # The slug is forwarded verbatim to hermes -m.
-    assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek/deepseek-v3.2-exp"
+    assert plan.cmd[plan.cmd.index("-m") + 1] == "deepseek/deepseek-v4-pro"
+
+
+def test_provider_bare_slash_slug_raises(monkeypatch) -> None:
+    """A ``vendor/model`` slug WITHOUT the openrouter/ prefix must fail loudly
+    instead of silently billing the metered OpenRouter proxy — the exact
+    inference that contributed to the 2026-07-07 account drain (#2245)."""
+    monkeypatch.delenv("KUBEDOJO_HERMES_PROVIDER", raising=False)
+    with pytest.raises(ValueError, match="2245"):
+        _build(monkeypatch, model="deepseek/deepseek-v3.2-exp")
 
 
 def test_provider_explicit_tool_config_wins(monkeypatch) -> None:
