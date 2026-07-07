@@ -83,12 +83,46 @@ T0 author primary is **codex-or-cursor** depending on codex weekly-cap state —
 2. For high-leverage decisions: `scripts/ab discuss --with claude,codex,agy` ([[.claude/rules/decision-card]]).
 3. Consult codex on non-trivial scope decisions ([[feedback_consult_codex_on_decisions]]).
 
+## Live cap state — route on CodexBar when it's up (user directive 2026-07-07)
+
+`codexbar` (Homebrew CLI + menu-bar app, `/opt/homebrew/bin/codexbar`) reports LIVE
+per-lane quota windows. **When it's installed and running, base routing on ITS numbers**
+instead of panel-checking rituals or guesses:
+
+```bash
+codexbar usage --provider both --no-color          # codex + claude in one call
+codexbar usage --provider cursor --no-color        # Total / Auto / API pools
+codexbar usage --provider antigravity --no-color   # agy — TWO pools (see rule 4)
+codexbar usage --provider zai --no-color           # GLM (opencode zai-coding-plan)
+# --format json for scripting; --provider all honors the in-app toggles
+```
+
+Routing rules on top of the numbers (verified output shape 2026-07-07):
+
+1. **When to check**: before a wave (3+ dispatches), before any burst to a single lane,
+   and at the start of a heavy orchestration session. Skip it for a one-off routine
+   dispatch — each call takes seconds (web-dashboard fetch); don't tax every small call.
+2. **Session window beats weekly.** `Session:` (the 5-hour rolling window) with its
+   `Pace: … Projected empty in …` line is what heavy headless bursts actually exhaust
+   (s195). If a lane's session window is projected empty before your batch would finish,
+   route the batch to another family NOW — don't ride it into the throttle.
+3. **Thresholds**: <20% left in the governing window → treat the lane as THROTTLED
+   (route per the throttle section below). 20–40% → finish in-flight work but don't
+   START a new multi-dispatch wave on that lane.
+4. **agy has TWO pools** — `Gemini Models` vs `Claude and GPT` reset independently.
+   Check the pool for the MODEL you're dispatching, not just the first line.
+5. **deepseek and grok are not CodexBar-enabled here** → keep the manual checks for
+   those lanes (deepseek is ≈free anyway; grok via its CLI auth state).
+6. **Fallback, never a blocker**: if `codexbar` is missing or errors (app not running,
+   cookies stale), fall back to the manual pre-flight below and proceed.
+
 ## Pre-flight checklist (before EVERY dispatch)
 
 1. **Is the agent's auth alive?**
    - Codex: `codex exec --help` should not 403. If it does, `codex login`.
    - Agy: open agy panel, verify Claude tier selected.
-2. **Are caps healthy?** Check the panel/dashboard before firing 3+ in parallel.
+2. **Are caps healthy?** `codexbar usage` (section above) when available; else the
+   panel/dashboard — before firing 3+ in parallel.
 3. **Will this burn the cheap-tier first?** If the cheap tier (mini/spark/flash-lite) can do it, use it. Don't reflex-bump to gpt-5.5 ([[feedback_codex_model_routing]]).
 4. **Will this fan out beyond the parallel cap?** Hard cap 3 parallel rewrites ([[feedback_parallel_rewrite_cap_three]]).
 5. **Will this trip the OAuth burst limit?** Mix agents for 3+ parallel reviews ([[feedback_parallel_review_oauth_burst]]).

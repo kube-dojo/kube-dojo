@@ -55,6 +55,8 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 ### Before any dispatch
 1. Verify the agent's auth is alive (codex 403 = `codex login` needed; agy panel quota).
+   Before a WAVE: check live caps via `codexbar usage --provider both --no-color` when
+   CodexBar is running — session (5h) window governs; full rules in [[dispatch-router]].
 2. WARN the user before 3+ parallel or 5+ sequential to any single agent in 10 min ([[feedback_warn_before_gemini_quota_burn]]).
 3. Pick the lowest-tier model that can do the job ([[feedback_codex_model_routing]], [[feedback_dispatch_smart_for_sweeps]]).
 4. **Make fix briefs literal-complete.** Opus-4.8-class authors follow instructions literally and do not generalize from one listed item to its siblings. Every fix brief MUST say: *"Find and fix ALL occurrences of this pattern in the file, not just the listed line(s) — issue listings are sampled, not exhaustive. Apply the change to every instance, not just the first one."* ([[feedback_class_a_fix_includes_sibling_grep]]).
