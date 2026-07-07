@@ -11,9 +11,13 @@ End-of-session ritual for KubeDojo. The handoff is a durable narrative that lets
 ## The two-file pattern
 
 ```
-docs/session-state/YYYY-MM-DD-session-NN-<slug>.md   ← full handoff (this skill writes it; gitignored)
-.agent/STATUS.md                                       ← LIVE index that points at it (this skill updates it; gitignored)
+.agent/session-state/YYYY-MM-DD-session-NN-<slug>.md   ← handoff BRIEF (this skill writes it; agent dir, gitignored)
+.agent/STATUS.md                                        ← LIVE index that points at it (this skill updates it; gitignored)
 ```
+
+(lu parity #3768/#4704, user 2026-07-07: handoffs live in the AGENT DIR and never go
+through git/PRs — session end is pure file writes, "much faster". `docs/session-state/`
+= tracked pre-s196 history only.)
 
 **Do NOT inline the full handoff into the index.** `.agent/STATUS.md` is an INDEX. The briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from it (`_live_status_path` prefers the live copy), so those headings stay populated — but the narrative belongs in the dated file.
 
@@ -40,53 +44,48 @@ explicitly asks for a rendered report.
 ## Naming
 
 ```
-docs/session-state/YYYY-MM-DD-session-NN-<topic-slug>.md
+.agent/session-state/YYYY-MM-DD-session-NN-<topic-slug>.md
 ```
 
 Examples:
 - `2026-07-07-session-196-infra-prompt-refresh-codexbar-openrouter-git-clean.md` (first under the MD convention)
-- pre-s196 handoffs are `.html` (readable history; do not convert)
+- pre-s196 handoffs are `.html` in `docs/session-state/` (readable history; do not convert or move the tracked ones)
 
-## Markdown template
+## Markdown template — a lean BRIEF, not a saga (~2–5KB target, lu #4704)
 
-Skeleton (sections mirror the pre-s196 HTML conventions):
+YAML frontmatter + bullet-dense body. Agents AND the human read THIS — the lu measurement
+was that heavyweight narrative halves go unread. Cite PRs/issues/decisions instead of
+retelling them; the git log and the PR bodies are the archive. Skeleton:
 
 ```markdown
+---
+session: NN
+date: YYYY-MM-DD
+lane: <curriculum | infra>
+prs_merged: ["#NNNN", "#NNNN"]
+issues: {filed: ["#N"], closed: ["#N"]}
+next: "<the single DO-NEXT for the successor session>"
+---
+
 # Session NN — <one-line topic>
 
-<date> · <lane / model>. <2-3 sentence TLDR: who was active, what shifted, what landed.>
+<2-3 sentence TLDR: what shifted, what landed.>
 
-## Headline
+## Shipped
+- #NNNN <title> — <one-line what/why; review cycle in the PR>
 
-| PR / Issue | State | Title | Cycle |
-|---|---|---|---|
-| #NNNN | MERGED | ... | R1 ... → R2 ... → merged |
-| #NNNN | IN-FLIGHT | ... | ... |
-
-## Policy moves locked this session
-
-### 1. <name>
-What changed, why, who triggered it. Quote the user verbatim where load-bearing.
-
-## Headline data
-
-Numbers from the briefing API at session end. Quality boards, readiness, in-flight PRs.
+## Decisions / policy moves
+- <what changed + who triggered it; quote the user where load-bearing>
 
 ## Dispatch ledger
-
-| Dispatch | Agent | Class | Outcome |
-|---|---|---|---|
-| PR #NNNN R1 | codex gpt-5.5 | review | ... |
+- <dispatch> → <agent> → <outcome>   (one line each; the audit trail)
 
 ## What's next
+- <top priority>
+- <date-bound / watch items>
 
-- Top priority for next session: ...
-- Date-bound: ...
-- Long-running epics: ...
-
-## Files touched
-
-- `path/to/file.py` — what changed
+## Memory / files
+- <memory entries added-updated; notable files — one line each>
 ```
 
 ## Required sections
@@ -114,7 +113,7 @@ via PR only:
 1. **Promote previous "Latest handoff" row to "Predecessor chain"** (move the row down a section).
 2. **Insert new row** at the top of "## Latest handoff":
    ```
-   | YYYY-MM-DD | **NN** | <one-line summary> | [session-NN](./docs/session-state/<file>.md) |
+   | YYYY-MM-DD | **NN** | <one-line summary> | [session-NN](./.agent/session-state/<file>.md) |
    ```
 3. **Refresh "## Current state"** — module counts, readiness, in-flight PRs.
 4. **Refresh "## TODO"** — unchecked `- [ ]` items the next session should pick up. The briefing API parses these.
@@ -128,15 +127,16 @@ Cap `.agent/STATUS.md` at ~100 lines (the compression target — commit `dcd8636
 
 Markdown handoffs are consumed via the `Read` tool (next agent) and the briefing API's
 handoff pointer — no render step needed. If a human wants to view one, serve it via the
-local API artifacts route (`http://127.0.0.1:8768/artifacts/docs/session-state/<file>.md`)
+local API artifacts route (`http://127.0.0.1:8768/artifacts/.agent/session-state/<file>.md`)
 — never `open <file>` / `file://` ([[feedback_html_artifacts_via_local_api]]). Pre-s196
 `.html` handoffs render via `8910` (`http://127.0.0.1:8910/docs/session-state/<file>.html`).
 
 ## Do NOT commit the handoff (user directive s190b)
 
 Handoffs + the live STATUS index are **LOCAL agent state** — the briefing API and
-cold-start read them **from disk**, not from git. New files in `docs/session-state/`
-are gitignored; `.agent/STATUS.md` is gitignored. Ending a session = a couple of
+cold-start read them **from disk**, not from git. Handoffs live in the gitignored
+`.agent/session-state/`; `.agent/STATUS.md` is gitignored; `docs/session-state/` new
+files are gitignored too (defense in depth). Ending a session = a couple of
 file Writes. **No `git add`, no commit, no PR, no CI wait** — see
 [[feedback_handoff_commit_direct_no_worktree]]. (Durable shared records — decision
 docs, curriculum, code — still go through git + PR as normal.)

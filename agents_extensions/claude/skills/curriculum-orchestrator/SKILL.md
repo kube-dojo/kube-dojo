@@ -184,5 +184,5 @@ Context discipline in the meantime:
 - [`docs/review-protocol.md`](../../../docs/review-protocol.md) — cross-family review contract.
 - [`scripts/agent_onboarding.md`](../../../scripts/agent_onboarding.md) — full API recipes.
 - [`.claude/rules/decision-card.md`](../../rules/decision-card.md) — multi-agent deliberation pattern.
-- [`.claude/rules/goal-driven-runs.md`](../../rules/goal-driven-runs.md) — `/goal` command vocabulary.
+- [`docs/archive/2026-07-goal-driven-runs.md`](../../../docs/archive/2026-07-goal-driven-runs.md) — `/goal` command vocabulary (ARCHIVED 2026-07-07, dormant; revival path in its header).
 - Learn-ukrainian counterpart: `~/projects/learn-ukrainian/.claude/agents/curriculum-orchestrator.md` (different stack, same role shape).
