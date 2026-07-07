@@ -1,6 +1,6 @@
 ---
 name: session-handoff-writer
-description: End-of-session handoff convention for KubeDojo. HTML-first, served via local API. Live-index (.agent/STATUS.md) update protocol — handoffs are LOCAL agent state, never committed. Triggers on "session handoff", "end of session", "wrap up session", "write handoff".
+description: End-of-session handoff convention for KubeDojo. MARKDOWN handoff file (AI→AI local agent state) + live-index (.agent/STATUS.md) update — never committed to git. Triggers on "session handoff", "end of session", "wrap up session", "write handoff".
 last_calibrated: 2026-05-24
 ---
 
@@ -11,8 +11,8 @@ End-of-session ritual for KubeDojo. The handoff is a durable narrative that lets
 ## The two-file pattern
 
 ```
-docs/session-state/2026-05-24-session-52-<slug>.html   ← full handoff (this skill writes it; gitignored)
-.agent/STATUS.md                                         ← LIVE index that points at it (this skill updates it; gitignored)
+docs/session-state/YYYY-MM-DD-session-NN-<slug>.md   ← full handoff (this skill writes it; gitignored)
+.agent/STATUS.md                                       ← LIVE index that points at it (this skill updates it; gitignored)
 ```
 
 **Do NOT inline the full handoff into the index.** `.agent/STATUS.md` is an INDEX. The briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from it (`_live_status_path` prefers the live copy), so those headings stay populated — but the narrative belongs in the dated file.
@@ -24,85 +24,69 @@ docs/session-state/2026-05-24-session-52-<slug>.html   ← full handoff (this sk
 - After a meaningful policy/routing change (Decision Card move, agent retirement, threshold freeze).
 - Before a long break where session context would otherwise be lost to compaction.
 
-## Format choice — HTML default (HTML-first artifact policy)
+## Format — MARKDOWN (re-reclassified AI→AI, 2026-07-07 s196)
 
-Per [[feedback_html_over_markdown_for_artifacts]]:
-- **AI → Human consumption** (handoffs, audits, batch reports, PR explainers, autopsies) → **HTML**.
-- **Human → AI or AI → AI** (dispatch briefs, agent prompts) → **MD**.
+Per [[feedback_html_over_markdown_for_artifacts]] the format follows the READER. Since
+PR #2247 handoffs are gitignored LOCAL AGENT STATE — the primary reader is the NEXT
+AGENT (Read tool) + the briefing parser, not a human in a browser. So handoffs are
+**Markdown**: 2–4× cheaper to generate, cheaper to Read, greppable. (User, s196: "do
+whichever is more efficient". The 2026-05-09 AI→Human/HTML reclassification is
+SUPERSEDED — its premise, "the file's primary reader is the user", no longer holds.)
 
-Handoffs are AI → Human (you, the orchestrator, telling the user + next orchestrator what happened) → **HTML**.
-
-Brief / dense handoffs may stay `.md` if the narrative is short and a sidecar (`.notes.md`) is not warranted. Default: `.html`.
+HTML remains for genuinely human-facing artifacts (batch reports, audits, PR review
+explainers, autopsies) — and only there. Do NOT write an HTML handoff unless the user
+explicitly asks for a rendered report.
 
 ## Naming
 
 ```
-docs/session-state/YYYY-MM-DD-session-NN-<topic-slug>.html
+docs/session-state/YYYY-MM-DD-session-NN-<topic-slug>.md
 ```
 
 Examples:
-- `2026-05-24-session-52-cursor-as-author-pr-pipeline-6-merged.html`
-- `2026-05-23-session-48-parallel-rewrite-cap-three.html`
+- `2026-07-07-session-196-infra-prompt-refresh-codexbar-openrouter-git-clean.md` (first under the MD convention)
+- pre-s196 handoffs are `.html` (readable history; do not convert)
 
-## HTML template
+## Markdown template
 
-Use this skeleton (matches sessions 50-52 conventions):
+Skeleton (sections mirror the pre-s196 HTML conventions):
 
-```html
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Session NN — <one-line topic></title>
-<style>
-body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
-h1 { margin-bottom: 0.2rem }
-.meta { color: #555; margin-bottom: 1.5rem }
-h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
-h3 { margin-top: 1.4rem }
-code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
-table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
-td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
-th { background: #f8f8f8 }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
-.merged { background: #d4edda; color: #155724 }
-.inflight { background: #cce5ff; color: #004085 }
-blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
-</style></head><body>
+```markdown
+# Session NN — <one-line topic>
 
-<h1>Session NN — <one-line topic></h1>
-<p class="meta"><date + 2-3 sentence TLDR. Who was active, what shifted, what landed.></p>
+<date> · <lane / model>. <2-3 sentence TLDR: who was active, what shifted, what landed.>
 
-<h2>Headline</h2>
-<table>
-<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
-<tr><td>#NNNN</td><td><span class="pill merged">MERGED</span></td><td>...</td><td>R1 ... → R2 ... → merged</td></tr>
-<tr><td>#NNNN</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>...</td><td>...</td></tr>
-</table>
+## Headline
 
-<h2>Policy moves locked this session</h2>
-<h3>1. <name></h3>
-<p>What changed, why, who triggered it. Quote the user verbatim where load-bearing.</p>
+| PR / Issue | State | Title | Cycle |
+|---|---|---|---|
+| #NNNN | MERGED | ... | R1 ... → R2 ... → merged |
+| #NNNN | IN-FLIGHT | ... | ... |
 
-<h2>Headline data</h2>
-<p>Numbers from the briefing API at session end. Quality boards, readiness, in-flight PRs.</p>
+## Policy moves locked this session
 
-<h2>Dispatch ledger</h2>
-<table>
-<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
-<tr><td>PR #NNNN R1</td><td>codex gpt-5.5</td><td>review</td><td>...</td></tr>
-</table>
+### 1. <name>
+What changed, why, who triggered it. Quote the user verbatim where load-bearing.
 
-<h2>What's next</h2>
-<ul>
-<li>Top priority for next session: ...</li>
-<li>Date-bound: ...</li>
-<li>Long-running epics: ...</li>
-</ul>
+## Headline data
 
-<h2>Files touched</h2>
-<ul>
-<li><code>path/to/file.py</code> — what changed</li>
-</ul>
+Numbers from the briefing API at session end. Quality boards, readiness, in-flight PRs.
 
-</body></html>
+## Dispatch ledger
+
+| Dispatch | Agent | Class | Outcome |
+|---|---|---|---|
+| PR #NNNN R1 | codex gpt-5.5 | review | ... |
+
+## What's next
+
+- Top priority for next session: ...
+- Date-bound: ...
+- Long-running epics: ...
+
+## Files touched
+
+- `path/to/file.py` — what changed
 ```
 
 ## Required sections
@@ -142,9 +126,11 @@ Cap `.agent/STATUS.md` at ~100 lines (the compression target — commit `dcd8636
 
 ## Serving the handoff
 
-Per [[feedback_html_artifacts_via_local_api]]: HTML artifacts MUST be served via the local API, never `open <file>` or `file://`. **Port map** — `8768` = local API (briefing, pipeline state, JSON endpoints); `8910` = session-state HTML renderer (`render_url` for dated handoffs).
-
-The render URL pattern is `http://127.0.0.1:8910/docs/session-state/<file>.html`. Briefing API (`8768`) surfaces it as `kubedojo:session` → `render_url`.
+Markdown handoffs are consumed via the `Read` tool (next agent) and the briefing API's
+handoff pointer — no render step needed. If a human wants to view one, serve it via the
+local API artifacts route (`http://127.0.0.1:8768/artifacts/docs/session-state/<file>.md`)
+— never `open <file>` / `file://` ([[feedback_html_artifacts_via_local_api]]). Pre-s196
+`.html` handoffs render via `8910` (`http://127.0.0.1:8910/docs/session-state/<file>.html`).
 
 ## Do NOT commit the handoff (user directive s190b)
 
@@ -182,7 +168,7 @@ The handoff cites/links to these; it does not duplicate them.
 
 - Inlining the full handoff into the index — `.agent/STATUS.md` is the index, dated handoff HTML is the log (see commit `dcd86360` compression).
 - Skipping the dispatch ledger — that's the audit trail, not optional.
-- Writing the handoff in Markdown when the HTML rendering matters (tables, pill labels) — use HTML.
+- Writing an HTML handoff — handoffs are Markdown since s196 (AI→AI local agent state); HTML is for human-facing reports only.
 - Forgetting to refresh `## TODO` / `## Blockers` — the briefing API will surface stale data.
 - Writing a handoff before merging the in-flight PRs — better: write the handoff WITH `IN-FLIGHT` pills, then let the next session merge.
 
