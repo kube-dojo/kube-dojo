@@ -121,7 +121,11 @@ Optional but recommended:
 
 ## STATUS.md update protocol
 
-After writing the handoff HTML, update [`STATUS.md`](../../../STATUS.md):
+After writing the handoff HTML, update the **LIVE index: `.agent/STATUS.md`**
+(machine-local, gitignored — the briefing API + `cold-start.sh` prefer it when
+present; seed it from the tracked `STATUS.md` if missing). Do NOT edit the
+tracked `STATUS.md` at session end — it holds the durable sections and changes
+via PR only:
 
 1. **Promote previous "Latest handoff" row to "Predecessor chain"** (move the row down a section).
 2. **Insert new row** at the top of "## Latest handoff":
@@ -142,10 +146,17 @@ Per [[feedback_html_artifacts_via_local_api]]: HTML artifacts MUST be served via
 
 The render URL pattern is `http://127.0.0.1:8910/docs/session-state/<file>.html`. Briefing API (`8768`) surfaces it as `kubedojo:session` → `render_url`.
 
-## Commit the handoff in the same PR as the work, or in a dedicated docs commit
+## Do NOT commit the handoff (user directive s190b)
 
-```bash
-git add docs/session-state/2026-05-24-session-52-*.html STATUS.md
+Handoffs + the live STATUS index are **LOCAL agent state** — the briefing API and
+cold-start read them **from disk**, not from git. New files in `docs/session-state/`
+are gitignored; `.agent/STATUS.md` is gitignored. Ending a session = a couple of
+file Writes. **No `git add`, no commit, no PR, no CI wait** — see
+[[feedback_handoff_commit_direct_no_worktree]]. (Durable shared records — decision
+docs, curriculum, code — still go through git + PR as normal.)
+
+<!-- Historical (pre-s190b) commit ritual removed. Old form for reference:
+git add docs/session-state/<file>.html STATUS.md
 git commit -m "$(cat <<'EOF'
 docs: session NN handoff — <topic>
 
@@ -156,7 +167,7 @@ docs: session NN handoff — <topic>
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
-```
+-->
 
 ## What NOT to put in a handoff
 

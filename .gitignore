@@ -134,6 +134,10 @@ docs/quality-progress.tsv.lock
 # Agent bridge runtime
 .bridge/
 .agent/
+# Session handoffs are LOCAL agent state (user directive s190b) — new files in
+# docs/session-state/ are never committed; the ~254 pre-rule files stay tracked
+# (gitignore does not affect already-tracked paths). Read/serve paths unchanged.
+docs/session-state/
 
 # Local Codex / agent runtime state
 .agents/

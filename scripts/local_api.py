@@ -8110,6 +8110,24 @@ _STATUS_MD_CACHE: dict[str, dict[str, Any]] = {}
 _STATUS_MD_CACHE_LOCK = threading.Lock()
 
 
+def _live_status_path(repo_root: Path) -> Path:
+    """Resolve the LIVE status index: ``.agent/STATUS.md`` when present.
+
+    Session handoffs + the live status index are LOCAL agent state, not
+    curriculum (user directive s190b, memory
+    ``feedback_handoff_commit_direct_no_worktree``). The live per-session
+    index lives in the gitignored ``.agent/STATUS.md`` so ending a session
+    never dirties git; the tracked ``STATUS.md`` keeps the durable sections
+    (Active policies, historical index snapshot) and is updated via PR only.
+    Falls back to the tracked file when no live copy exists (fresh clones,
+    CI, worktrees).
+    """
+    live = repo_root / ".agent" / "STATUS.md"
+    if live.is_file():
+        return live
+    return repo_root / "STATUS.md"
+
+
 def _parse_status_md(status_path: Path) -> dict[str, Any]:
     """Extract focus + blockers + a light summary from STATUS.md.
 
@@ -8483,7 +8501,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     makes, replacing the usual ``cat STATUS.md + git log + ls`` crawl.
     See issue #258.
     """
-    status_md = _parse_status_md(repo_root / "STATUS.md")
+    status_md = _parse_status_md(_live_status_path(repo_root))
     worktree = build_worktree_status(repo_root)
     worktrees = build_worktrees_list(repo_root)
     services = build_runtime_services_status(repo_root)
