@@ -136,10 +136,11 @@ def _resolve_provider(tool_config: dict[str, Any], model: str) -> str:
 
     1. explicit ``tool_config["provider"]`` — caller intent.
     2. ``KUBEDOJO_HERMES_PROVIDER`` env — operator override.
-    3. model-slug inference — an OpenRouter-style slug (``openrouter/…`` or any
-       ``vendor/model`` form such as ``deepseek/deepseek-v3.2``) routes via
+    3. model-slug — ONLY an explicit ``openrouter/…`` prefix routes via
        ``openrouter``; a bare first-party slug (``deepseek-v4-pro``) via
-       ``deepseek``.
+       ``deepseek``. Any other ``vendor/model`` form raises: the old "any
+       slash means openrouter" inference silently billed the metered
+       OpenRouter account (incident #2245, 2026-07-07).
     """
     explicit = tool_config.get("provider")
     if explicit:
@@ -147,8 +148,16 @@ def _resolve_provider(tool_config: dict[str, Any], model: str) -> str:
     env_override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
     if env_override:
         return env_override
-    if model.startswith("openrouter/") or "/" in model:
+    if model.startswith("openrouter/"):
         return "openrouter"
+    if "/" in model:
+        raise ValueError(
+            f"Ambiguous DeepSeek model slug {model!r}: a vendor/model form no "
+            "longer implies the OpenRouter proxy (silent-billing incident "
+            "#2245). Opt in explicitly with an 'openrouter/…' slug, "
+            "tool_config={'provider': 'openrouter'}, or "
+            "KUBEDOJO_HERMES_PROVIDER."
+        )
     return "deepseek"
 
 
@@ -222,15 +231,21 @@ class DeepSeekAdapter:
                 )
             final_prompt = translate_mcp_prefix_for_hermes(final_prompt)
 
-        # Model
+        # Model — resolve the provider from the RAW slug first (an explicit
+        # ``openrouter/`` prefix is the opt-in marker, #2245), then strip that
+        # prefix so hermes -m receives the provider-native model id
+        # (OpenRouter's catalog uses ``vendor/model``).
         effective_model = model or self.default_model
+        provider = _resolve_provider(tc, effective_model)
+        if effective_model.startswith("openrouter/"):
+            effective_model = effective_model.removeprefix("openrouter/")
         cmd.extend(["-m", effective_model])
 
         # Provider — first-party ``deepseek`` (China-hosted) is the default;
-        # opt into OpenRouter's US-hosted proxy via tool_config, the
-        # KUBEDOJO_HERMES_PROVIDER env, or an OpenRouter model slug. See
+        # OpenRouter's US-hosted proxy is EXPLICIT-ONLY: tool_config, the
+        # KUBEDOJO_HERMES_PROVIDER env, or an ``openrouter/…`` model slug.
+        # Silent fallbacks removed after incident #2245. See
         # ``_resolve_provider``.
-        provider = _resolve_provider(tc, effective_model)
         cmd.extend(["--provider", provider])
 
         # Toolset selection — caller override wins, else mode default.

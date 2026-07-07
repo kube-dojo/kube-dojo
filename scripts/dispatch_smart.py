@@ -661,7 +661,14 @@ def _grok_binary() -> str:
 
 
 def _hermes_provider_for_model(model: str) -> str:
-    """Pick a Hermes provider from the model name, unless env overrides it."""
+    """Pick a Hermes provider from the model name, unless env overrides it.
+
+    NO silent metered fallback: the old catch-all returned ``openrouter``,
+    which billed the OpenRouter account for any model without an explicit
+    branch — ``deepseek-v4-*`` had no branch, so deepseek-via-hermes
+    dispatches silently drained OpenRouter instead of hitting the first-party
+    DeepSeek API (incident #2245, 2026-07-07). Unknown models now raise.
+    """
     override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
     if override:
         return override
@@ -674,11 +681,29 @@ def _hermes_provider_for_model(model: str) -> str:
         # xai-oauth`), NOT the metered XAI_API_KEY "xai" provider. Override with
         # KUBEDOJO_HERMES_PROVIDER=xai if you have an API key instead.
         return "xai-oauth"
-    return "openrouter"
+    if model.startswith("deepseek"):
+        # First-party DeepSeek API (api.deepseek.com) — NEVER the OpenRouter
+        # proxy unless the caller opts in explicitly (#2245).
+        return "deepseek"
+    if model.startswith("qwen"):
+        # The documented metered qwen lane rides OpenRouter deliberately
+        # ([[reference_qwen_hermes_openrouter]]) — an explicit branch, not a
+        # fallback.
+        return "openrouter"
+    raise ValueError(
+        f"No Hermes provider mapping for model {model!r} — refusing to fall "
+        "back to a metered proxy (incident #2245). Set "
+        "KUBEDOJO_HERMES_PROVIDER or use an explicit 'openrouter/<vendor>/"
+        "<model>' slug."
+    )
 
 
 def _hermes_cli_model(model: str) -> str:
     """Map KubeDojo's route labels to Hermes v0.14 CLI model IDs."""
+    if model.startswith("openrouter/"):
+        # The ``openrouter/`` prefix is only the explicit provider opt-in
+        # marker (#2245); OpenRouter's own catalog ids are ``vendor/model``.
+        return model.removeprefix("openrouter/")
     if model.startswith("qwen-"):
         return f"qwen/qwen{model.removeprefix('qwen-')}"
     return model
