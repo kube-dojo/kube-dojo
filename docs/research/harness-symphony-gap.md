@@ -171,7 +171,7 @@ same thread.
 > of strict transitions, much like a good manager would assign a goal to a
 > direct report."
 
-**This is the same shift KubeDojo's `.claude/rules/goal-driven-runs.md` (PR
+**This is the same shift KubeDojo's `docs/archive/2026-07-goal-driven-runs.md` (formerly `.claude/rules/goal-driven-runs.md`; PR
 #1082) encoded for `/goal`. Independent convergence — Symphony reached this
 conclusion from the orchestration side, we reached it from the rule side.**
 
@@ -276,7 +276,7 @@ trial and error. Concrete tool-by-tool map:
 | Repo as only state | Briefing API parses STATUS.md `## TODO` + `## Blockers`; decisions in `docs/decisions/`; agent comms in `.bridge/messages.db` served by API |
 | Multi-agent feedback loops | `scripts/ab discuss` channels with `[AGREE]/[OPTION X]/[DEFER]` convention; cross-family review per `docs/review-protocol.md` (Codex→Claude, Claude→Codex/Gemini, Gemini→Claude/Codex) |
 | Two-tier handoffs | `docs/session-state/YYYY-MM-DD-*.{md,html}` narrative + STATUS.md index pointer; HTML-first artifact policy per `docs/migrations/html-first/plan.html` |
-| Objectives over rigid state transitions | `.claude/rules/goal-driven-runs.md` (PR #1082, in test) — independent convergence with Symphony's late lesson, reached 2026-05-12 |
+| Objectives over rigid state transitions | `docs/archive/2026-07-goal-driven-runs.md` (formerly `.claude/rules/`; PR #1082, archived 2026-07-07 as dormant) — independent convergence with Symphony's late lesson, reached 2026-05-12 |
 
 ### Where KubeDojo materially differs from Symphony
 

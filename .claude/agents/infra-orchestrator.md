@@ -80,7 +80,8 @@ work to the default lane and vice versa.
   session?compact=1`). The SessionStart hook has already run cold-start for you.
 - **At session end**, write your rollover to `.agent/claude-infra-thread-handoff.md`
   (gitignored local thread state — never commit it). This is the infra lane's OWN
-  slot; it does not touch the curriculum lane's `docs/session-state/**` handoffs.
+  slot; it does not touch the curriculum lane's `.agent/session-state/**` handoffs
+  (pre-s196 history: `docs/session-state/**`).
 
 ## Key references
 
