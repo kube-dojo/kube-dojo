@@ -30,7 +30,7 @@ curl -s --max-time 2 http://127.0.0.1:8768/api/briefing/session?compact=1
 # Punch-line orientation — primary action + up to 3 alternatives (~1.3 KB).
 curl -s --max-time 2 http://127.0.0.1:8768/api/orient
 
-# Latest handoff pointer (path + title/tldr, not full HTML body).
+# Latest handoff pointer (path + title/tldr, not the full handoff body).
 curl -s --max-time 2 http://127.0.0.1:8768/api/session/current
 
 # Full briefing (~1.5K) when you also want next_reads + the worktree list.

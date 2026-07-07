@@ -176,6 +176,6 @@ The handoff cites/links to these; it does not duplicate them.
 - [[feedback_html_over_markdown_for_artifacts]] — format-choice rule.
 - [[feedback_html_artifacts_via_local_api]] — serving rule.
 - [`STATUS.md`](../../../STATUS.md) — the tracked seed/fallback (durable sections; PR-only). The LIVE index this skill updates is `.agent/STATUS.md`.
-- [`docs/session-state/`](../../../docs/session-state/) — all prior handoffs (49+ files).
+- [`docs/session-state/`](../../../docs/session-state/) — tracked pre-s196 handoff history; live briefs in `.agent/session-state/`.
 - [`docs/migrations/html-first/plan.html`](../../../docs/migrations/html-first/plan.html) — HTML-first artifact policy spec.
 - [`scripts/local_api.py`](../../../scripts/local_api.py) `_parse_status_md` — the briefing parser.
