@@ -111,8 +111,10 @@ Routing rules on top of the numbers (verified output shape 2026-07-07):
    START a new multi-dispatch wave on that lane.
 4. **agy has TWO pools** — `Gemini Models` vs `Claude and GPT` reset independently.
    Check the pool for the MODEL you're dispatching, not just the first line.
-5. **deepseek and grok are not CodexBar-enabled here** → keep the manual checks for
-   those lanes (deepseek is ≈free anyway; grok via its CLI auth state).
+5. **deepseek and grok report credits/balance, NOT Session/Weekly windows**
+   (`--provider deepseek` → API balance; `--provider grok` → credits) — useful as a
+   spend check, but the window rules 2–3 don't apply; keep the manual auth checks for
+   these lanes (deepseek is ≈free anyway; grok via its CLI auth state).
 6. **Fallback, never a blocker**: if `codexbar` is missing or errors (app not running,
    cookies stale), fall back to the manual pre-flight below and proceed.
 
