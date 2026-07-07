@@ -1,21 +1,21 @@
 ---
 name: session-handoff-writer
-description: End-of-session handoff convention for KubeDojo. HTML-first, served via local API. STATUS.md index update protocol. Triggers on "session handoff", "end of session", "wrap up session", "write handoff".
+description: End-of-session handoff convention for KubeDojo. HTML-first, served via local API. Live-index (.agent/STATUS.md) update protocol — handoffs are LOCAL agent state, never committed. Triggers on "session handoff", "end of session", "wrap up session", "write handoff".
 last_calibrated: 2026-05-24
 ---
 
 # Session Handoff Writer Skill
 
-End-of-session ritual for KubeDojo. The handoff is a durable narrative that lets the next agent pick up cold without paging the previous session's context. STATUS.md is the index that points to it.
+End-of-session ritual for KubeDojo. The handoff is a durable narrative that lets the next agent pick up cold without paging the previous session's context. The LIVE index `.agent/STATUS.md` (machine-local, gitignored) points to it; the tracked `STATUS.md` is the seed/fallback and changes via PR only.
 
 ## The two-file pattern
 
 ```
-docs/session-state/2026-05-24-session-52-<slug>.html   ← full handoff (this skill writes it)
-STATUS.md                                                ← index that points at it (this skill updates it)
+docs/session-state/2026-05-24-session-52-<slug>.html   ← full handoff (this skill writes it; gitignored)
+.agent/STATUS.md                                         ← LIVE index that points at it (this skill updates it; gitignored)
 ```
 
-**Do NOT inline the full handoff into STATUS.md.** STATUS.md is an INDEX. The briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md, so those headings stay populated — but the narrative belongs in the dated file.
+**Do NOT inline the full handoff into the index.** `.agent/STATUS.md` is an INDEX. The briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from it (`_live_status_path` prefers the live copy), so those headings stay populated — but the narrative belongs in the dated file.
 
 ## When to write a handoff
 
@@ -138,7 +138,7 @@ via PR only:
 6. **Refresh "## Active policies"** — add new Decision Cards / policy locks.
 7. **Date-bound items** — add expiry-bound TODOs (claude-throttle window, agentic-pool flip, agent retirements).
 
-Cap STATUS.md at ~100 lines (the recent compression target — commit `dcd86360`). Anything narrative-y belongs in the handoff HTML, not here.
+Cap `.agent/STATUS.md` at ~100 lines (the compression target — commit `dcd86360`). Anything narrative-y belongs in the handoff HTML, not here.
 
 ## Serving the handoff
 
@@ -180,7 +180,7 @@ The handoff cites/links to these; it does not duplicate them.
 
 ## Anti-patterns
 
-- Inlining the full handoff into STATUS.md — STATUS.md is the index, dated handoff HTML is the log (see commit `dcd86360` STATUS.md compression).
+- Inlining the full handoff into the index — `.agent/STATUS.md` is the index, dated handoff HTML is the log (see commit `dcd86360` compression).
 - Skipping the dispatch ledger — that's the audit trail, not optional.
 - Writing the handoff in Markdown when the HTML rendering matters (tables, pill labels) — use HTML.
 - Forgetting to refresh `## TODO` / `## Blockers` — the briefing API will surface stale data.
@@ -191,7 +191,7 @@ The handoff cites/links to these; it does not duplicate them.
 - [[curriculum-orchestrator]] — the parent role that calls this skill.
 - [[feedback_html_over_markdown_for_artifacts]] — format-choice rule.
 - [[feedback_html_artifacts_via_local_api]] — serving rule.
-- [`STATUS.md`](../../../STATUS.md) — the index this skill updates.
+- [`STATUS.md`](../../../STATUS.md) — the tracked seed/fallback (durable sections; PR-only). The LIVE index this skill updates is `.agent/STATUS.md`.
 - [`docs/session-state/`](../../../docs/session-state/) — all prior handoffs (49+ files).
 - [`docs/migrations/html-first/plan.html`](../../../docs/migrations/html-first/plan.html) — HTML-first artifact policy spec.
 - [`scripts/local_api.py`](../../../scripts/local_api.py) `_parse_status_md` — the briefing parser.

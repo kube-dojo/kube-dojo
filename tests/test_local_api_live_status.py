@@ -48,8 +48,9 @@ def test_live_status_fallback_when_agent_dir_empty(tmp_path: Path) -> None:
     assert local_api._live_status_path(tmp_path) == tmp_path / "STATUS.md"
 
 
-def test_parse_status_md_reads_live_copy(tmp_path: Path) -> None:
-    """End-to-end: briefing focus/TODO parsing must see the LIVE copy's items."""
+def test_session_briefing_reads_live_copy(tmp_path: Path) -> None:
+    """PUBLIC path: build_session_briefing must surface the LIVE copy's TODO items —
+    pins the actual briefing behavior, not just the private helper (codex R1 nit)."""
     (tmp_path / "STATUS.md").write_text(
         "# tracked\n\n## TODO\n\n- [ ] stale tracked item\n", encoding="utf-8"
     )
@@ -60,7 +61,7 @@ def test_parse_status_md_reads_live_copy(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    parsed = local_api._parse_status_md(local_api._live_status_path(tmp_path))
-    focus_blob = " ".join(str(x) for x in parsed.get("focus", []))
+    briefing = local_api.build_session_briefing(tmp_path)
+    focus_blob = " ".join(str(x) for x in briefing.get("focus", []))
     assert "live item" in focus_blob
     assert "stale tracked item" not in focus_blob
