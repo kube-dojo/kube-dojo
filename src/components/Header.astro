@@ -155,7 +155,8 @@ const nav = isUk
   .kd-header-standalone .kd-topbar { max-width: 100%; min-width: 0; }
   .kd-header-standalone .kd-right { flex-shrink: 0; }
   .kd-header-standalone .kd-search { min-width: 0; }
-  .kd-header-standalone .kd-search :global(button) { max-width: none; width: auto; }
+  .kd-header-standalone .kd-search :global(button) { max-width: none; width: auto; white-space: nowrap; }
+  .kd-header-standalone .kd-search :global(kbd) { display: none; }
   .kd-theme :global(select), .kd-lang :global(select) { font-size: 0.75rem; }
   .kd-social :global(a) { color: #9CA3AF; } .kd-social :global(a:hover) { color: #0F172A; }
   :global([data-theme='dark']) .kd-social :global(a:hover) { color: white; }

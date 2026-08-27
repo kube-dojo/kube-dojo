@@ -54,6 +54,7 @@ describe('home header overflow (#2266)', () => {
       /\.kd-header-standalone \.kd-search :global\(button\)\s*\{[^}]*max-width:\s*none[^}]*width:\s*auto/,
     );
     expect(header).toMatch(/\.kd-header-standalone \.kd-search\s*\{[^}]*min-width:\s*0/);
+    expect(header).toMatch(/\.kd-header-standalone \.kd-search :global\(kbd\)\s*\{[^}]*display:\s*none/);
   });
 
   it('keeps the JS menu closer in sync with the CSS collapse queries', () => {
