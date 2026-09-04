@@ -9,7 +9,7 @@ sidebar:
 
 ## Who Is This Track For?
 
-This track is for **absolute beginners**. You don't need any IT background, any coding experience, or any special knowledge. If you can use a web browser, you can do this.
+This track is for **absolute beginners**. No IT or coding background is assumed; use each module's platform guidance and setup notes as you go.
 
 Maybe you're:
 - A student curious about technology
@@ -32,7 +32,11 @@ By the end of this track, you'll be able to:
 - Know what "the cloud" actually means (spoiler: it's not magic)
 - **Deploy a real website using nothing but the terminal**
 
-This track leads into the main prerequisites route — **Cloud Native 101** and then **Kubernetes Basics** — with **Linux Deep Dive** as an optional systems-internals fork you can take anytime. Most senior engineers eventually know both.
+This track leads into the main prerequisites route — **Cloud Native 101** and then **Kubernetes Basics** — with **Linux Deep Dive** as an optional systems-internals fork you can take anytime.
+
+### Optional first-terminal preview
+
+Before starting the ordered route, you may preview the existing [terminal opening and prompt guide](module-0.2-what-is-a-terminal/#opening-the-terminal-and-reading-the-prompt) and [first safe-command exercise](module-0.2-what-is-a-terminal/#hands-on-exercise-your-first-terminal-session). Use Module 0.2's own platform guidance. Then return to Module 0.1 and complete the modules in order; the preview does not replace the track.
 
 ---
 
@@ -51,7 +55,7 @@ Throughout these modules, we use a **restaurant kitchen** as our running analogy
 | Server | A restaurant kitchen (serves many customers) |
 | Cloud | Renting a commercial kitchen instead of building your own |
 
-This analogy will carry you all the way from here to Kubernetes, where you'll manage **thousands of kitchens** automatically.
+Use the kitchen table as an optional orientation aid for the terms listed above. It does not replace the technical explanations, platform notes, or exercises; skip the analogy if it obscures the terms.
 
 ---
 
@@ -59,24 +63,26 @@ This analogy will carry you all the way from here to Kubernetes, where you'll ma
 
 | Module | Title | Time | What You'll Learn |
 |--------|-------|------|-------------------|
-| 0.1 | [What is a Computer?](module-0.1-what-is-a-computer/) | 20 min | CPU, RAM, disk, OS -- the kitchen hardware |
-| 0.2 | [What is a Terminal?](module-0.2-what-is-a-terminal/) | 20 min | Opening and understanding the terminal |
+| 0.1 | [What is a Computer?](module-0.1-what-is-a-computer/) | 35 min | CPU, RAM, disk, OS -- the kitchen hardware |
+| 0.2 | [What is a Terminal?](module-0.2-what-is-a-terminal/) | 25–35 min | Opening and understanding the terminal |
 | 0.3 | [First Terminal Commands](module-0.3-first-commands/) | 25 min | Navigate, create, move, and delete files |
-| 0.4 | [Files and Directories](module-0.4-files-and-directories/) | 25 min | Paths, file types, organizing your filesystem |
-| 0.5 | [Editing Files](module-0.5-editing-files/) | 25 min | Edit files with nano, write your first script |
-| 0.6 | [Git Basics — Track Your Work](module-0.6-git-basics/) | 45 min | Track your work with Git -- init, add, commit, log |
-| 0.7 | [What is Networking?](module-0.7-what-is-networking/) | 25 min | IPs, ports, DNS -- how computers talk to each other |
+| 0.4 | [Files and Directories](module-0.4-files-and-directories/) | 25–30 min | Paths, file types, organizing your filesystem |
+| 0.5 | [Editing Files](module-0.5-editing-files/) | 35 min | Edit files with nano, write your first script |
+| 0.6 | [Git Basics — Track Your Work](module-0.6-git-basics/) | 60 min | Track your work with Git -- init, add, commit, log |
+| 0.7 | [What is Networking?](module-0.7-what-is-networking/) | 35–45 min | IPs, ports, DNS -- how computers talk to each other |
 | 0.8 | [Servers and SSH](module-0.8-servers-and-ssh/) | 25 min | What servers are, how to connect remotely |
-| 0.9 | [Software and Packages](module-0.9-software-and-packages/) | 25 min | Installing and managing software from the terminal |
-| 0.10 | [What is the Cloud?](module-0.10-what-is-the-cloud/) | 20 min | Cloud computing, AWS/Azure/GCP, where K8s fits |
-| 0.11 | [Your First Server -- Putting It All Together](module-0.11-your-first-server/) | 45 min | Capstone: deploy a real website using everything you've learned |
+| 0.9 | [Software and Packages](module-0.9-software-and-packages/) | 25–30 min | Installing and managing software from the terminal |
+| 0.10 | [What is the Cloud?](module-0.10-what-is-the-cloud/) | 35 min | Cloud computing, AWS/Azure/GCP, where K8s fits |
+| 0.11 | [Your First Server -- Putting It All Together](module-0.11-your-first-server/) | 55–70 min | Capstone: deploy a real website using everything you've learned |
+
+These are planning estimates copied from the eleven module headers, not measured learner completion times. Their arithmetic gives an aggregate range of **380–425 minutes (6 hours 20 minutes–7 hours 5 minutes)**; individual setup, reading, and practice time will vary.
 
 ---
 
 ## How to Use This Track
 
 1. **Go in order.** Each module builds on the last.
-2. **Do the exercises.** Reading is not learning. Doing is learning.
+2. **Do the exercises.** Read the explanation, try the task, and compare your result with the success criteria.
 3. **It's okay to be slow.** Speed comes with practice, not pressure.
 4. **Re-read if needed.** Professional engineers re-read documentation constantly.
 5. **Take breaks.** Your brain needs time to absorb new concepts.
@@ -91,7 +97,7 @@ On the **suggested prerequisites route**, continue straight into Cloud Native 10
 
 **Optional fork:** [Linux Fundamentals](../../linux/) if you want deeper operating-system knowledge before operations-heavy work. Linux is not required for the main route; you can return to it anytime.
 
-Most senior engineers eventually know both Linux depth and cloud-native delivery. If you are unsure where to go, start with Cloud Native 101 and keep the Linux path as a parallel option rather than an equal first choice.
+If you are unsure where to go, start with Cloud Native 101 and keep the Linux path as an optional parallel route.
 
 ```text
                Zero to Terminal
@@ -111,10 +117,8 @@ Most senior engineers eventually know both Linux depth and cloud-native delivery
 
 ## Time Investment
 
-Total track time: **~4.5 hours**
-
-That's it. A few hours from "I've never used a terminal" to "I deployed a website on the internet." Not bad for a weekend.
+The module-header planning range is **6 hours 20 minutes–7 hours 5 minutes**. It is an unmeasured estimate, not a completion promise; setup, reading, and practice can take longer.
 
 ---
 
-> **Remember**: The tech industry needs people with fresh perspectives. Your beginner eyes see things that experts have become blind to. You're not behind -- you're just getting started.
+> **Start with one action.** Try it, check what happened, and ask questions before moving on. You do not need to master the whole track in one sitting.
