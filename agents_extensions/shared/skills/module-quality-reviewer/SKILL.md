@@ -37,7 +37,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 | **Learning Outcomes** | Are they stated? Measurable? Bloom's L3+? |
 | **Scaffolding** | Does content build simple→complex? Narrative bridges between sections? |
 | **Active Learning** | Are there inline prompts? Or is all practice back-loaded to the end? |
-| **Real-World Connection** | War stories with specific details? Or generic "in production" handwaving? |
+| **Real-World Connection** | Concrete, evidence-backed context, consequences, tradeoffs, or diagnosis? Or generic "in production" handwaving? |
 | **Assessment Alignment** | Do quiz questions test understanding (scenarios) or recall (what is X?)? |
 | **Cognitive Load** | Well-chunked? Diagrams integrated? Or information dump? |
 | **Engagement** | Memorable tone? Would you recommend this to a colleague? Or dry/robotic? |
@@ -45,7 +45,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 ## Structure Checklist
 
 - [ ] Learning Outcomes (Bloom's L3+ verbs: debug, design, evaluate)
-- [ ] Why This Module Matters (war story with real impact)
+- [ ] Why This Module Matters (clear motivation and practical relevance; any incident or scenario is cited or explicitly labeled `Hypothetical scenario:`/`Exercise scenario:`/`Simulation:`)
 - [ ] Core content (3-6 sections with code, diagrams, tables)
 - [ ] Inline active learning (at least 2 prediction/try-it prompts in the body)
 - [ ] Did You Know? (4 facts with real numbers)
@@ -53,6 +53,8 @@ Every PR must be reviewed by a different model family than the author per [`docs
 - [ ] Quiz (6-8 scenario-based questions with `<details>` answers)
 - [ ] Hands-On Exercise (multi-step with success criteria)
 - [ ] Next Module link
+
+Do not penalize a module solely for omitting a story or analogy. When used, verify the incident's source, the hypothetical scenario's explicit label, and the analogy's mapping and limits. A labeled simulation illustrates a concept; it is not evidence that an incident occurred or a learner improved. Engagement scores are editorial judgments, not measured learner outcomes.
 
 > **Reviewer bar ≥ author template.** [[curriculum-writer]]'s minimal template lists 2-3 Did You Know? / 4 quiz questions; this reviewer checklist is the stricter shipping bar. Author for the reviewer bar, not the template floor.
 
@@ -110,6 +112,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 - "Refer to official documentation for details"
 - Sections that could be rearranged in any order without losing coherence
 - Unverified external citations (a hard-flag, not a soft-flag — see [[feedback_citation_verify_or_remove]])
+- Unsourced incidents presented as facts or anonymous “authentic” details treated as evidence
 - Personal-life framing (interview/job/role narrative — [[feedback_no_personal_framing]])
 - Listicle dumps without teaching arc ([[feedback_teaching_not_listicles]])
 

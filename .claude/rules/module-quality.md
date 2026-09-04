@@ -9,7 +9,7 @@ paths:
 ## Required Sections (in order)
 1. Title + metadata (complexity, time, prerequisites)
 2. Learning Outcomes — 3-5 measurable outcomes using Bloom's L3+ verbs (debug, design, evaluate, compare)
-3. Why This Module Matters — dramatic real-world opening (third person)
+3. Why This Module Matters — clear motivation and practical relevance; use a documented incident or explicitly labeled scenario only when it helps
 4. Core content (3-6 sections with code, ASCII diagrams, tables, inline active learning prompts)
 5. Did You Know? — exactly 4 facts
 6. Common Mistakes — table with 6-8 rows
@@ -59,3 +59,4 @@ paths:
 - Do NOT repeat the number 47 (known LLM pattern)
 - Do NOT use emojis
 - Do NOT write "list of facts" modules — if sections are just bullets, it's a reference doc, not a lesson
+- Stories and analogies are optional: real incidents require verifiable citations, hypothetical examples explicit labels, and analogies a clear mapping and limits. Do not manufacture mystery, clue hunts, or gamification to satisfy an engagement checklist.
