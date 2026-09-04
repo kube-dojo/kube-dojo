@@ -25,13 +25,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import citation_backfill  # noqa: E402
-
-from scripts.quality import dispatchers, pipeline, stages, state, worktree  # noqa: E402
-from scripts.quality.citations import CitationResult  # noqa: E402
-from scripts.quality.dispatchers import DispatchResult  # noqa: E402
+import citation_backfill
 from conftest import _read_frontmatter
 
+from scripts.quality import dispatchers, pipeline, stages, state, worktree
+from scripts.quality.citations import CitationResult
+from scripts.quality.dispatchers import DispatchResult
 
 # ---- fixtures ---------------------------------------------------------
 
@@ -970,7 +969,8 @@ def test_cleanup_only_no_changes_ends_at_skipped_without_merge(fake_repo, monkey
     import subprocess as _sp
     branch = worktree.branch_name(slug)
     rc = _sp.run(
-        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True,
+        check=False,
     ).returncode
     assert rc != 0, "branch should be cleaned up"
 
@@ -1064,7 +1064,8 @@ def test_failed_modules_have_branches_cleaned_up(fake_repo, monkeypatch):
     import subprocess as _sp
     branch = worktree.branch_name(slug)
     rc = _sp.run(
-        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True,
+        check=False,
     ).returncode
     assert rc != 0, "FAILED module must not leak its branch"
     # Worktree gone.
@@ -1254,7 +1255,7 @@ Better scenario question.
     assert not worktree.worktree_dir(fake_repo, slug).exists()
     rc = subprocess.run(
         ["git", "rev-parse", "--verify", worktree.branch_name(slug)],
-        cwd=fake_repo, capture_output=True,
+        cwd=fake_repo, capture_output=True, check=False,
     ).returncode
     assert rc != 0, "branch must be deleted after gate fail"
 
@@ -1306,7 +1307,7 @@ def test_cleanup_only_scrubs_worktree_when_state_file_disappears(fake_repo, monk
     import subprocess as _sp
     rc = _sp.run(
         ["git", "rev-parse", "--verify", worktree.branch_name(slug)],
-        cwd=fake_repo, capture_output=True,
+        cwd=fake_repo, capture_output=True, check=False,
     ).returncode
     assert rc != 0, "cleanup-only branch must not leak when state file vanishes"
 
@@ -1356,7 +1357,7 @@ def test_cleanup_only_removes_worktree_when_lease_raises_after_create(fake_repo,
     import subprocess as _sp
     rc = _sp.run(
         ["git", "rev-parse", "--verify", worktree.branch_name(slug)],
-        cwd=fake_repo, capture_output=True,
+        cwd=fake_repo, capture_output=True, check=False,
     ).returncode
     assert rc != 0, "cleanup-only branch must not leak on post-write lease failure"
 
@@ -1400,7 +1401,7 @@ def test_cleanup_only_scrubs_worktree_when_create_worktree_raises_after_creation
     )
     rc = subprocess.run(
         ["git", "rev-parse", "--verify", worktree.branch_name(slug)],
-        cwd=fake_repo, capture_output=True,
+        cwd=fake_repo, capture_output=True, check=False,
     ).returncode
     assert rc != 0, "round-5: throwaway branch must not leak"
 
@@ -1448,7 +1449,7 @@ def test_cleanup_only_removes_worktree_when_write_text_raises(fake_repo, monkeyp
     import subprocess as _sp
     rc = _sp.run(
         ["git", "rev-parse", "--verify", worktree.branch_name(slug)],
-        cwd=fake_repo, capture_output=True,
+        cwd=fake_repo, capture_output=True, check=False,
     ).returncode
     assert rc != 0, "cleanup-only branch must not leak on write_text failure"
 
@@ -1519,7 +1520,8 @@ def test_write_cleanup_even_when_commit_fails(fake_repo, monkeypatch):
     import subprocess as _sp
     branch = worktree.branch_name(slug)
     rc = _sp.run(
-        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True,
+        check=False,
     ).returncode
     assert rc != 0
 
@@ -1542,6 +1544,21 @@ def _seed_committed_state(fake_repo: Path, monkeypatch) -> tuple[str, dict]:
     return slug, st
 
 
+def _seed_inherited_citation_bit(fake_repo: Path, module_rel: str) -> None:
+    """Give the backfill input a pre-existing bit with no attached receipt."""
+    module_path = fake_repo / module_rel
+    module_path.write_text(
+        module_path.read_text().replace("---\n", "---\ncitations_verified: true\n", 1)
+    )
+    subprocess.run(["git", "add", module_rel], cwd=fake_repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "seed inherited citation bit"],
+        cwd=fake_repo,
+        check=True,
+        capture_output=True,
+    )
+
+
 def test_backfill_pending_happy_path_records_done_and_commits(fake_repo, monkeypatch):
     """When research + inject both succeed and inject modifies the file,
     cmd_backfill_pending stamps state.backfill={done, ok, sha} and adds
@@ -1552,6 +1569,7 @@ def test_backfill_pending_happy_path_records_done_and_commits(fake_repo, monkeyp
     slug, st = _seed_committed_state(fake_repo, monkeypatch)
 
     module_rel = st["module_path"]
+    _seed_inherited_citation_bit(fake_repo, module_rel)
     sources_block = "\n## Sources\n\n- [Test](https://example.com) — example citation.\n"
 
     def fake_subcmd(module_key, sub, *, agent=None):
@@ -1573,9 +1591,12 @@ def test_backfill_pending_happy_path_records_done_and_commits(fake_repo, monkeyp
     bf = st2["backfill"]
     assert bf["done"] is True and bf["ok"] is True
     assert bf["sha"] and len(bf["sha"]) == 40
+    assert bf["source_acceptance"] == "unverified"
+    assert bf["readiness_impact"] == "not_cleared_until_independent_source_evidence"
     # Module file on disk has the Sources section.
     assert "## Sources" in (fake_repo / module_rel).read_text()
-    assert _read_frontmatter(fake_repo / module_rel)["citations_verified"] is True
+    assert _read_frontmatter(fake_repo / module_rel).get("citations_verified") is None
+    assert "source acceptance unverified" in st2["history"][-1]["note"]
     # Stage is still COMMITTED — backfill is a metadata layer, not a stage.
     assert st2["stage"] == "COMMITTED"
     # Re-running is a no-op (filtered out by backfill.done).
@@ -1603,7 +1624,7 @@ def test_backfill_pending_research_failure_records_error_no_commit(fake_repo, mo
     state.backfill.done=False, and NOT touch the working tree. Repeating
     the command will retry (because done=False), which is the desired
     behavior for transient LLM failures."""
-    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    slug, _st = _seed_committed_state(fake_repo, monkeypatch)
 
     head_before = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=fake_repo, check=True, capture_output=True, text=True,
@@ -1638,7 +1659,7 @@ def test_backfill_pending_commits_seed_alongside_module(fake_repo, monkeypatch):
     in the same backfill commit so the provenance is traceable in git
     history (matches the prior pipeline_v3 convention from commit ec20ddef).
     """
-    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    _slug, st = _seed_committed_state(fake_repo, monkeypatch)
     module_rel = st["module_path"]
     module_key = pipeline._module_key_from_path(module_rel)
     seed_rel = f"docs/citation-seeds/{module_key.replace('/', '-')}.json"
@@ -1653,7 +1674,7 @@ def test_backfill_pending_commits_seed_alongside_module(fake_repo, monkeypatch):
 
     def fake_subcmd(mk, sub, *, agent=None):
         if sub == "research":
-            seed_path.write_text('{"module_key": "%s", "claims": []}\n' % mk)
+            seed_path.write_text(f'{{"module_key": "{mk}", "claims": []}}\n')
             return {"ok": True, "stdout": "", "stderr": "", "returncode": 0}
         target = fake_repo / module_rel
         target.write_text(target.read_text() + "\n## Sources\n\n- [Test](https://example.com).\n")
@@ -1706,9 +1727,9 @@ def test_backfill_pending_refuses_when_foreign_changes_appear(fake_repo, monkeyp
 
 
 def test_backfill_pending_inject_nothing_to_do_marks_done(fake_repo, monkeypatch):
-    """Inject returns production `nothing_to_do` → mark done=True, ok=True,
-    no_op=True, reason=nothing_to_do and write citations_verified=true."""
+    """A no-op completes processing but cannot promote source acceptance."""
     slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    _seed_inherited_citation_bit(fake_repo, st["module_path"])
 
     def fake_subcmd(module_key, sub, *, agent=None):
         if sub == "research":
@@ -1733,14 +1754,17 @@ def test_backfill_pending_inject_nothing_to_do_marks_done(fake_repo, monkeypatch
     assert bf["done"] is True and bf["ok"] is True and bf.get("no_op") is True
     assert bf.get("reason") == "nothing_to_do"
     assert bf.get("sha") is None or len(bf["sha"]) == 40
-    assert _read_frontmatter(fake_repo / st["module_path"])["citations_verified"] is True
+    assert bf["source_acceptance"] == "unverified"
+    assert bf["readiness_impact"] == "not_cleared_until_independent_source_evidence"
+    assert _read_frontmatter(fake_repo / st["module_path"]).get("citations_verified") is None
 
 
 def test_backfill_pending_inject_nothing_to_do_includes_seed_in_commit(fake_repo, monkeypatch):
     """When inject is no-op after research changed the seed, both module and
     seed must be committed so the checkout stays clean."""
-    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    _slug, st = _seed_committed_state(fake_repo, monkeypatch)
     module_rel = st["module_path"]
+    _seed_inherited_citation_bit(fake_repo, module_rel)
     module_key = pipeline._module_key_from_path(module_rel)
     seed_rel = f"docs/citation-seeds/{module_key.replace('/', '-')}.json"
     seed_path = fake_repo / seed_rel

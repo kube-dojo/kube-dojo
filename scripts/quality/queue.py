@@ -424,12 +424,13 @@ def set_citations_verified_frontmatter(module_path: Path, verified: bool = True)
         verified: if True, sets ``citations_verified: true``.
             If False, removes the key entirely (absent = not verified).
 
-    Called from ``_backfill_one`` after inject. The contract is:
+    ``_backfill_one`` does not establish claim/source verification:
 
-    * inject success → verified=True (citations were written)
-    * inject nothing_to_do → verified=True (verification ran, nothing to
-      verify)
-    * inject failure → not called (key stays absent)
+    * inject success or nothing_to_do → verified=False (remove inherited key)
+    * inject failure → not called (the caller restores partial file changes)
+
+    Setting the key to True requires independent source evidence; this helper
+    only mutates frontmatter and does not validate that evidence.
     """
     text = module_path.read_text(encoding="utf-8")
     fm = _FRONTMATTER_RE.match(text)
@@ -494,23 +495,23 @@ def queue_summary() -> dict[str, Any]:
 
 
 __all__ = [
-    "PRIMARY_BEGINNER",
-    "PRIMARY_ADVANCED",
-    "TERTIARY",
-    "MAX_PRIMARY_ATTEMPTS",
     "BACKOFF_SECONDS",
+    "MAX_PRIMARY_ATTEMPTS",
+    "PRIMARY_ADVANCED",
+    "PRIMARY_BEGINNER",
+    "TERTIARY",
     "ClaimResult",
-    "route_writer",
-    "model_to_agent",
-    "ensure_queued",
     "claim",
+    "clear_qa_pending_frontmatter",
+    "clear_revision_pending_frontmatter",
+    "ensure_queued",
+    "model_to_agent",
+    "queue_summary",
     "record_attempt_start",
     "record_block",
     "record_completion",
-    "queue_summary",
-    "set_revision_pending_frontmatter",
-    "clear_revision_pending_frontmatter",
-    "set_qa_pending_frontmatter",
-    "clear_qa_pending_frontmatter",
+    "route_writer",
     "set_citations_verified_frontmatter",
+    "set_qa_pending_frontmatter",
+    "set_revision_pending_frontmatter",
 ]
