@@ -454,94 +454,196 @@ The Deployment must be able to identify the Pods created from its own template, 
 
 ## Hands-On Exercise
 
-This lab creates a Deployment, scales it, performs a rollout, observes history, and rolls back to the previous image. Use a disposable namespace or lab cluster, and keep the object names exactly as written so your verification commands match the expected output. The goal is not only to make the commands pass; it is to connect each command to the Deployment, ReplicaSet, and Pod layer that changes afterward.
+**Controlled exercise — use a context you have independently confirmed is a dedicated disposable lab.** Set `KUBEDOJO_LAB_CONTEXT` before Step 0. The guard verifies only that the selected context matches that value and that the namespace name is unused; it cannot prove cluster ownership or disposability. After setup, the selected context supplies the namespace for the simple commands in Steps 1–4. Run those steps in order; the cleanup block is safe to run after an interruption.
+
+The `kubectl config set-context` command changes only the stored default namespace for the named dedicated context. It does not switch your current context or reset it later. Keep using this same context throughout the exercise, and do not run these commands against another context.
+
+### Step 0: Prepare a known-good Deployment
 
 ```bash
-# 1. Create deployment
-kubectl create deployment web --image=nginx:1.26
+(
+  set -euo pipefail
+  : "${KUBEDOJO_LAB_CONTEXT:?Set this to a dedicated disposable Kubernetes context}"
+  KUBEDOJO_LAB_NAMESPACE="${KUBEDOJO_LAB_NAMESPACE:-kubedojo-deploy-lab}"
+  CURRENT_CONTEXT="$(kubectl config current-context)"
+  if [ "$KUBEDOJO_LAB_CONTEXT" = "default" ] || [ "$KUBEDOJO_LAB_NAMESPACE" = "default" ]; then
+    echo "Refusing the default context or namespace" >&2; exit 1
+  fi
+  if [ "$CURRENT_CONTEXT" != "$KUBEDOJO_LAB_CONTEXT" ]; then
+    echo "Selected context does not match KUBEDOJO_LAB_CONTEXT" >&2; exit 1
+  fi
+  if kubectl --context "$KUBEDOJO_LAB_CONTEXT" get namespace "$KUBEDOJO_LAB_NAMESPACE" >/dev/null 2>&1; then
+    echo "Namespace exists; choose a fresh disposable name" >&2
+    exit 1
+  fi
+  kubectl --context "$KUBEDOJO_LAB_CONTEXT" create namespace "$KUBEDOJO_LAB_NAMESPACE"
+  kubectl config set-context "$KUBEDOJO_LAB_CONTEXT" --namespace "$KUBEDOJO_LAB_NAMESPACE"
+  kubectl apply -f - <<'YAML'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.26
+        ports:
+        - containerPort: 80
+YAML
+  kubectl rollout status deployment/web --timeout=90s
+  kubectl get deploy,rs,pods -o wide
+)
+```
 
-# 2. Scale to 3 replicas
-kubectl scale deployment web --replicas=3
+### Step 1: Scale and observe self-healing
 
-# 3. Verify
-kubectl get deploy,rs,pods
+```bash
+kubectl scale deployment/web --replicas=3
+kubectl rollout status deployment/web --timeout=90s
+kubectl get deploy,rs,pods -o wide
+```
 
-# 4. Update image
-kubectl set image deployment/web nginx=nginx:1.27
+Choose one of the `web` Pod names from that output. Replace `POD_NAME` below with the name you observed.
 
-# 5. Watch rollout
-kubectl rollout status deployment web
+```bash
+kubectl delete pod POD_NAME
+```
 
-# 6. Check history
-kubectl rollout history deployment web
+Watch the ReplicaSet create a replacement. Stop the watch with <kbd>Ctrl</kbd>+<kbd>C</kbd> after three Pods are ready.
 
-# 7. Simulate problem - rollback
-kubectl rollout undo deployment web
+```bash
+kubectl get pods -w
+```
 
-# 8. Verify rollback
-kubectl get deployment web -o jsonpath='{.spec.template.spec.containers[0].image}'
-# Should show nginx:1.26
+Then record the final state:
 
-# 9. Cleanup
-kubectl delete deployment web
+```bash
+kubectl get deploy,rs,pods -o wide
+```
+
+### Step 2: Introduce the failed revision
+
+Run this command only after Steps 0–1 succeed. Stop after it changes the template; Step 3 gathers evidence before repair.
+
+```bash
+kubectl set image deployment/web nginx=nginx:does-not-exist
+```
+
+### Step 3: Diagnose before repair
+
+Run this command before Step 4. The timeout is expected for the induced failure. Read the output: continue to the inspection commands only when it describes a timeout or progress deadline for this Deployment. Stop on API, authentication, or context errors; a nonzero status alone is not image-failure evidence.
+
+```bash
+kubectl rollout status deployment/web --timeout=30s
+```
+
+Inspect the Deployment conditions, ReplicaSet counts, Pod states, and recent events. Look for the actual image-pull evidence (such as `ErrImagePull` or `ImagePullBackOff`) and explain why the old ready Pods remain while the new revision cannot become ready.
+
+```bash
+kubectl describe deployment web
+kubectl get rs,pods -o wide
+kubectl describe pod -l app=web
+kubectl get events --sort-by=.lastTimestamp
+```
+
+### Step 4: Repair and prove recovery
+
+```bash
+kubectl rollout undo deployment/web
+kubectl rollout status deployment/web --timeout=90s
+kubectl get deployment web -o wide
+```
+
+From the final output, verify `IMAGES` is `nginx:1.26` and `READY` is `3/3`.
+
+### Cleanup: runnable after an interruption
+
+Run this block independently after Step 4 or if any earlier step stops. Confirm that the namespace is the exercise namespace before allowing deletion; these checks cannot prove cluster disposability.
+
+```bash
+(
+  set -euo pipefail
+  : "${KUBEDOJO_LAB_CONTEXT:?Set this to the verified lab context}"
+  KUBEDOJO_LAB_NAMESPACE="${KUBEDOJO_LAB_NAMESPACE:-kubedojo-deploy-lab}"
+  CURRENT_CONTEXT="$(kubectl config current-context)"
+  if [ "$KUBEDOJO_LAB_CONTEXT" = "default" ] || [ "$KUBEDOJO_LAB_NAMESPACE" = "default" ] || [ "$CURRENT_CONTEXT" != "$KUBEDOJO_LAB_CONTEXT" ]; then
+    echo "Refusing default or mismatched context/namespace" >&2; exit 1
+  fi
+  kubectl --context "$KUBEDOJO_LAB_CONTEXT" delete namespace "$KUBEDOJO_LAB_NAMESPACE" --ignore-not-found=true --wait=true --timeout=120s
+)
 ```
 
 ### Tasks
 
-1. Create the `web` Deployment with `nginx:1.26`, then inspect the Deployment, ReplicaSet, and Pods in a single command so you can trace ownership.
+1. Explain what the context and namespace checks establish and what they cannot prove, and verify that every later command is scoped to them.
 
 <details><summary>Solution</summary>
 
-Run the first create command, then run `kubectl get deploy,rs,pods`. You should see one Deployment named `web`, one active ReplicaSet owned by it, and one Pod before scaling. If the Pod is not running, describe it and read events before continuing.
+The checks compare the selected context with the explicit context value, reject `default`, and reject a namespace that already exists. They do not prove that the cluster is dedicated or that a namespace is safe to delete; confirm those facts before setup and cleanup. `kubectl config set-context` stores the exercise namespace only on the named context, so keep using that context and do not reset another context.
 
 </details>
 
-2. Scale the Deployment to three replicas, delete one generated Pod, and explain which controller restores the missing instance.
+2. Confirm the one-replica baseline, scale to three, delete one Pod, and explain which controller restores it before changing the image.
 
 <details><summary>Solution</summary>
 
-Run the scale command, wait until three Pods are ready, then delete one Pod by name or by using a label selector. The ReplicaSet restores the missing Pod because its desired count remains three, while the Deployment remains the parent that defines the active template and rollout history.
+Use the initial and post-scale `rollout status` and `get deploy,rs,pods` results as your baseline. Replace `POD_NAME` with an actual Pod from the list, watch the replacement with `kubectl get pods -w`, and explain how the ReplicaSet maintains the Deployment's desired count.
 
 </details>
 
-3. Update the image to `nginx:1.27`, watch the rollout, and identify the new ReplicaSet created by the template change.
+3. Set `nginx:does-not-exist`, read the bounded rollout result, and use conditions, ReplicaSet counts, Pod status, and events to explain why the new revision cannot become ready and why old capacity remains.
 
 <details><summary>Solution</summary>
 
-Run the set image command and then `kubectl rollout status deployment web`. After it completes, `kubectl get rs` should show a newer ReplicaSet with the active replicas and an older ReplicaSet retained for history with zero replicas. The exact generated names vary because Kubernetes includes hashes in the names.
+Read the actual rollout error first. If it reports an API, authentication, or context error, stop. Otherwise inspect the Deployment conditions, ReplicaSet and Pod state, and events before repairing. Connect the bad image reference to the new Pod's pull failure, then connect that Pod state to the Deployment's stalled progress. Record the actual wording and timing.
 
 </details>
 
-4. Roll back the Deployment and verify that the Pod template again references `nginx:1.26`.
+4. Roll back the Deployment and verify the final image and `READY` output establish the intended template and replica readiness. This does not test HTTP responses.
 
 <details><summary>Solution</summary>
 
-Run `kubectl rollout undo deployment web`, wait for rollout status to complete, and then read the image with the jsonpath command from the lab. The output should be `nginx:1.26`, which proves the Deployment restored the previous template revision rather than merely deleting current Pods.
+The rollback changes Deployment intent to the retained revision and creates the Pods needed for that template. The final `kubectl get deployment web -o wide` output should show `nginx:1.26` in `IMAGES` and `3/3` in `READY`.
 
 </details>
 
-5. Clean up the Deployment and confirm that the managed ReplicaSet and Pods disappear with it.
+5. Run the standalone cleanup block after recovery or interruption, and explain why deleting the namespace is the final cleanup boundary.
 
 <details><summary>Solution</summary>
 
-Run `kubectl delete deployment web`, then use `kubectl get deploy,rs,pods` to confirm the lab resources are gone. Deleting the parent Deployment removes the managed ReplicaSets and Pods, which is another reminder that ownership flows from the Deployment down through the hierarchy.
+The namespace is the exercise boundary, so deleting it removes the Deployment and its managed children together. The cleanup guard checks the same context and namespace, and `--ignore-not-found=true` makes a repeated cleanup harmless. If deletion fails, report the namespace state and inspect context or API/authentication errors rather than switching contexts or deleting broader resources.
 
 </details>
 
 **Success Criteria**:
 
-- [ ] Create a deployment named `web` with image `nginx:1.26`.
-- [ ] Scale the deployment to 3 replicas.
-- [ ] Verify 3 pods are running using `kubectl get pods`.
-- [ ] Delete one Pod and observe the replacement.
-- [ ] Update the image to `nginx:1.27`.
-- [ ] Watch the rollout complete using `kubectl rollout status`.
-- [ ] Roll back the deployment to the previous version.
-- [ ] Verify the active pods are running `nginx:1.26`.
-- [ ] Clean up by deleting the deployment.
+- [ ] Refuse `default`, verify the selected lab context, and create a fresh disposable namespace.
+- [ ] Start a successful one-replica `web` Deployment and record its baseline objects.
+- [ ] Scale to three, delete one Pod, and observe the ReplicaSet restore three ready replicas.
+- [ ] Induce `nginx:does-not-exist`; inspect the bounded rollout result, Pod status, and events for the image-pull failure.
+- [ ] Explain the failed revision before rolling back to `nginx:1.26`.
+- [ ] Verify `IMAGES=nginx:1.26` and `READY=3/3` after repair, then run standalone namespace cleanup.
 
 ## Sources
 
+- **Exercise references (Kubernetes v1.35):** [Deployments](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/deployment/), [kubectl create namespace](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_namespace/), [kubectl rollout status](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_status/), and [kubectl rollout undo](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_undo/).
 - [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
 - [Kubernetes ReplicaSet](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/)
 - [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/)
