@@ -19,9 +19,13 @@ Output schema (JSON):
       "content_type": "text/html; charset=utf-8",
       "allowlist_tier": "standards" | ... | null,
       "bytes": 123456,
+      "truncated": false,                  # null on failed fetches
       "text_length": 45678,
+      "text_sha256": "...",                 # exact cached UTF-8 bytes
+      "text_bytes": 45678,
       "text_preview": "first ~400 chars",
       "cached_at": "2026-04-19T...",
+      "fetch_attempt_completed_at": "2026-04-19T...",
       "from_cache": false,
       "issues": []
     }
@@ -44,7 +48,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 try:
     import yaml
@@ -77,7 +81,7 @@ MAX_BYTES = 4 * 1024 * 1024  # 4 MiB ceiling; large PDFs skip text extraction
 class _TextExtractor(html.parser.HTMLParser):
     """Strip script/style, collapse whitespace, emit readable plain text."""
 
-    _SKIP_TAGS = {"script", "style", "noscript", "template", "svg", "iframe"}
+    _SKIP_TAGS: ClassVar[set[str]] = {"script", "style", "noscript", "template", "svg", "iframe"}
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -113,7 +117,7 @@ def _html_to_text(body: str) -> str:
         parser.feed(body)
         parser.close()
     except Exception:  # noqa: BLE001 - malformed HTML shouldn't kill us
-        pass
+        return parser.text()
     return parser.text()
 
 
@@ -176,13 +180,13 @@ def _load_cached(url: str) -> dict[str, Any] | None:
     return data
 
 
-def _store_cache(url: str, meta: dict[str, Any], text: str) -> None:
+def _store_cache(url: str, meta: dict[str, Any], text_bytes: bytes) -> None:
     meta_path, text_path = _cache_paths(url)
     meta_path.write_text(
         json.dumps(meta, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    text_path.write_text(text, encoding="utf-8")
+    text_path.write_bytes(text_bytes)
 
 
 def cached_text_path(url: str) -> Path:
@@ -219,7 +223,7 @@ def _fetch_once(url: str, timeout: int) -> tuple[dict[str, Any], bytes]:
         try:
             body = e.read(MAX_BYTES + 1)[:MAX_BYTES]
         except Exception:  # noqa: BLE001
-            pass
+            body = b""
         return {
             "final_url": getattr(e, "url", url) or url,
             "status": int(e.code),
@@ -248,6 +252,7 @@ def fetch(url: str, *, refresh: bool = False, timeout: int = DEFAULT_TIMEOUT) ->
             return cached
 
     meta, body = _fetch_once(url, timeout=timeout)
+    fetch_attempt_completed_at = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
     issues: list[str] = []
     if meta.get("error"):
         issues.append(str(meta["error"]))
@@ -278,6 +283,8 @@ def fetch(url: str, *, refresh: bool = False, timeout: int = DEFAULT_TIMEOUT) ->
     if meta.get("truncated"):
         issues.append("truncated_body")
 
+    text_bytes = text.encode("utf-8")
+
     out = {
         "url": url,
         "final_url": meta.get("final_url", url),
@@ -285,13 +292,17 @@ def fetch(url: str, *, refresh: bool = False, timeout: int = DEFAULT_TIMEOUT) ->
         "content_type": content_type,
         "allowlist_tier": allowlist_tier(meta.get("final_url", url) or url),
         "bytes": int(meta.get("bytes", 0)),
+        "truncated": bool(meta.get("truncated", False)) if 0 < status < 400 else None,
         "text_length": len(text),
+        "text_sha256": hashlib.sha256(text_bytes).hexdigest(),
+        "text_bytes": len(text_bytes),
         "text_preview": text[:400],
         "cached_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+        "fetch_attempt_completed_at": fetch_attempt_completed_at,
         "from_cache": False,
         "issues": issues,
     }
-    _store_cache(url, out, text)
+    _store_cache(url, out, text_bytes)
     return out
 
 
@@ -353,7 +364,7 @@ def run_dry_run(refresh: bool = False) -> int:
         marker = " " if passed else "!"
         if not passed:
             bad += 1
-        print(f"{marker} {url[:68]:<68}  {tier:<10}  {str(expected or '-'):<10}  {status:<6}  {textlen:<6}  {issues}")
+        print(f"{marker} {url[:68]:<68}  {tier:<10}  {expected or '-'!s:<10}  {status:<6}  {textlen:<6}  {issues}")
     print("-" * 140)
     print(f"failed: {bad}/{len(_DRY_RUN_URLS)}")
     return 0 if bad == 0 else 1
