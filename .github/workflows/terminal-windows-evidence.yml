@@ -8,13 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  commands:
+  windows_powershell:
     runs-on: windows-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - name: Preserve source bytes for the digest check
         shell: powershell
@@ -23,7 +19,53 @@ jobs:
         with:
           persist-credentials: false
       - name: Execute exact reviewed PowerShell examples
-        shell: ${{ matrix.shell }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lesson = 'src/content/docs/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal.md'
+          $expectedDigest = 'b011bdc3093087401dea744a0949024c3c45938f0f5a89eda5b6c814b5940067'
+          $digest = (Get-FileHash -Algorithm SHA256 $lesson).Hash
+          if ($digest -ne $expectedDigest) { throw 'Lesson digest changed; review the examples again.' }
+          $body = Get-Content -Raw -Encoding UTF8 $lesson
+          $blocks = @([regex]::Matches($body, '(?ms)^```powershell\r?\n(?<code>.*?)^```[ \t]*\r?$') |
+            Where-Object { $_.Groups['code'].Value -match 'Today is' })
+          if ($blocks.Count -ne 2) { throw 'Expected the two reviewed combined-command examples.' }
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+          foreach ($block in $blocks) {
+            $code = $block.Groups['code'].Value.Replace('[YOUR NAME]', 'Test learner')
+            $lines = @(& ([ScriptBlock]::Create($code)))
+            if ($LASTEXITCODE -ne 0) { throw 'A native command failed.' }
+            $line = @($lines | Where-Object { $_ -like 'Today is *' })
+            if ($line.Count -ne 1) { throw 'Missing or duplicate combined output.' }
+            $parsed = [regex]::Match($line[0], '^Today is (.+) and I am (.+)$')
+            if (-not $parsed.Success) { throw 'Unexpected output structure.' }
+            if ($parsed.Groups[2].Value -ne $identity) { throw 'Identity did not match the running account.' }
+            $timestamp = [datetime]::Parse($parsed.Groups[1].Value, [cultureinfo]::InvariantCulture)
+            if ([math]::Abs(([datetime]::Now - $timestamp).TotalSeconds) -gt 60) { throw 'Timestamp did not match the runner clock.' }
+            Write-Output $line[0]
+          }
+          [ordered]@{
+            result = 'pass'
+            tested_examples = $blocks.Count
+            lesson_sha256 = $digest
+            powershell = $PSVersionTable.PSVersion.ToString()
+            edition = $PSVersionTable.PSEdition
+            os = [Environment]::OSVersion.VersionString
+            commit = $env:GITHUB_SHA
+          } | ConvertTo-Json -Compress
+
+  powershell_core:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preserve source bytes for the digest check
+        shell: powershell
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Execute exact reviewed PowerShell examples
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $lesson = 'src/content/docs/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal.md'
