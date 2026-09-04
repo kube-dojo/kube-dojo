@@ -474,6 +474,6 @@ Same shape as codex via `.venv/bin/python scripts/dispatch_smart.py draft --agen
 - [[dispatch-router]] — agent routing decisions.
 - [[k8s-cert-expert]] — domain expertise for k8s/cert content.
 - [[platform-expert]] — domain expertise for platform-engineering content.
-- [`docs/quality-rubric.md`](../../../docs/quality-rubric.md) — full rubric definition.
-- [`docs/pedagogical-framework.md`](../../../docs/pedagogical-framework.md) — research + guidelines.
-- [`scripts/prompts/module-writer.md`](../../../scripts/prompts/module-writer.md) — standard module-writer prompt.
+- Read `docs/quality-rubric.md` from the repository root for the full rubric definition.
+- Read `docs/pedagogical-framework.md` from the repository root for research and guidelines.
+- Read `scripts/prompts/module-writer.md` from the repository root for the standard writing prompt.
