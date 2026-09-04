@@ -6,12 +6,17 @@ For each module path in --input (default scripts/quality/pilot-2026-05-02.txt):
   2. Codex (gpt-5.5, mode=danger) rewrites per module-rewriter-388.md,
      runs verifier, commits, pushes, opens PR
   3. Cross-family review on the PR (agy — the Google lane — with claude/qwen fallback)
-  4. APPROVE       -> squash-merge with --delete-branch
+  4. APPROVE       -> retain PR/review and hold for a real source-acceptance receipt
      APPROVE_WITH_NITS -> log + post review; orchestrator triages (C3 fix-up lane)
      NEEDS CHANGES -> log + hold; orchestrator decides (re-dispatch vs inline)
   5. Brief pause; next module
 
 Sequential per item. JSONL log under logs/.
+
+The APPROVE hold is an interim containment measure: this dispatcher does not
+merge or run post-merge citation backfill until a real source-acceptance gate
+is integrated. It does not treat ordinary review, CI, or inherited metadata
+as source evidence.
 """
 from __future__ import annotations
 
@@ -22,9 +27,9 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 import yaml
 
@@ -40,13 +45,13 @@ WRITER_BRIEF = REPO / "scripts/prompts/module-writer.md"
 VENV_PYTHON = PRIMARY_REPO / ".venv" / "bin" / "python"
 
 sys.path.insert(0, str(REPO / "scripts"))
-from agent_runtime.runner import invoke  # noqa: E402
-from agent_runtime.errors import (  # noqa: E402
+from agent_runtime.errors import (
     AgentTimeoutError,
     AgentUnavailableError,
     RateLimitedError,
 )
-from lib.pr_merge import PrMergeError, merge_when_green  # noqa: E402
+from agent_runtime.runner import invoke
+from lib.pr_merge import PrMergeError, merge_when_green
 
 
 def module_slug_for_pipeline(module_path: str) -> str:
@@ -72,15 +77,11 @@ def module_slug_for_pipeline(module_path: str) -> str:
 
 def _module_path_for_marker(module_path: str) -> str:
     module = Path(module_path)
-    if module.is_absolute():
-        try:
-            module = module.relative_to(PRIMARY_REPO)
-        except ValueError:
-            module = module
+    if module.is_absolute() and module.is_relative_to(PRIMARY_REPO):
+        module = module.relative_to(PRIMARY_REPO)
     normalized = module.as_posix().replace("\\", "/")
     normalized = normalized.removeprefix("./")
-    if normalized.startswith("/"):
-        normalized = normalized[1:]
+    normalized = normalized.removeprefix("/")
     return normalized
 
 
@@ -106,14 +107,14 @@ def _parse_yaml_queue(queue_text: str) -> list[dict[str, object]]:
     loaded = yaml.safe_load(queue_text) or {}
     entries = loaded.get("queue", loaded) if isinstance(loaded, dict) else loaded
     if not isinstance(entries, list):
-        raise ValueError("YAML dispatch queue must be a dict with a 'queue' list or a list")
+        raise TypeError("YAML dispatch queue must be a dict with a 'queue' list or a list")
     normalized: list[dict[str, object]] = []
     for row in entries:
         if isinstance(row, str):
             normalized.append({"path": row})
             continue
         if not isinstance(row, dict):
-            raise ValueError("YAML dispatch queue entries must be strings or mappings")
+            raise TypeError("YAML dispatch queue entries must be strings or mappings")
         if "path" not in row:
             raise ValueError("YAML dispatch queue entry missing required 'path'")
         normalized.append(row)
@@ -671,13 +672,18 @@ def main(argv: list[str] | None = None) -> int:
         if review_text:
             post_review_comment(pr_num, review_text)
         if verdict == "APPROVE":
-            merge_sha = merge_pr(pr_num)
-            if merge_sha:
-                log({"event": "merged", "pr": pr_num, "module": module_path, "merge_sha": merge_sha})
-                # dispatch_backfill is best-effort and must never block the merge chain.
-                dispatch_backfill(slug, module_path)
-            else:
-                log({"event": "merge_held", "pr": pr_num, "module": module_path, "verdict": "MERGE_FAILED"})
+            log({
+                "event": "source_acceptance_unverified",
+                "pr": pr_num,
+                "module": module_path,
+                "verdict": verdict,
+                "action": "merge_held",
+            })
+            print(
+                f"[source_acceptance_unverified] holding PR #{pr_num} for {module_path}; "
+                "a real source-acceptance receipt gate is required before merge or backfill.",
+                flush=True,
+            )
         elif verdict == "APPROVE_WITH_NITS":
             # C3 fix-up lane: orchestrator triages inline (trivial nits) or
             # re-dispatches codex (semantic). Do NOT auto-merge — the

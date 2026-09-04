@@ -111,36 +111,74 @@ def test_dispatch_backfill_backfill_failure_logs_and_continues():
     assert failed["reason"] == "pipeline_failed"
 
 
-def test_main_chain_calls_backfill_after_merge_and_continues_on_failure(tmp_path):
+def test_main_approve_holds_merge_and_backfill_for_all_queued_items(tmp_path, capsys):
     queue = tmp_path / "queue.txt"
     queue.write_text(
-        "\n".join(
-            [
-                "src/content/docs/k8s/cka/module-1.md",
-                "src/content/docs/k8s/cka/module-2.md",
-            ]
-        )
+        "src/content/docs/k8s/cka/module-1.md\n"
+        "src/content/docs/k8s/cka/module-2.md"
     )
     codex_result = MagicMock(ok=True, response="Opened PR: https://github.com/org/repo/pull/42")
+    reviewer = MagicMock(return_value=("VERDICT: APPROVE", "APPROVE"))
+    for name in ("module-1.md", "module-2.md"):
+        module = tmp_path / "src/content/docs/k8s/cka" / name
+        module.parent.mkdir(parents=True, exist_ok=True)
+        module.write_text("---\ncitations_verified: true\nrevision_pending: false\n---\nDraft\n")
 
-    with patch("scripts.quality.dispatch_388_pilot.make_worktree", return_value=tmp_path), \
+    with patch.object(pilot, "REPO", tmp_path), \
+         patch.object(pilot, "PILOT_FILE", queue), \
+         patch.object(pilot, "LOG", tmp_path / "pilot.jsonl"), \
+         patch.object(pilot, "invoke", side_effect=AssertionError("unexpected provider call")), \
+         patch.object(pilot.subprocess, "run", side_effect=AssertionError("unexpected subprocess")), \
+         patch("scripts.quality.dispatch_388_pilot.make_worktree", return_value=tmp_path), \
          patch("scripts.quality.dispatch_388_pilot.dispatch_codex", return_value=codex_result), \
-         patch("scripts.quality.dispatch_388_pilot.dispatch_agy_review", return_value=("VERDICT: APPROVE", "APPROVE")), \
-         patch("scripts.quality.dispatch_388_pilot.merge_pr", return_value="abc123"), \
-         patch("scripts.quality.dispatch_388_pilot.dispatch_backfill", side_effect=[False, True]) as mock_backfill, \
-         patch("scripts.quality.dispatch_388_pilot.post_review_comment"), \
+         patch("scripts.quality.dispatch_388_pilot.build_reviewer_cascade", return_value=[("claude", reviewer)]), \
+         patch("scripts.quality.dispatch_388_pilot.merge_pr", return_value="abc123") as mock_merge, \
+         patch("scripts.quality.dispatch_388_pilot.dispatch_backfill", return_value=True) as mock_backfill, \
+         patch("scripts.quality.dispatch_388_pilot.post_review_comment") as mock_post_review, \
          patch("scripts.quality.dispatch_388_pilot.time.sleep"), \
          patch("scripts.quality.dispatch_388_pilot.log") as mock_log:
         rc = pilot.main(["--input", str(queue)])
 
     assert rc == 0
-    expected_slug_1 = pilot.module_slug_for_pipeline("src/content/docs/k8s/cka/module-1.md")
-    expected_slug_2 = pilot.module_slug_for_pipeline("src/content/docs/k8s/cka/module-2.md")
-    mock_backfill.assert_any_call(expected_slug_1, "src/content/docs/k8s/cka/module-1.md")
-    mock_backfill.assert_any_call(expected_slug_2, "src/content/docs/k8s/cka/module-2.md")
-    assert mock_backfill.call_count == 2
+    assert reviewer.call_count == 2
+    assert mock_post_review.call_count == 2
+    mock_merge.assert_not_called()
+    mock_backfill.assert_not_called()
     events = [c.args[0]["event"] for c in mock_log.call_args_list]
-    assert events.count("merged") == 2
+    assert events.count("source_acceptance_unverified") == 2
+    assert "merged" not in events
+    assert capsys.readouterr().out.count("[source_acceptance_unverified]") == 2
+
+
+@pytest.mark.parametrize(
+    ("verdict", "expected_event"),
+    [
+        ("APPROVE_WITH_NITS", "merge_held_nits"),
+        ("NEEDS CHANGES", "merge_held"),
+    ],
+)
+def test_main_nonapprove_verdicts_remain_held(tmp_path, verdict, expected_event):
+    queue = tmp_path / "queue.txt"
+    queue.write_text("src/content/docs/k8s/cka/module-1.md")
+    codex_result = MagicMock(ok=True, response="Opened PR: https://github.com/org/repo/pull/42")
+    reviewer = MagicMock(return_value=(f"VERDICT: {verdict}", verdict))
+
+    with patch.object(pilot, "invoke", side_effect=AssertionError("unexpected provider call")), \
+         patch.object(pilot.subprocess, "run", side_effect=AssertionError("unexpected subprocess")), \
+         patch("scripts.quality.dispatch_388_pilot.make_worktree", return_value=tmp_path), \
+         patch("scripts.quality.dispatch_388_pilot.dispatch_codex", return_value=codex_result), \
+         patch("scripts.quality.dispatch_388_pilot.build_reviewer_cascade", return_value=[("claude", reviewer)]), \
+         patch("scripts.quality.dispatch_388_pilot.merge_pr") as mock_merge, \
+         patch("scripts.quality.dispatch_388_pilot.dispatch_backfill") as mock_backfill, \
+         patch("scripts.quality.dispatch_388_pilot.post_review_comment"), \
+         patch("scripts.quality.dispatch_388_pilot.time.sleep"), \
+         patch("scripts.quality.dispatch_388_pilot.log") as mock_log:
+        assert pilot.main(["--input", str(queue)]) == 0
+
+    mock_merge.assert_not_called()
+    mock_backfill.assert_not_called()
+    events = [c.args[0]["event"] for c in mock_log.call_args_list]
+    assert expected_event in events
 
 
 def test_slugify_uses_repo_relative_path_not_stem():
@@ -159,9 +197,10 @@ def test_make_worktree_rejects_existing_worktree_for_different_module(tmp_path, 
     worktree.mkdir(parents=True)
     (worktree / ".module_path").write_text("src/content/docs/k8s/cks/module-1.md", encoding="utf-8")
 
-    with patch("scripts.quality.dispatch_388_pilot.subprocess.run"):
-        with pytest.raises(RuntimeError, match="existing worktree"):
-            pilot.make_worktree(slug, "src/content/docs/k8s/cka/module-1.md")
+    with patch("scripts.quality.dispatch_388_pilot.subprocess.run"), pytest.raises(
+        RuntimeError, match="existing worktree"
+    ):
+        pilot.make_worktree(slug, "src/content/docs/k8s/cka/module-1.md")
 
 
 def test_make_worktree_reuses_existing_worktree_for_same_module_and_records_marker(tmp_path, monkeypatch):
@@ -199,12 +238,10 @@ def test_make_worktree_writes_module_path_marker_for_new_tree(tmp_path, monkeypa
 
 
 def test_dispatch_backfill_sha_regex_parses_ok_line():
-    output = "\n".join(
-        [
-            "[no-op] k8s-cka-module-9: already clean",
-            "[ok]    k8s-cka-module-8: deadbeef12",
-            "[ok]    k8s-cka-module-9: c0ffee99",
-        ]
+    output = (
+        "[no-op] k8s-cka-module-9: already clean\n"
+        "[ok]    k8s-cka-module-8: deadbeef12\n"
+        "[ok]    k8s-cka-module-9: c0ffee99"
     )
     match = re.search(r"^\[ok\]\s+k8s-cka-module-8:\s+([0-9a-f]+)", output, re.MULTILINE)
     assert match is not None
@@ -269,13 +306,17 @@ def test_dispatch_agy_review_uses_danger_mode(monkeypatch: pytest.MonkeyPatch) -
         # URL plus a timed-out message; no VERDICT line present.
         (
             True,
-            "Authentication required. Please visit the URL to log in: "
-            "https://accounts.google.com/o/oauth2/auth?...\n"
-            "Error: authentication timed out.",
+            (
+                "Authentication required. Please visit the URL to log in: "
+                "https://accounts.google.com/o/oauth2/auth?...\n"
+                "Error: authentication timed out."
+            ),
             "UNCLEAR",
-            "Authentication required. Please visit the URL to log in: "
-            "https://accounts.google.com/o/oauth2/auth?...\n"
-            "Error: authentication timed out.",
+            (
+                "Authentication required. Please visit the URL to log in: "
+                "https://accounts.google.com/o/oauth2/auth?...\n"
+                "Error: authentication timed out."
+            ),
         ),
     ],
 )
