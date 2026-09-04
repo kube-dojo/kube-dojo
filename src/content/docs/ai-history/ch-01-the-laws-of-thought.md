@@ -137,3 +137,14 @@ George Boole left behind a calculus of classes and propositions, etched entirely
 :::note[Why this still matters today]
 Every digital circuit you have ever used resolves into AND, OR, and NOT — operations whose symbolic treatment begins here. Search queries, program conditionals, and database filters all execute chains of Boolean evaluation. The path from Boole's notation to silicon takes another half-century of mathematical work and a fresh engineering insight; the chapters that follow trace it.
 :::
+
+## Sources
+
+These references support specific parts of the chapter. The school dates, Jevons and Schröder chronology, college background, and some biographical and modern-computing claims still need correction or stronger support; see the [open factual review](https://github.com/kube-dojo/kube-dojo.github.io/issues/2302). Access notes were recorded on 2026-09-04. Page numbers refer to printed pagination; section names and fragments identify the linked HTML pages.
+
+- [George Boole, *An Investigation of the Laws of Thought* (1854), Project Gutenberg #15114](https://www.gutenberg.org/files/15114/15114-pdf.pdf) — primary text: Ch. I §1 p. 1; Ch. II §§4, 6, 7, 11 pp. 18–23; Ch. III §§13–16 pp. 33–36; Ch. IV §§7–8 pp. 40–41; Chs. XI–XII pp. 124–142.
+- [Alexander Macfarlane, *Lectures on Ten British Mathematicians of the Nineteenth Century* (1916), Project Gutenberg #9942](https://www.gutenberg.org/files/9942/9942-pdf.pdf) — pp. 37–40: Boole’s early life, school, mathematical work, Cork appointment, 1854 book, marriage, rain walk, and death.
+- [Stanley Burris, “George Boole,” *Stanford Encyclopedia of Philosophy*](https://plato.stanford.edu/entries/boole/#LifeWork) — checked sections `#MathAnalLogi1847`, `#OperLawsForElecSymb`, `#LawsThou1854`, `#ObjeBoolAlgeLogi`, `#ModeRecoBoolSyst`, and `#BoolGeneMethForSecoProp` for the algebra, Jevons, idempotence, and secondary propositions.
+- [J. J. O’Connor and E. F. Robertson, “George Boole,” MacTutor](https://mathshistory.st-andrews.ac.uk/Biographies/Boole/) — `Quick Info` and `Biography` for the life chronology, Royal Society recognition, Cork post, and rain-walk account.
+- [J. J. O’Connor and E. F. Robertson, “Mary Everest Boole,” MacTutor](https://mathshistory.st-andrews.ac.uk/Biographies/Boole_Mary/) — `Quick Info` and `Biography` for the London librarianship, teaching, curve stitching, and educational publications.
+- [“George Boole,” *Encyclopædia Britannica*](https://www.britannica.com/biography/George-Boole) — attributed in the chapter for the exact rain-walk date and a different distance. This page could not be rechecked on 2026-09-04 (HTTP 403); the earlier research notes record this attribution, which remains unconfirmed in this pass.
