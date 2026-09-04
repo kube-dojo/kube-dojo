@@ -1,5 +1,4 @@
 ---
-citations_verified: true
 title: "What Is AI?"
 slug: ai/foundations/module-1.1-what-is-ai
 sidebar:
@@ -38,7 +37,7 @@ The goal is not to make AI mysterious or magical. The goal is to make it legible
 
 Artificial intelligence is a broad name for computer systems that appear to perform tasks we normally associate with judgment, pattern recognition, language, planning, or decision support. That does not mean the computer understands the world the way a person does. It means the system receives input, transforms it using rules or learned patterns, and produces an output such as a label, recommendation, prediction, piece of content, or next action.
 
-The OECD's updated definition of an AI system describes a machine-based system that infers from input how to generate outputs such as predictions, content, recommendations, or decisions that can influence physical or virtual environments. That wording is useful for beginners because it focuses on the flow of the system rather than the hype around it. Something goes in, a system infers what output fits, and the output may affect what people see or do next.
+In a simplified paraphrase of the OECD definition, an AI system uses the input it receives to work out an output that serves a stated or implicit objective. The result might be a prediction, recommendation, decision, or generated content that affects the physical world or a digital environment. Systems differ in how independently they operate and how much they can adapt after they enter use. For a beginner, the useful idea is the flow: something goes in, the system works out an output, and that output may affect what people see or do next.
 
 In everyday language, AI is easiest to understand as software that handles ambiguity. A calculator does not need AI to add two numbers, because the rule is exact. A photo app that groups pictures of the same person faces a messier task, because faces vary with lighting, angle, age, expression, camera quality, and background. The value of AI often appears where the input is too varied for a simple rule to cover comfortably.
 
@@ -150,13 +149,13 @@ The second boundary question is "What can it change?" A chatbot that only answer
 
 The third boundary question is "Who approves?" Human approval is not a decorative button. A useful approval step shows the proposed action, the evidence behind it, the cost or consequence, and the way to undo it if possible. If an assistant asks "Confirm booking?" but hides the hotel city, cancellation policy, and total price, the approval is weak. A good approval step makes the decision understandable before you click.
 
-You can sort everyday AI tasks into low, medium, and high stakes. Low-stakes tasks include brainstorming birthday party themes, rewriting a casual note, or suggesting practice questions for a topic you are learning. Medium-stakes tasks include summarizing a lease, comparing health insurance terms, or drafting a work message where tone matters. High-stakes tasks include medical, legal, financial, safety, or irreversible decisions. The higher the stakes, the more outside evidence and human review you need.
+You can sort everyday AI tasks into low, medium, and high stakes. Low-stakes tasks include brainstorming birthday party themes, rewriting a casual note, or suggesting practice questions for a topic you are learning. Medium-stakes tasks include drafting a work message for your review or organizing information before a decision. Summarizing a lease or comparing health insurance terms can become consequential when you rely on the summary to act. High-stakes tasks include medical, legal, financial, safety, or irreversible decisions. The consequences and your reliance on the output determine how much outside evidence and human review you need.
 
 The boundary should also match your own expertise. If you ask AI to explain a topic you understand well, you can spot many mistakes. If you ask it about a topic you barely know, you may not recognize false confidence. That does not mean you cannot use it for unfamiliar topics. It means you should ask for sources, compare multiple references, and avoid acting on the answer until a more authoritative source confirms it.
 
 A useful beginner rule is "draft freely, decide carefully." Let AI help you explore ideas, organize messy notes, compare options, and create first drafts. Slow down when the output claims facts, affects people, spends money, shares private data, changes a record, or tells you what to do in a serious situation. This rule keeps AI useful while making sure responsibility stays with the person who understands the real-world consequences.
 
-The NIST AI Risk Management Framework describes AI risk work through functions such as govern, map, measure, and manage. You do not need the full framework in this first module, but the beginner version is already visible: know who is responsible, map what the tool can see and do, measure whether the answer is reliable enough, and manage the risk before action happens. Serious AI literacy starts with those habits.
+NIST's voluntary AI Risk Management Framework (AI RMF) 1.0, released in 2023, organizes AI risk work through the functions Govern, Map, Measure, and Manage. You do not need the full framework in this first module, but the beginner version is already visible: know who is responsible, map what the tool can see and do, measure whether the answer is reliable enough, and keep managing risk as the system is designed, used, and evaluated. Serious AI literacy starts with those habits.
 
 ## Reading AI Answers
 
@@ -186,7 +185,7 @@ Use generative AI when you need drafting, summarizing, rephrasing, translation h
 
 Use agentic assistants when the task genuinely needs several steps and tools, and when you can keep approval over important actions. A good early use is asking the assistant to gather options, prepare a draft, or build a checklist for your review. A risky use is letting it spend money, contact people, submit forms, or alter records without a clear preview. Autonomy should grow only after reliability and boundaries are proven.
 
-Do not use AI as a substitute for professional accountability. Medical, legal, financial, safety, and employment decisions can be supported by AI for organization or preparation, but the output should not become the final authority. The tool does not carry responsibility for the outcome. People do. That is why verification, source checking, and human judgment belong at the center of serious AI use.
+Do not use AI as a substitute for professional accountability. Medical, legal, financial, safety, and employment decisions can be supported by AI for organization or preparation, but the output should not become the final authority. People and organizations retain decision roles, with responsibilities assigned according to the role and context. That is why verification, source checking, and human judgment belong at the center of serious AI use.
 
 ## A Beginner's First AI Conversation
 
@@ -215,7 +214,7 @@ The point of a first AI conversation is not to get the perfect answer. The point
 ## Did You Know?
 
 - [The OECD revised its AI system definition in 2023 to emphasize machine-based systems that infer from input and generate outputs such as predictions, content, recommendations, or decisions.](https://oecd.ai/en/wonk/definition-)
-- [The NIST AI RMF Playbook says AI RMF 1.0 was released on January 26, 2023, and organizes work around Govern, Map, Measure, and Manage.](https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook)
+- [The NIST AI RMF Playbook describes the voluntary AI RMF 1.0, released on January 26, 2023, and organizes work around Govern, Map, Measure, and Manage.](https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook)
 - The same product can combine several mechanisms, so one "AI assistant" may include rules, learned rankings, generated text, and tool-using steps in a single workflow.
 - A beginner can often reduce risk by asking three plain questions before using a tool: what can it see, what can it change, and what evidence supports the answer?
 
@@ -323,8 +322,8 @@ Continue to [What Are LLMs?](./module-1.2-what-are-llms/) to learn why modern ch
 - [OECD AI Principles](https://oecd.ai/en/ai-principles)
 - [NIST AI Risk Management Framework Playbook](https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook)
 - [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
-- [NIST AI Risk Management Framework: Generative Artificial Intelligence Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence-profile)
-- [NIST Trustworthy and Responsible AI](https://www.nist.gov/artificial-intelligence/trustworthy-and-responsible-ai)
+- [NIST AI Risk Management Framework: Generative Artificial Intelligence Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence)
+- [NIST Trustworthy and Responsible AI](https://www.nist.gov/trustworthy-and-responsible-ai)
 - [Google Machine Learning Crash Course](https://developers.google.com/machine-learning/crash-course)
 - [Google People + AI Guidebook](https://pair.withgoogle.com/guidebook)
 - [Stanford AI Index Report](https://aiindex.stanford.edu/report/)
