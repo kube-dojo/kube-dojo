@@ -19,7 +19,7 @@ After this module, you will be able to perform these beginner terminal tasks and
 
 - **Compare** graphical interfaces and terminal interfaces, then choose the better tool for a beginner engineering task.
 - **Open** a terminal on macOS, Windows, or Linux and **diagnose** what the visible prompt is telling you.
-- **Run** simple commands such as `echo`, `date`, `whoami`, and `hostname`, then **interpret** the output without guessing.
+- **Run** simple commands such as `echo`, a shell-appropriate date/time command (`date` or `Get-Date`), `whoami`, and `hostname`, then **interpret** the output without guessing.
 - **Debug** common beginner terminal problems, including copied prompt symbols, command typos, incomplete quotes, and long-running commands.
 
 ---
@@ -81,7 +81,7 @@ The same idea applies even when the task is not large. If you run `date` before 
 
 Opening the terminal is slightly different on each operating system, but the first goal is the same everywhere: get to a window that shows a prompt and a blinking cursor. On macOS, press Cmd + Space, type Terminal, and press Enter. On many Linux desktops, Ctrl + Alt + T opens a terminal, and the applications menu usually has a Terminal entry if the shortcut is disabled.
 
-Windows has several valid options, and they serve different purposes. Windows Terminal is Microsoft's modern terminal application and is a good day-to-day container for shells. WSL, the Windows Subsystem for Linux, gives you a Linux-style shell on Windows; use a WSL tab for the Unix command names in this module (`date`, `date -u`, and bash-style examples such as `$(date)`). PowerShell is built in and works for `echo` (alias) and identity checks such as `whoami`, but it has **no** `date` command — only the `Get-Date` cmdlet, with no `date` alias — so plain PowerShell will fail if you type `date` as shown below. WSL is recommended for the rest of this curriculum for the same reason.
+Windows has several valid options, and they serve different purposes. Windows Terminal is Microsoft's modern terminal application and is a good day-to-day container for shells. WSL, the Windows Subsystem for Linux, gives you a Linux-style shell on Windows; use a WSL tab for the Unix command names in this module (`date`, `date -u`, and bash-style examples such as `$(date)`). PowerShell is a separate shell with its own command names and subexpression syntax. Profiles can define aliases or functions, so availability depends on the host; for a predictable PowerShell path in this module, use the native `Get-Date` and `Write-Output` examples below. WSL is recommended for the rest of this curriculum when later modules expect Unix command names.
 
 If you choose WSL later, the official installation path starts from PowerShell and uses Microsoft's installer command. You do not need to run it for this module, but seeing the shape of the command helps you recognize that terminal instructions can install real tools. This curriculum will return to WSL when the operating system details matter more.
 
@@ -130,7 +130,7 @@ That rule is especially useful when output is quiet. Some commands print a resul
 
 ## Your First Safe Commands
 
-The safest first commands are ones that print information and do not change files. `echo` prints text back to the screen, `date` asks the system clock for the current date and time, `whoami` prints the current username, and `hostname` prints the machine name. These commands are small, but they teach the whole loop: type an instruction, press Enter, read output, wait for the prompt to return.
+The safest first commands are ones that print information and do not change files. `echo` prints text back to the screen, the shell-appropriate date/time command (`date` in Bash-like shells or `Get-Date` in PowerShell) asks for the current date and time, `whoami` prints the current username, and `hostname` prints the machine name. These commands are small, but they teach the whole loop: type an instruction, press Enter, read output, wait for the prompt to return.
 
 Before running this, what output do you expect from a command named `echo` when the argument is `Hello, World!`? Make a prediction in plain language first. Prediction matters because the terminal can feel less random when you train yourself to compare expected output with actual output.
 
@@ -154,11 +154,21 @@ $ echo "Hello, World!"
 
 If you are typing by hand, that display style is harmless because you naturally start after the prompt. If you are copying and pasting, it can cause trouble because the shell receives the `$` as text. For that reason, this rewrite uses runnable command blocks without the prompt symbol when the intent is copy-paste practice.
 
-Now ask the computer for the date and time. The exact output depends on your operating system, timezone, locale, and shell, so do not worry if yours is formatted differently from the example. What matters is that the command returns a timestamp and then gives you the prompt again. On Windows, run this in **WSL** (or another bash/zsh shell); in PowerShell only, use `Get-Date` instead — there is no `date` command there.
+Now ask the computer for the date and time. The exact output depends on your operating system, timezone, locale, and shell, so do not worry if yours is formatted differently from the example. What matters is that the command returns a timestamp and then gives you the prompt again. Use the branch that matches the shell you opened:
+
+**Bash, zsh, or WSL:**
 
 ```bash
 date
 ```
+
+**PowerShell:**
+
+```powershell
+Get-Date
+```
+
+The PowerShell [`Get-Date` cmdlet](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-date?view=powershell-7.5) is the native date/time example used in this module. A different shell or profile may expose additional aliases, but follow the branch that matches the command language you are using.
 
 One possible output looks like this, but your local timezone and formatting may produce a different line:
 
@@ -270,11 +280,21 @@ The correct fix is not to panic or close the whole application. You can type the
 
 That `>` is not a normal ready prompt in this situation. It is the shell asking for more input because the previous line was incomplete. Recognizing the difference between a normal prompt and a continuation prompt turns a confusing moment into a solvable one.
 
-Try one more safe combination. This example uses command substitution, which means the shell runs the commands inside `$(...)` first and inserts their output into the surrounding `echo` command. You do not need to master command substitution yet; just notice that terminal commands can be composed.
+Try one more safe combination. These examples insert command output into a sentence using shell-specific command names. You do not need to master command substitution or subexpressions yet; just notice that terminal commands can be composed.
+
+**Bash, zsh, or WSL:**
 
 ```bash
 echo "Today is $(date) and I am $(whoami)"
 ```
+
+**PowerShell:**
+
+```powershell
+Write-Output "Today is $(Get-Date) and I am $(whoami)"
+```
+
+PowerShell uses the [`$()` subexpression operator](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.5#subexpression-operator--) inside the native `Write-Output` command. In either branch, `whoami` reports the account running that shell; read the output as evidence about the current session.
 
 The important lesson is that composition is one of the terminal's superpowers. A GUI button usually does one visible operation. A shell command can combine smaller commands into a larger instruction, which is why scripts become possible later. For now, composition simply means you can build up from small reliable pieces instead of memorizing one giant command.
 
@@ -443,7 +463,7 @@ Open a terminal, run safe information commands, and practice one recovery move. 
 
 ### Setup
 
-Use any terminal you can open today. macOS Terminal, a Linux terminal, or **Windows Terminal with a WSL Ubuntu profile** are the best fit for this exercise because the tasks use Unix-style `date` and bash composition. If you only have PowerShell open, `echo` and `whoami` work, but use `Get-Date` wherever the exercise says `date`, or open a WSL tab to match the examples. If one command prints a slightly different format on your system, treat that as useful evidence rather than a failure.
+Use any terminal you can open today, then follow the branch for that shell. macOS Terminal and Linux terminals commonly use zsh or Bash; **Windows Terminal with a WSL Ubuntu profile** uses the Unix-style `date` and Bash composition shown below. PowerShell has its own branch using native `Get-Date`, `Write-Output`, and the PowerShell subexpression form `$()`; open a WSL tab only if you want to follow the Unix-style branch. If one command prints a slightly different format on your system, treat that as useful evidence rather than a failure.
 
 ### Tasks
 
@@ -481,13 +501,21 @@ If you typed only `echo "Hello, World!"`, the terminal should print `Hello, Worl
 
 </details>
 
-3. Ask the computer for the current date and time.
+3. Ask the computer for the current date and time. Use the command for the shell you opened.
+
+**Bash, zsh, or WSL:**
 
 ```bash
 date
 ```
 
-The preserved prompt-style example from earlier course notes includes the leading prompt marker for comparison with the runnable command:
+**PowerShell:**
+
+```powershell
+Get-Date
+```
+
+The preserved Bash/zsh/WSL prompt-style example from earlier course notes includes the leading prompt marker for comparison with the runnable command:
 
 ```bash
 $ date
@@ -502,7 +530,7 @@ Mon Mar 23 14:30:00 UTC 2026
 <details>
 <summary>Solution guidance</summary>
 
-Your exact timestamp will differ from the example because your machine has its own current time, timezone, and formatting rules. The important result is that `date` prints a timestamp and then the prompt returns. In plain PowerShell, `date` is not a valid command — run `Get-Date` for the same information, or switch to WSL so `date` matches later modules.
+Your exact timestamp will differ from the example because your machine has its own current time, timezone, and formatting rules. The important result is that the shell-appropriate command prints a timestamp and then the prompt returns. In Bash, zsh, or WSL, that command is `date`; in PowerShell, use the native `Get-Date` cmdlet shown above. The [`Get-Date` documentation](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-date?view=powershell-7.5) describes the PowerShell form.
 
 </details>
 
@@ -542,12 +570,21 @@ your-mac.local
 
 5. Make the output personal, then try one composed command.
 
+**Bash, zsh, or WSL:**
+
 ```bash
 echo "My name is [YOUR NAME] and I just used the terminal!"
 echo "Today is $(date) and I am $(whoami)"
 ```
 
-The preserved prompt-style examples from earlier course notes show the same commands with visible prompt markers for recognition practice:
+**PowerShell:**
+
+```powershell
+Write-Output "My name is [YOUR NAME] and I just used the terminal!"
+Write-Output "Today is $(Get-Date) and I am $(whoami)"
+```
+
+The preserved Bash/zsh/WSL prompt-style examples from earlier course notes show the same commands with visible prompt markers for recognition practice:
 
 ```bash
 $ echo "My name is [YOUR NAME] and I just used the terminal!"
@@ -560,7 +597,7 @@ $ echo "Today is $(date) and I am $(whoami)"
 <details>
 <summary>Solution guidance</summary>
 
-Replace `[YOUR NAME]` with your actual name or initials before running the first command. In the second command, the shell runs `date` and `whoami` first, then inserts their output into the surrounding sentence. You are seeing command composition in a harmless form, which prepares you for later scripts without requiring you to learn scripting syntax today.
+Replace `[YOUR NAME]` with your actual name or initials before running the first command. In the Bash/zsh/WSL branch, the shell runs `date` and `whoami` first; in the PowerShell branch, it evaluates `Get-Date` and `whoami` inside `Write-Output`. Both branches show command composition in a harmless form, which prepares you for later scripts without requiring you to learn scripting syntax today. See Microsoft's [subexpression operator documentation](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.5#subexpression-operator--) for the PowerShell form.
 
 </details>
 
@@ -586,9 +623,9 @@ You've completed this exercise when you can demonstrate each item below without 
 - [ ] Open a terminal window on your operating system.
 - [ ] Identify at least one part of your prompt, such as username, hostname, directory, `$`, or `%`.
 - [ ] Run `echo "Hello, World!"` and see the output.
-- [ ] Run `date` and explain why your output differs from the example.
+- [ ] Run the date/time command for your shell (`date` in Bash/zsh/WSL or `Get-Date` in PowerShell) and explain why your output differs from the example.
 - [ ] Run `whoami` and `hostname` and connect the output to your current session.
-- [ ] Run the combined `echo "Today is $(date) and I am $(whoami)"` command.
+- [ ] Run the combined shell-appropriate example: `echo "Today is $(date) and I am $(whoami)"` in Bash/zsh/WSL, or `Write-Output "Today is $(Get-Date) and I am $(whoami)"` in PowerShell.
 - [ ] Cancel an unfinished quoted command with Ctrl+C and return to a normal prompt.
 
 ## Sources
@@ -602,6 +639,8 @@ You've completed this exercise when you can demonstrate each item below without 
 - [GNU Coreutils manual: hostname invocation](https://www.gnu.org/software/inetutils/manual/html_node/hostname-invocation.html)
 - [Bash Reference Manual: Quoting](https://www.gnu.org/software/bash/manual/html_node/Quoting.html)
 - [Bash Reference Manual: Command Substitution](https://www.gnu.org/software/bash/manual/html_node/Command-Substitution.html)
+- [PowerShell Get-Date cmdlet](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-date?view=powershell-7.5)
+- [PowerShell about_Operators: Subexpression operator](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.5#subexpression-operator--)
 - [Kubernetes kubectl quick reference](https://kubernetes.io/docs/reference/kubectl/quick-reference/)
 - [Punched card](https://en.wikipedia.org/wiki/Punched_card)
 - [Graphical user interface](https://en.wikipedia.org/wiki/Graphical_user_interface)
