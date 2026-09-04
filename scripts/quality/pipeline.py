@@ -26,21 +26,23 @@ scripts can detect issues), 3 when aborted by dispatcher unavailability.
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-from . import density, queue, state, stages
+from . import density, queue, stages, state
 from .dispatchers import DispatcherUnavailable
 from .prompts import assert_required_docs_exist
-from .worktree import has_uncommitted, primary_checkout_root
 from .queue import set_citations_verified_frontmatter
-
+from .worktree import has_uncommitted, primary_checkout_root
 
 _REPO_ROOT = primary_checkout_root(Path(__file__).resolve().parents[2])
 _CONTENT_ROOT = _REPO_ROOT / "src" / "content" / "docs"
+logger = logging.getLogger(__name__)
 
 WORKER_CAP = 3
 """Hard cap per project memory ``feedback_batch_worker_cap.md`` —
@@ -369,6 +371,7 @@ def _process_batch(
             aborted = True
             return ok, fail, aborted
         except Exception as exc:  # pragma: no cover — unexpected failures logged
+            logger.exception("quality batch item failed for %s", slug)
             print(f"[fail] {slug}: {exc}")
             fail += 1
     return ok, fail, aborted
@@ -433,8 +436,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 2
 
-    if args.workers < 1:
-        args.workers = 1
+    args.workers = max(args.workers, 1)
     if args.workers > WORKER_CAP:
         print(f"[warn] --workers clamped from {args.workers} to {WORKER_CAP}")
         args.workers = WORKER_CAP
@@ -492,6 +494,7 @@ def _run_one_with_abort(slug: str) -> str:
         print(f"[abort] dispatcher unavailable at {slug}: {exc}")
         return "abort"
     except Exception as exc:
+        logger.exception("quality module run failed for %s", slug)
         print(f"[fail] {slug}: {exc}")
         _print_failure_diagnostics(slug)
         return "fail"
@@ -510,6 +513,7 @@ def _print_failure_diagnostics(slug: str) -> None:
     try:
         st = state.load_state(slug)
     except Exception as exc:  # pragma: no cover — display path
+        logger.exception("could not load failure state for %s", slug)
         print(f"        (could not read state: {exc})")
         return
     if st is None:
@@ -559,6 +563,14 @@ def cmd_run_module(args: argparse.Namespace) -> int:
 
 _CITATION_BACKFILL_SCRIPT = _REPO_ROOT / "scripts" / "citation_backfill.py"
 _VENV_PYTHON = str(_REPO_ROOT / ".venv" / "bin" / "python")
+
+# The v2 backfill seam records processing completion, but it does not have a
+# durable claim/source verification receipt.  Keep that readiness distinction
+# explicit: an injection (or no-op) never earns the frontmatter bit.
+_SOURCE_UNVERIFIED = {
+    "source_acceptance": "unverified",
+    "readiness_impact": "not_cleared_until_independent_source_evidence",
+}
 
 
 def _module_key_from_path(module_path: str) -> str:
@@ -618,8 +630,9 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
 
     Returns the outcome dict to be persisted to ``state.backfill``. On
     success, the working module file may have been edited and a new
-    commit added on ``main``; on failure, leaves the worktree clean
-    (``git restore`` rolls back any partial inject write).
+    commit added on ``main``; this does not establish source acceptance.
+    On failure, leaves the worktree clean (``git restore`` rolls back any
+    partial inject write).
     """
     slug = st["slug"]
     module_key = _module_key_from_path(st["module_path"])
@@ -656,11 +669,13 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
 
     inject = _run_citation_subcommand(module_key, "inject", agent=agent)
     if not inject["ok"]:
-        # `nothing_to_do` means verification ran but there were no
-        # actionable citation changes; for backfill, this is a success
-        # path (frontmatter can still be marked verified).
+        # `nothing_to_do` means injection found no actionable citation
+        # changes; for backfill, this remains a
+        # processing-complete path, but it is not source acceptance.
         if inject.get("error") == "nothing_to_do" or "nothing_to_do" in (inject.get("stdout") or ""):
-            set_citations_verified_frontmatter(_REPO_ROOT / st["module_path"], verified=True)
+            # A pre-existing true bit is not evidence this run can inherit.
+            # Remove it so readiness fails closed after this pipeline pass.
+            set_citations_verified_frontmatter(_REPO_ROOT / st["module_path"], verified=False)
             rc, status_all, _ = _git(repo, "status", "--porcelain", check=False)
             if rc != 0:
                 _git(repo, "restore", st["module_path"], check=False)
@@ -691,9 +706,10 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
                 return {
                     "done": True, "ok": True, "no_op": True,
                     "reason": "nothing_to_do", "module_key": module_key,
+                    **_SOURCE_UNVERIFIED,
                 }
             _git(repo, "add", *backfill_paths)
-            msg = f"chore(citations): mark {module_key} verified (no-op backfill)"
+            msg = f"chore(citations): record {module_key} backfill no-op"
             rc, _, stderr = _git(repo, "commit", "-m", msg, check=False)
             if rc != 0:
                 for p in backfill_paths:
@@ -709,6 +725,7 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
                 "done": True, "ok": True, "no_op": True,
                 "reason": "nothing_to_do", "sha": (sha.strip() if sha else None),
                 "module_key": module_key,
+                **_SOURCE_UNVERIFIED,
             }
         # Best-effort: discard any partial write so primary stays clean.
         _git(repo, "restore", st["module_path"], check=False)
@@ -718,10 +735,9 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
             "error": (inject["stderr"] or inject["stdout"])[-500:],
             "module_key": module_key,
         }
-    # A4 prereq #1: backfill success (including no-op inject) means
-    # citations were verified for readiness purposes, so mark as verified
-    # in frontmatter.
-    set_citations_verified_frontmatter(_REPO_ROOT / st["module_path"], verified=True)
+    # Injection completion is not claim/source verification.  Remove any
+    # inherited bit so this unsupported mutation cannot promote readiness.
+    set_citations_verified_frontmatter(_REPO_ROOT / st["module_path"], verified=False)
 
     # The research step writes (or refreshes) the seed JSON; both
     # artifacts (module + seed) must land in the same commit so the
@@ -759,7 +775,7 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
         # Mark as done — backfill considered complete for this module.
         return {
             "done": True, "ok": True, "no_op": True,
-            "module_key": module_key,
+            "module_key": module_key, **_SOURCE_UNVERIFIED,
         }
 
     _git(repo, "add", *backfill_paths)
@@ -782,7 +798,7 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
     _, sha, _ = _git(repo, "rev-parse", "HEAD")
     return {
         "done": True, "ok": True, "sha": sha.strip(),
-        "module_key": module_key,
+        "module_key": module_key, **_SOURCE_UNVERIFIED,
     }
 
 
@@ -830,7 +846,10 @@ def cmd_backfill_pending(args: argparse.Namespace) -> int:
                 "at": state.now_iso(),
                 "stage": current["stage"],
                 "note": (
-                    "backfill done" if outcome.get("ok") and not outcome.get("no_op")
+                    "backfill done; source acceptance unverified"
+                    if outcome.get("ok") and not outcome.get("no_op")
+                    else "backfill no-op; source acceptance unverified"
+                    if outcome.get("no_op") and outcome.get("source_acceptance") == "unverified"
                     else "backfill no-op" if outcome.get("no_op")
                     else f"backfill failed: {outcome.get('stage_failed') or 'unknown'}"
                 ),
@@ -1001,6 +1020,7 @@ def _cleanup_banner_for_module(
         )
         return True
     except Exception:
+        logger.exception("banner cleanup failed for %s", slug)
         return False
 
 
