@@ -51,20 +51,20 @@ The 7-dimension rubric (Learning Outcomes, Scaffolding, Active Learning, Real-Wo
 
 ## Track-Specific Guidelines
 
-KubeDojo has three tracks with different focuses:
+These examples illustrate different track focuses:
 
-### Kubernetes Certifications (docs/k8s/)
+### Kubernetes Certifications (src/content/docs/k8s/)
 - Exam-focused content
 - Aligned with official CNCF curriculum
 - Time-boxed complexity (exam speed matters)
 - kubectl commands emphasized
 
-### Prerequisites (docs/prerequisites/)
+### Prerequisites (src/content/docs/prerequisites/)
 - Beginner-friendly fundamentals
 - No assumed knowledge
 - Build foundation for certifications
 
-### Platform Engineering (docs/platform/)
+### Platform Engineering (src/content/docs/platform/)
 - Post-certification, practitioner content
 - Theory-first approach (principles over tools)
 - Three layers: Foundations → Disciplines → Toolkits
@@ -75,7 +75,7 @@ KubeDojo has three tracks with different focuses:
 
 Platform modules have **three tiers**:
 
-### Foundations (docs/platform/foundations/)
+### Foundations (src/content/docs/platform/foundations/)
 Timeless theory that doesn't change:
 - Systems Thinking
 - Reliability Engineering
@@ -83,7 +83,7 @@ Timeless theory that doesn't change:
 - Security Principles
 - Distributed Systems
 
-### Disciplines (docs/platform/disciplines/)
+### Disciplines (src/content/docs/platform/disciplines/)
 Applied practices and mental models:
 - SRE
 - Platform Engineering
@@ -91,7 +91,7 @@ Applied practices and mental models:
 - DevSecOps
 - MLOps
 
-### Toolkits (docs/platform/toolkits/)
+### Toolkits (src/content/docs/platform/toolkits/)
 Current tools (will evolve over time):
 - Observability (Prometheus, OTel, Grafana)
 - GitOps Tools (ArgoCD, Flux)
@@ -118,9 +118,9 @@ Current tools (will evolve over time):
 
 [2-3 paragraphs explaining WHY this topic matters]
 
-> **The [Topic] Analogy**
+> **Optional analogy: [Topic]**
 >
-> [Memorable analogy that makes the concept stick]
+> [Use only when it clarifies the concept; state the mapping and its limits.]
 
 ---
 
@@ -146,9 +146,9 @@ Current tools (will evolve over time):
 
 [Hands-on content]
 
-> **War Story: [Catchy Title]**
+> **Optional documented case or labeled scenario**
 >
-> [Real incident that illustrates the concept]
+> [Use a cited real incident, or label `Hypothetical scenario:`/`Simulation:` and state what is simulated.]
 
 ---
 
@@ -227,9 +227,9 @@ Platform modules include additional sections:
 
 [Real-world motivation - not exam-focused]
 
-> **The [Topic] Analogy**
+> **Optional analogy: [Topic]**
 >
-> [Analogy connecting to familiar concepts]
+> [If useful, connect the concept to something familiar and state where the analogy stops matching.]
 
 ---
 
@@ -336,20 +336,20 @@ Books, talks, and papers for deeper understanding:
 - Use "you" and "we" freely
 
 ### Analogies
-- One memorable analogy per module minimum
-- Connect concepts to familiar real-world things
-- Analogies should illuminate, not oversimplify
+- Use an analogy only when it clarifies the concept; it is optional, not a quota.
+- State the mapping and where it stops matching; an analogy is not evidence for a factual claim.
+- Do not add mystery, clue hunts, or gamification just to satisfy an engagement expectation.
 
-### War Stories
-- At least one per module
-- Must have real consequences (time lost, money lost, outage)
-- End with a lesson learned
-- Can be anonymized but should feel authentic
+### War Stories and Scenarios
+- Use a documented real incident only when its details have a citation or `Source:` line.
+- Otherwise use an explicitly labeled `Hypothetical scenario:` or `Simulation:` and state what is simulated; omit it when evidence is insufficient.
+- Never present invented incidents, dialogue, motives, timelines, metrics, consequences, or results as documented facts. An anonymous “authentic-feeling” story is not evidence.
+- End with a lesson learned grounded in the cited or labeled scenario.
 
 ### Code Examples
 - All code must be complete and runnable
 - Use realistic names (not foo/bar)
-- Show expected output where helpful
+- Label output as observed only after a recorded run. Otherwise label it expected, illustrative, or simulated; do not imply it was executed.
 - Include verification steps
 
 ### Diagrams
@@ -361,6 +361,7 @@ Books, talks, and papers for deeper understanding:
 - Use current versions of tools
 - Note when something is deprecated
 - Link to official docs for deep dives
+- Check equations and state their assumptions and limits.
 - For Platform track: cover principles before tools
 
 ### Quiz Questions
@@ -383,8 +384,9 @@ Before considering a module complete:
 ### All Tracks
 - [ ] **Density gates pass** (`.venv/bin/python scripts/quality/verify_module.py <path>`): median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%
 - [ ] All structural elements present
-- [ ] At least one memorable analogy
-- [ ] At least one war story
+- [ ] Any analogy materially clarifies the concept and states its limits
+- [ ] Any case or scenario is cited or explicitly labeled `Hypothetical scenario:`/`Simulation:`; no invented details presented as fact
+- [ ] No forced mystery, clue hunt, or gamification layer
 - [ ] 2-3 "Did You Know?" facts
 - [ ] Common mistakes table filled
 - [ ] 4 quiz questions with detailed answers
@@ -417,7 +419,7 @@ Examples:
 
 ### Directory Structure
 ```
-docs/platform/disciplines/sre/
+src/content/docs/platform/disciplines/sre/
 ├── README.md           # Part overview
 ├── module-1.1-xxx.md
 ├── module-1.2-xxx.md
