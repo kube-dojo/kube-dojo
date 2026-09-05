@@ -976,7 +976,8 @@ EOF
 }
 cleanup() {
   local rc=$? cleanup_rc=0 clusters cluster_deleted=0 namespace_cleanup_ok=1
-  trap - EXIT INT TERM
+  trap - EXIT
+  trap '' INT TERM
   set +e
   if [[ "$MANIFEST_MOVE_ATTEMPTED" -eq 1 ]] && ! restore_manifest; then
     printf 'Recovery unknown: use docker exec %s to inspect manifest=%s and hold=%s; retain cluster and private kubeconfig=%s until restored.\n' "$CONTROL_PLANE" "$MANIFEST" "$HOLD" "$KUBECONFIG_PATH" >&2
@@ -1034,7 +1035,7 @@ nodes="$(docker ps --filter "label=io.x-k8s.kind.cluster=$CLUSTER" --format '{{.
 [[ "$(printf '%s\n' "$nodes" | sed '/^$/d' | wc -l | tr -d '[:space:]')" == 1 ]] || die 'expected exactly one running owned control-plane container'
 CONTROL_PLANE="$(printf '%s\n' "$nodes" | sed -n '1p')"
 [[ "$(docker inspect --format '{{ index .Config.Labels "io.x-k8s.kind.cluster" }}' "$CONTROL_PLANE")" == "$CLUSTER" ]] || die 'control-plane cluster label mismatch'
-[[ "$(docker inspect --format '{{ index .Config.Labels "io.x-k8s.role" }}' "$CONTROL_PLANE")" == control-plane ]] || die 'control-plane role label mismatch'
+[[ "$(docker inspect --format '{{ index .Config.Labels "io.x-k8s.kind.role" }}' "$CONTROL_PLANE")" == control-plane ]] || die 'control-plane role label mismatch'
 k config current-context | grep -Fxq "kind-$CLUSTER" || die 'private kubeconfig context mismatch'
 docker exec "$CONTROL_PLANE" sh -c 'command -v crictl >/dev/null && test -f /etc/kubernetes/manifests/kube-scheduler.yaml' || die 'fixture lacks crictl or scheduler manifest'
 docker exec "$CONTROL_PLANE" sh -c 'mkdir -p "$1" && test ! -e "$2"' sh "$HOLD_DIR" "$HOLD" || die 'owned hold path is not clean'
