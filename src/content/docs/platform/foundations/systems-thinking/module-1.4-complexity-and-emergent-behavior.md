@@ -24,17 +24,22 @@ After completing this module, you will be able to apply complexity thinking to p
 
 ---
 
-## The Perfect Storm That Nobody Saw Coming
+## Three Outages, an Unfinished Explanation
 
-On [July 8, 2015](https://www.nyse.com/market-status/history), the New York Stock Exchange suspended trading for several hours after a software configuration problem during a routine deployment. That same morning, [United Airlines grounded flights nationwide](https://www.bbc.co.uk/news/technology-33449693) because of a failed network router, and the Wall Street Journal website suffered a separate technical outage. Three high-profile failures within hours looked coordinated to observers watching social media, even though post-incident reporting from each organization described independent causes with no shared attacker or shared root dependency.
+At a CSIS forum on July 8, 2015, Homeland Security Secretary Jeh Johnson discussed reported malfunctions affecting United Airlines, the New York Stock Exchange, and The Wall Street Journal. His assessment was provisional: the information then available did not point to a malicious actor at United or the NYSE, and he said less was known about The Wall Street Journal. [Read the contemporaneous transcript, PDF page 3](https://csis-website-prod.s3.amazonaws.com/s3fs-public/event/150708_Statesmens_Forum_DHS_Johnson_Transcript.pdf#page=3).
 
-Engineers at each company faced a familiar pattern: dashboards that looked mostly healthy, symptoms that did not map cleanly to a single broken component, and public pressure to name one villain quickly. The NYSE incident involved software behavior during an update. United's outage traced to router configuration. The WSJ disruption involved its own delivery stack. None of these stories required a conspiracy to be terrifying—they required only the ordinary complexity of large socio-technical systems failing in parallel while humans searched for narrative simplicity.
+**Try the diagnosis:** does that assessment establish a shared technical dependency, establish three independent technical causes, or leave the relationship unresolved? Choose an answer and identify what evidence would distinguish the alternatives before opening the explanation.
 
-This clustering effect is one reason operators study complexity theory instead of treating every incident as an isolated bug hunt. When several critical systems wobble on the same day, your brain wants one explanation. Complex systems often deliver many small explanations that combine into a day that feels impossible until you read the timelines carefully.
+<details>
+<summary>Check what the evidence supports</summary>
 
-> **Stop and think**: Before reading further, consider the last major incident you experienced. Did it have one clear cause, or was it a combination of seemingly unrelated, small factors?
+It leaves the technical relationship unresolved. An assessment about malicious activity is not a dependency analysis. This transcript records a public statement made with limited information; it is not a set of completed technical investigations. It supports neither a shared-dependency conclusion nor a claim of three independently established root causes.
 
-**This is how complex systems work.** They don't fail in the ways you predict. They fail in ways that seem obvious only in hindsight. They create coincidences that look like conspiracies. And they resist all attempts to make them "safe."
+Service-impact timelines could clarify whether disruptions overlapped and which services were affected. Change records could identify candidate triggers. A dependency map could expose a shared component worth investigating. None alone would prove causation: you would still need evidence connecting a proposed failure to the observed effects.
+
+</details>
+
+This is a reader exercise in evaluating evidence, not a reconstruction of the incident teams' actions. The source does not tell us what their dashboards showed or how they reached their eventual diagnoses. The useful operational habit is to keep an explanation provisional until the evidence supports it.
 
 ---
 
