@@ -117,6 +117,51 @@ Theorem 15a is the absorption law: in Shannon's algebra, $X + XY = X$. Theorem 1
 
 The worked example gives the algebra a concrete purpose. An engineer can compare two series-parallel forms before building either one: the rewritten circuit must preserve the original circuit's open-or-closed behavior for every assignment of the variables. Here, the same behavior can be expressed with six contacts instead of thirteen.
 
+### Try it: will the circuit be open or closed?
+
+This modern learning exercise uses the expressions in [Shannon's thesis, printed pp. 14–16](https://dspace.mit.edu/handle/1721.1/11173). Remember the hindrance convention: `0` means closed and `1` means open. Read `+` as OR, juxtaposition as AND, and a prime as NOT.
+
+Set `W=0, X=0, Y=0, Z=1, S=0, V=1`. Predict the result of each expression before opening the answer. Do they describe the same open-or-closed behavior? Be careful with the primed terms: since `S=0`, `S'=1`.
+
+<details>
+<summary>Reveal the answer, then check every assignment</summary>
+
+For this assignment, the original becomes:
+
+`0 + 1(0+0) + (0+1)(0+1+1)(0+0+1·1) = 1`
+
+The reduced expression becomes `0+0+0+1·1·1 = 1`. Both describe an open circuit.
+
+One matching case is encouraging; it cannot establish equivalence. Six binary variables have 64 possible assignments. This Python check evaluates the two expressions for every one of them, and stops with the offending assignment if their results differ:
+
+```python
+from itertools import product
+
+def original(W, X, Y, Z, S, V):
+    return int(bool(W or ((not W) and (X or Y)) or
+        ((X or Z) and (S or (not W) or Z) and
+         ((not Z) or Y or ((not S) and V)))))
+
+def reduced(W, X, Y, Z, S, V):
+    return int(bool(W or X or Y or (Z and (not S) and V)))
+
+sample = (0, 0, 0, 1, 0, 1)
+print("sample:", original(*sample), reduced(*sample))
+assert original(*sample) == reduced(*sample)
+
+checked = 0
+for assignment in product((0, 1), repeat=6):
+    assert original(*assignment) == reduced(*assignment), assignment
+    checked += 1
+print("assignments checked:", checked)
+```
+
+This is a present-day algebra check of the transcribed expressions. The historical argument remains on the thesis pages; the program does not reconstruct a physical experiment.
+
+</details>
+
+### A second worked example
+
 He demonstrated even further reductions in his Section V *Selective Circuit* example, where a relay `A` was required to operate when any one, any three, or all four of the relays `w`, `x`, `y`, `z` were operated. Starting with an initial series-parallel form of 20 elements—a sum of seven product terms enumerating each operating combination—Shannon recognized the requirement as a *symmetric function* of its four arguments and rewrote it as `A = S₄(1, 3, 4)`, the function that selected the cases of weight one, three, or four. The symmetric-function form required 15 elements. He then noticed that the *complement* function, `A' = S₄(0, 2)`, was simpler still, and constructed `A` as the dual network of the realization of `A'`—a transformation that exchanged series with parallel and break-contacts with make-contacts. The dual-network form required 14 elements, which Shannon noted was "probably the most economical circuit of any sort" for the given requirement.
 
 Turing's 1936 universal-machine paper belongs nearby only as a pointer, not as a premise: Shannon's thesis addressed relay-circuit synthesis, and the two works were not in conversation.
