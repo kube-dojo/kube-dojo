@@ -11,6 +11,8 @@ Between 1940 and 1953 a parallel research program to symbolic AI took shape — 
 
 ## Boundary Contract
 
+For the analog/parallel-program thesis and aftermath, use the [later-trajectory evidence boundary](aftermath-evidence.md). Technical apparatus descriptions do not establish the cause of a field's dispersal. Distinguish the end of the Macy meetings from Kline's later U.S. institutional account, and attribute conceptual comparisons rather than presenting an analog-only program or inevitable replacement.
+
 For the three-pillar passage, use the [Macy synthesis evidence boundary](macy-synthesis-evidence.md). Attribute the synthesis to Pias's retrospective account; do not turn a cross-domain ambition into established explanatory success or an undocumented meeting consensus. Preserve the distinction between feedback teleology and determinism in the adjacent passage.
 
 For the meeting-format passage, use the [Macy format evidence boundary](macy-format-evidence.md). Restricted membership and editing for publication do not by themselves establish a causal limit on movement-wide diffusion or a counterfactual about recruitment through journals, courses or notation. Do not invent learning interactions among participants to fill that gap. This boundary does not refresh unrelated historical claims below.
