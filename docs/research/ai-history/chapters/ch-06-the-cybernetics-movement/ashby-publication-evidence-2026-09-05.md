@@ -1,6 +1,6 @@
 # Ashby's 1948 article: publication evidence and priority limit
 
-Research-only packet for #2405, parent #2289/#2290, epic #2272. Checked 2026-09-05. No published chapter change; independent source review pending.
+Research-only packet for #2405, parent #2289/#2290, epic #2272. Rechecked 2026-09-05. Independent Fable source review accepted the bounded statement and limits at `bf4e422da7d3712050319816054023a4abeb415b`; [review provenance](https://github.com/kube-dojo/kube-dojo.github.io/issues/2405#issuecomment-5553957842). No published chapter change or prose acceptance.
 
 ## Inspected records
 
@@ -14,6 +14,8 @@ Both public HTML records were read directly by the lead after the scout identifi
 Use the bounded publication statement: **Ashby published “Design for a Brain” in Electronic Engineering in December 1948; the bibliography gives volume 20, pages 379–383.** Link the archive catalogue and bibliography where that statement is used.
 
 Do not infer **first published account**, first conception, first construction, first working machine or first-ever priority from these two records. The bibliography explicitly disclaims completeness. The scout initially recommended a first-publication formulation; lead review rejected that additional inference. This packet does not show that the priority claim is false, only that the inspected evidence does not establish it.
+
+Nor do these records establish that the article describes the Homeostat. Removing only “first” from “first published Homeostat description” would retain an unsupported contents claim. Use the documented article title rather than a paraphrase of unread contents. Construction dates, demonstrations and technical details need their own evidence.
 
 The scout also identified private journal entries and a later collected-paper PDF as leads. They are outside this packet's lead inspection and cannot supply accepted construction dates or article-internal claims here. Earlier Green/Yellow ledger labels likewise do not replace source inspection.
 
