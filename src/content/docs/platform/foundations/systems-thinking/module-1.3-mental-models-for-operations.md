@@ -545,74 +545,106 @@ Build a dedicated database observability dashboard showing active connections, q
 
 ## Hands-On Exercise
 
-This exercise has two parts. Part A lets you observe stock-and-flow dynamics directly in a live Kubernetes cluster by creating and draining a job queue. Part B asks you to apply all three mental models—stock-and-flow, causal loops, and leverage points—to analyze a realistic web application architecture with known issues. Together they provide concrete practice in translating the conceptual frameworks from this module into operational reasoning.
+This exercise has two parts. Part A measures unfinished work and its successful and failed exits using independent Kubernetes Jobs. Part B asks you to apply all three mental models—stock-and-flow, causal loops, and leverage points—to analyze a realistic web application architecture with known issues. Together they provide concrete practice in translating the conceptual frameworks from this module into operational reasoning.
 
-### Part A: Observe Stocks and Flows in Kubernetes (15 minutes)
+### Part A: Measure Unfinished Work in Kubernetes (15 minutes)
 
-The objective of this exercise is to see stocks and flows in action using a Kubernetes Job queue as a simplified model of a production work pipeline. You will need a running Kubernetes cluster—kind, minikube, or any accessible cluster will work. The exercise proceeds through five steps that each illustrate a different aspect of stock-and-flow dynamics.
+Count **nonterminal Jobs**, not a queue of Pending Pods. A Job enters this stock when created and leaves when its `Complete` or `Failed` condition becomes true; report these two exits separately. The object remains after termination. Kubernetes [terminal Job conditions](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/job/#terminal-job-conditions) are distinct from failed Pod attempts and intermediate success/failure targets. [Pod Pending](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-phase) also includes image preparation.
 
-**Step 1: Create a job processing system.** Start by creating a dedicated namespace and submitting ten Kubernetes Jobs that will serve as the work queue. These jobs simulate variable-duration work items by sleeping for a random interval:
+Use Bash, jq and a compatible kubectl against a **disposable Kubernetes 1.35 lab cluster**. Set `STOCKS_CONTEXT` to that cluster's exact context name. This block creates a fresh namespace, pins every API call to that context and cleans up only after checking the namespace UID. Keep the kubeconfig unchanged while it runs. Interrupted or failed cleanup reports the namespace for inspection; do not delete an unverified replacement.
+
+**Predict first:** three suspended Jobs enter, then two more. None has started. What are the two stock counts, and how many Pods should exist? After release, four Jobs are programmed to succeed and one to fail. Does an empty nonterminal stock mean all work succeeded? These are designed experiment inputs, not production observations.
 
 ```bash
-# Create namespace
-kubectl create namespace stocks-lab
-
-# Create a series of jobs (the "queue")
-for i in {1..10}; do
-cat <<EOF | kubectl apply -f -
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: task-$i
-  namespace: stocks-lab
-spec:
-  template:
-    spec:
-      containers:
-      - name: worker
-        image: busybox
-        command: ["sh", "-c", "echo Processing task $i; sleep \$((RANDOM % 10 + 5))"]
-      restartPolicy: Never
-  backoffLimit: 2
-EOF
+(
+set -euo pipefail
+: "${STOCKS_CONTEXT:?Set this to your disposable lab context}"
+command -v jq >/dev/null
+ctx="$STOCKS_CONTEXT"
+k() { kubectl --context="$ctx" --request-timeout=20s "$@"; }
+k get namespace default -o name >/dev/null
+ns="stocks-lab-$RANDOM-$RANDOM"
+uid=""
+cleanup() {
+  rc=$?
+  trap - EXIT INT TERM
+  if [ -z "$uid" ]; then
+    echo "No ownership proof; inspect $ctx / $ns if creation was uncertain." >&2
+    exit "$rc"
+  fi
+  if actual=$(k get namespace "$ns" -o jsonpath='{.metadata.uid}') && [ "$actual" = "$uid" ]; then
+    k delete namespace "$ns" --wait=true --timeout=90s || exit 1
+    remaining=$(k get namespace "$ns" --ignore-not-found -o name) || exit 1
+    [ -z "$remaining" ] || exit 1
+  else
+    echo "Cleanup refused: inspect $ctx / $ns; ownership could not be confirmed." >&2
+    exit 1
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+uid=$(k create namespace "$ns" -o jsonpath='{.metadata.uid}')
+[ -n "$uid" ]
+echo "Context=$ctx namespace=$ns UID=$uid"
+submit() {
+  name=$1; result=$2
+  k create job "$name" -n "$ns" --image=busybox:1.37.0 --dry-run=client -o json -- \
+    sh -c "sleep 8; exit $result" |
+    jq '.spec.suspend=true | .spec.backoffLimit=0' |
+    k create -f - >/dev/null
+}
+snapshot() {
+  k get --raw "/apis/batch/v1/namespaces/$ns/jobs" | jq '
+    def has($c): any(.status.conditions[]?; .type==$c and .status=="True");
+    if (.metadata.resourceVersion | type)!="string" or .metadata.resourceVersion==""
+      then error("missing list resourceVersion") else . end |
+    .metadata.resourceVersion as $version |
+    [.items[] | if has("Complete") and has("Failed") then error("conflicting conditions")
+      elif has("Complete") then "complete" elif has("Failed") then "failed"
+      else "nonterminal" end] as $states |
+    {sampledAt: now|todate, resourceVersion:$version, total:($states|length),
+     complete:([$states[]|select(.=="complete")]|length),
+     failed:([$states[]|select(.=="failed")]|length),
+     nonterminal:([$states[]|select(.=="nonterminal")]|length)}'
+}
+submit task-1 0
+submit task-2 0
+submit task-3 7
+snapshot
+submit task-4 0
+submit task-5 0
+snapshot
+k get pods -n "$ns" -o wide
+for i in 1 2 3 4 5; do
+  k patch job "task-$i" -n "$ns" --type=merge -p '{"spec":{"suspend":false}}' >/dev/null
 done
-```
-
-**Step 2: Watch the stock drain as jobs are processed.** With the jobs submitted, monitor the queue (the stock of pending work) and the pods (the workers processing that work). Open two terminal windows and run these watch commands simultaneously:
-
-```bash
-# Watch jobs - this shows the "stock" of work
-kubectl get jobs -n stocks-lab -w
-
-# In another terminal, watch pods (the workers processing the queue)
-kubectl get pods -n stocks-lab -w
-```
-
-**Step 3: Observe the dynamics by counting stock levels over time.** Use a watch loop that reports pending and completed job counts each second, giving you a real-time view of how the stock drains as workers process the queue:
-
-```bash
-# Count pending vs completed (stock levels)
-watch -n 1 'echo "Pending: $(kubectl get jobs -n stocks-lab --no-headers 2>/dev/null | grep -c "0/1"); echo "Completed: $(kubectl get jobs -n stocks-lab --no-headers 2>/dev/null | grep -c "1/1")"'
-```
-
-As you watch the numbers change, identify each element in the stock-and-flow model: the pending job count is your stock, job creation is the inflow, and job completion is the outflow. Note how the flow rate determines how fast the stock drains and how the random sleep durations introduce variability in the outflow rate.
-
-**Step 4: Create a flow imbalance by spiking the inflow.** With the original jobs still processing, add ten more jobs quickly to overwhelm the processing capacity and observe the pending stock grow as inflow exceeds outflow:
-
-```bash
-# Add 10 more jobs quickly (spike in inflow)
-for i in {11..20}; do
-kubectl create job task-$i -n stocks-lab --image=busybox -- sh -c "echo Processing task $i; sleep 8"
+finished=false
+for attempt in {1..30}; do
+  report=$(snapshot)
+  printf '%s\n' "$report"
+  if jq -e '.total==5 and .nonterminal==0' <<<"$report" >/dev/null; then
+    finished=true
+    break
+  fi
+  sleep 5
 done
+k get pods -n "$ns" -o 'custom-columns=NAME:.metadata.name,PHASE:.status.phase,EXIT:.status.containerStatuses[*].state.terminated.exitCode'
+k logs -n "$ns" job/task-3
+[ "$finished" = true ] || { echo "Observation limit reached; inspect the reports." >&2; exit 1; }
+jq -e '.complete==4 and .failed==1' <<<"$report" >/dev/null
+)
 ```
 
-Watch the pending count climb until the new jobs begin completing, at which point the stock should peak and then resume draining. This is the exact dynamic that occurs in production when a traffic spike arrives faster than the system can process it.
+<details>
+<summary>Check the prediction against your observations</summary>
 
-**Step 5: Clean up by deleting the namespace.** Remove all resources created during the exercise:
+Before release, the designed counts are **3 then 5 nonterminal Jobs**, with no Pods: [suspension](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/job/#suspending-a-job) keeps the Jobs from starting. This directly separates unfinished work from Pending Pods. After release, successful execution of the experiment yields **4 complete, 1 failed, 0 nonterminal**. A smaller stock can reflect failure as well as success. If the final check fails, use the actual reports; do not replace them with these expected numbers.
 
-```bash
-kubectl delete namespace stocks-lab
-```
+Each printed Job report uses one list response. The later Pod table is a separate diagnostic read, not part of the same snapshot. Between the first two reports, two creations increase the stock by two. After release, terminal outcomes drain it. These independent Jobs have no shared worker limit, so this exercise does not demonstrate a fixed-capacity queue or prove overload. Scheduling, image pulls and controller updates affect the observed timing. Explain which additional rate and capacity measurements you would need to diagnose a real growing queue.
+
+</details>
 
 ---
 
