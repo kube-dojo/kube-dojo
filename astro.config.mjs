@@ -5,6 +5,7 @@ import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { routeManifestIntegration } from './scripts/quality/route-manifest-integration.mjs';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const ignoredDevWatchPaths = [
@@ -691,5 +692,6 @@ export default defineConfig({
         { label: 'Glossary', link: '/glossary/' },
       ],
     }),
+    routeManifestIntegration(),
   ],
 });
