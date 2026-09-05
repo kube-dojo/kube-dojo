@@ -6,7 +6,7 @@
 - **Yellow**: claim has one strong source, page anchor pending verification, or unresolved attribution nuance.
 - **Red**: claim should not be drafted yet.
 
-Page-anchor convention: the McCulloch-Pitts 1943 paper is cited by *original 1943 pagination* (vol. 5, pp. 115-133 of *Bulletin of Mathematical Biophysics*). The freely available digital copy is the 1990 *Bulletin of Mathematical Biology* reprint (vol. 52, pp. 99-115); reprint page = original page minus 16. Anchors below give the original 1943 page so reviewers with either copy can verify.
+Page-anchor convention (corrected 2026-09-05): the CMU copy is a 1990 *Bulletin of Mathematical Biology* reprint whose visible pages are 99-115 and whose footer identifies the 1943 article as vol. 5, pp. 115-133. This copy does not expose original 1943 page labels; a constant reprint-plus-16 mapping is not established here, and the page-count difference alone does not prove omission or reflow. Use visible reprint-page locators until an original-pagination facsimile is verified. See `mp-source-corrections-2026-09-05.md`; earlier dated records remain historical.
 
 ## Primary Sources
 
