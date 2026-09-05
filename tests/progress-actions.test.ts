@@ -1,6 +1,31 @@
 import { expect, it, vi } from 'vitest';
 import { initProgressActions, mergeProgressText } from '../src/scripts/progress-actions';
 
+it('preserves stored data and emits no success event when writes or reset fail', () => {
+  const original = '{"retired":10}';
+  const changed = vi.fn();
+  document.addEventListener('kubedojo:progress-change', changed);
+  vi.stubGlobal('localStorage', {
+    getItem: () => original,
+    setItem: () => { throw new Error('quota exceeded'); },
+    removeItem: () => { throw new Error('storage denied'); },
+  });
+  document.body.innerHTML = '<button id="kd-export-btn"></button><button id="kd-clear-btn"></button><p id="kd-progress-actions-status" role="status"></p>';
+  try {
+    initProgressActions();
+    expect(mergeProgressText('{"new":12}')).toBe(false);
+    expect(document.getElementById('kd-progress-actions-status')?.textContent).toContain('could not be imported');
+    document.getElementById('kd-clear-btn')!.click();
+    document.getElementById('kd-progress-reset-confirm')!.click();
+    expect(document.getElementById('kd-progress-actions-status')?.textContent).toContain('could not be reset');
+    expect(window.localStorage.getItem('kubedojo-progress')).toBe(original);
+    expect(changed).not.toHaveBeenCalled();
+  } finally {
+    document.removeEventListener('kubedojo:progress-change', changed);
+    vi.unstubAllGlobals();
+  }
+});
+
 it('merges valid imports, preserves invalid originals, and requires explicit reset confirmation', () => {
   let raw: string | null = '{"retired":10}';
   vi.stubGlobal('localStorage', {
