@@ -257,11 +257,13 @@ A suggested update template is: **impact**, **stabilization status**, **working 
 
 ## Part 3: How Complex Systems Fail—Richard Cook's Essential Insights
 
-### 3.1 The 18 Principles Every Operator Must Know
+### 3.1 Read Cook's Principles as Questions About Your System
 
-Dr. Richard Cook's "How Complex Systems Fail" is three pages that will change how you think about operations. Here are the key insights, applied to production systems:
+Richard Cook's [*How Complex Systems Fail*, Revision D](https://www.adaptivecapacitylabs.com/HowComplexSystemsFail.pdf#page=1) is a short treatise with 18 principles. The following discussion separates his account of hazardous systems from this module's applications to platform operations; it is not a measured failure model for every software service.
 
-Cook's first three principles establish the baseline. **Complex systems are intrinsically hazardous**—not because your team built them incorrectly, but because coupling, humans, and time create inherent risk that must be designed for rather than denied. **Complex systems are heavily defended against failure** through redundancy, monitoring, alerting, failover, backups, circuit breakers, retries, and operational habit; those defenses usually work, which is why catastrophes are rare and therefore surprising. **Catastrophe requires multiple failures** aligning: the popular single-root-cause story hides the Swiss Cheese reality that several layers must fail together in a way nobody anticipated.
+Cook's first three principles describe hazards, extensive defenses, and accidents arising from combinations of failures. He includes technical, human, organizational, institutional, and regulatory defenses. Applying those ideas to a platform, ask which safeguards protect a customer operation, and which dependencies they share. Backups, failover, monitoring, and retry policies are examples to examine, not a guarantee that adding more mechanisms creates independent protection.
+
+A related analogy appears in James Reason's [“Human error: models and management,” in the section on the Swiss Cheese model](https://pmc.ncbi.nlm.nih.gov/articles/PMC1070929/). Reason describes layers of defense whose weaknesses change; an accident opportunity can pass through weaknesses in multiple layers. The diagram below is our simplified teaching illustration after Reason, not a figure from Cook's treatise.
 
 ```mermaid
 graph LR
@@ -271,27 +273,34 @@ graph LR
     L3 --> |Bypasses| L4[Defense 4: Hole]
     L4 --> End([Catastrophe])
 ```
-*The Swiss Cheese Model: Each defense layer has holes. Most days, they don't align. Some days, they do.*
+*Illustration after Reason: a possible path through weaknesses in several defenses. The drawing supplies no frequency estimate and does not depict every accident pathway.*
 
-**Principle 4** states that complex systems contain changing mixtures of latent failures—bugs, misconfigurations, race conditions, and capacity cliffs that exist right now while the service appears healthy because compensations and margins absorb them.
+**Principle 4** describes changing mixtures of latent flaws. **Principle 5** emphasizes continued operation despite degradation, with redundancy and human activity helping keep the system functioning. Bugs, misconfigurations, and capacity limits are platform examples to investigate; these principles alone do not establish which problems exist in your current service.
 
 ```mermaid
 graph LR
-    subgraph Belief
+    subgraph Binary View
         W1((Working)) --- F1((Failed))
     end
-    subgraph Reality
-        W2((Fully Working)) ===|Most of the time| M2((Mostly Working))
+    subgraph Illustrative States
+        W2((Fully Working)) === M2((Mostly Working))
         M2 ===|Compensating| B2((Barely Working))
-        B2 ===|Rarely| F2((Actually Failed))
+        B2 === F2((Actually Failed))
     end
 ```
 
-The useful post-incident question is not whether anything is wrong right now, but which latent problems are currently being compensated for by automation, operator habit, or slack capacity that could disappear during the next change window.
+This second diagram is an author-created illustration, not Cook's classification or a measured distribution. To apply the idea, look for evidence of what keeps an operation working and what could remove that support.
 
-> **Stop and think**: If your system is currently running without active incidents, does that mean it is completely healthy? Or is it just compensating for hidden failures?
+**Hypothetical exercise:** A backup job reports success, but nobody has tested restoring its output. Which claim can you support: “the job reported success,” “the data can be restored,” or “the service has no latent failures”? What observation would strengthen the next claim?
 
-**Principles 5 through 7** describe lived operations. Systems run in degraded mode where "normal" includes partial failures that humans and automation continuously work around. Catastrophe remains nearby because safety margins erode under everyday pressures to ship faster, spend less, and defer cleanup. Post-accident attribution to a single root cause is fundamentally misleading because it hides the system conditions, incentives, and adaptations that made the outcome possible.
+<details>
+<summary>Separate the observation from the inference</summary>
+
+You can support the reported job status. A controlled restore test would provide evidence about recovery for the data and conditions tested. Neither observation proves the absence of all latent failures. This is a teaching application of Cook's distinction between ongoing operation and underlying flaws, not an incident reported in his treatise.
+
+</details>
+
+In [principles 6–8](https://www.adaptivecapacitylabs.com/HowComplexSystemsFail.pdf#page=2), Cook discusses persistent catastrophic potential, argues against reducing an accident to an isolated root cause, and warns about hindsight bias. For platform investigations, distinguish an identified contributing fault from a complete explanation of how the outcome became possible. The source does not establish that a particular team's shipping pressure caused its incident.
 
 ### 3.2 The Myth of Root Cause
 
