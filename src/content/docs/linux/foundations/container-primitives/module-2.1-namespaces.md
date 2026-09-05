@@ -466,7 +466,7 @@ spec:
       mountPath: /var/log/app
   - name: sidecar
     image: busybox:1.36
-    command: ["sh", "-c", "tail -f /logs/app.log"]
+    command: ["sh", "-c", "tail -F /logs/app.log"]
     volumeMounts:
     - name: app-logs
       mountPath: /logs
@@ -474,6 +474,8 @@ spec:
   - name: app-logs
     emptyDir: {}
 ```
+
+In this BusyBox example, `-F` keeps retrying if `app.log` does not exist yet. An initial `can't open` message can therefore precede the log output when the writer creates the file. Retrying does not order the containers or establish application health: check that the sidecar actually prints the writer's lines. The shared volume supplies the common file location; the reader still needs to handle a file that has not appeared yet.
 
 Kubernetes can also [share the process namespace inside a pod when `shareProcessNamespace: true` is set](https://kubernetes.io/docs/tasks/configure-pod-container/share-process-namespace/). This lets containers see each other's processes, which can help sidecars send signals or collect diagnostics. It also weakens process isolation inside the pod, so it should be an explicit design decision rather than a default assumption.
 
