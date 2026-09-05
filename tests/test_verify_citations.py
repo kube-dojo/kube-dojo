@@ -95,4 +95,7 @@ def test_dispatch_failures_keep_validated_provenance(cache, monkeypatch, dispatc
     result = verifier.verify_claim(CLAIM, agent="agy", module_key="ai/test")
     assert result["verdict"] == "UNREADABLE"
     assert reason in result["reason"]
-    assert result["source_url"] == URL and result["text_sha256"] == hashlib.sha256(PAGE_BYTES).hexdigest() and result["prompt_sha256"]
+    assert result["source_url"] == URL
+    assert result["text_sha256"] == hashlib.sha256(PAGE_BYTES).hexdigest()
+    prompt = dispatch.call_args.args[0]
+    assert result["prompt_sha256"] == hashlib.sha256(prompt.encode("utf-8")).hexdigest()
