@@ -61,7 +61,7 @@ Verification: **Green** — Pias 2003 p. 15. Cross-link: Pillar 1 to Ch5; Pillar
 | Item | Value | Verification |
 |---|---|---|
 | Designer | W. Ross Ashby (Director of Research, Barnwood House Hospital) | **Green** — Ashby 1960 *Design for a Brain* title page. |
-| First publication | Ashby, "Design for a Brain," *Electronic Engineering* 20:379-383 (December 1948) | Yellow — citation verified via Ashby Digital Archive bibliography; article PDF not pulled. |
+| Documented article publication | Ashby, "Design for a Brain," *Electronic Engineering* 20:379-383 (December 1948) | [Reviewed metadata](ashby-publication-evidence-2026-09-05.md) establishes the publication record, not its contents or first-publication priority. |
 | Book-length treatment | Ashby, *Design for a Brain* (Chapman & Hall / Wiley, 1952; 2nd ed. 1960 with rewritten latter two-thirds) | **Green** — full PDF of 2nd ed. on archive.org. |
 | Companion volume | Ashby, *An Introduction to Cybernetics* (Chapman & Hall, 1956) | **Green** — full PDF on PCP / VUB. |
 | Macy presentation | Ninth Macy Conference (1952), New York: "Homeostasis" talk | **Green** — Pias 2003 p. 593+. |

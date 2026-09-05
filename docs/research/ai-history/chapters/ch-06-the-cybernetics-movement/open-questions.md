@@ -11,8 +11,8 @@ Surfaced from `brief.md` *Conflict Notes* and the Yellow/Red entries in `sources
 - **Status:** Yellow. Non-blocking — the October 1945 letters (Green via Galison) carry the substantive point. Direct quotation would tighten the prose.
 
 ### Q2. Ashby's 1948 *Electronic Engineering* paper
-- **Question:** What does Ashby's December 1948 *Electronic Engineering* paper actually say? It is the first published description of the Homeostat — predating the 1952 book by four years.
-- **Why it matters:** The chapter's Scene 4 currently anchors Homeostat construction in the 1952/1960 *Design for a Brain* book. The 1948 paper would let the chapter say "Ashby first published the Homeostat description in December 1948 in *Electronic Engineering*..." — establishing chronology more sharply.
+- **Question:** What does Ashby's December 1948 *Electronic Engineering* paper actually say? [Reviewed metadata](ashby-publication-evidence-2026-09-05.md) establishes its title and publication date, not its contents or priority.
+- **Why it matters:** Scene4 uses later books for construction details. Reading the article could permit a comparison with those accounts; it would not by itself prove that no earlier Homeostat description existed. Keep publication chronology separate from construction, contents and priority claims.
 - **Evidence needed:** PDF of *Electronic Engineering* 20 (December 1948), pp. 379-383. Probably accessible via the W. Ross Ashby Digital Archive's "Publications" section or via the IEEE/IET archives.
 - **Status:** Yellow. Non-blocking.
 
