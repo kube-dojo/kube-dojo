@@ -162,6 +162,7 @@ if (document.readyState === 'loading') {
 
 // Re-run on Astro page transitions
 document.addEventListener('astro:page-load', init);
+document.addEventListener('kubedojo:progress-change', init);
 window.addEventListener('storage', event => {
   if (event.key === PROGRESS_KEY || event.key === null) void init();
 });
