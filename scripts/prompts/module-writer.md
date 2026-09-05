@@ -29,13 +29,13 @@ TASK: Write a complete KubeDojo educational module.
 
 ### Quality Standard: 10/10 on the Dojo Scale
 
-**LENGTH**: 600-800 lines of **content** minimum. This is a deep, rich learning module — not an outline or reference doc. Visual aids (ASCII diagrams, mermaid charts, code blocks used purely for illustration) do NOT count toward the line minimum — they are supplements to the teaching, not substitutes for it.
+**DEPTH AND LENGTH**: Set the module's substantive scope from its topic, measurable outcomes, exercise, assessment, and verified evidence. Line and word counts are planning signals for routing and review; they are not proof of factual support, learning quality, or acceptance. Do not add repeated prose, decorative structure, or unsupported facts to reach a number. If verified material cannot support the requested scope, report the shortfall in the requested output format instead of inventing detail or claiming completion. Visual aids supplement teaching; they do not replace explanation.
 
 **REQUIRED SECTIONS** (in this exact order):
 
 1. **Frontmatter and metadata blockquote** — frontmatter `title:` + `slug:` + `sidebar.order:` (Starlight renders the page H1 from `title:`, so do NOT add a source `# Module X.Y` heading after the frontmatter — this would render as a duplicate visible title). Then a blockquote with `> **Complexity**: ...`, `> **Time to Complete**: ...`, `> **Prerequisites**: ...`, separated by `>` blank-quote lines, terminated with `---`.
 2. **Learning Outcomes** — 3-5 measurable outcomes using Bloom's Taxonomy Level 3+ action verbs: "debug", "design", "evaluate", "compare", "diagnose", "implement". NOT "understand" or "know". Each outcome must be testable by the quiz or exercise.
-3. **Why This Module Matters** — Open with a clear explanation of why the topic matters and what the learner will build or diagnose. Use a sourced incident or explicitly labeled `Hypothetical scenario:`/`Exercise scenario:` only when it clarifies the outcome. 2-3 paragraphs minimum.
+3. **Why This Module Matters** — Open with a clear explanation of why the topic matters and what the learner will build or diagnose. Use a sourced incident or explicitly labeled `Hypothetical scenario:`/`Exercise scenario:` only when it clarifies the outcome. Give the learner enough explanation to connect the stakes to the stated outcome; do not pad this section to meet a paragraph count.
 4. **Core content sections** (3-6 sections) — Each section should include:
    - **Theory before practice** — explain WHY this approach exists, what problem it solves, and what tradeoffs it makes BEFORE showing the commands. Prose must explain concepts between code blocks — never stack 3 code blocks without explanation.
    - Clear explanations for a smart beginner; use an analogy only when it clarifies the outcome and state its limits

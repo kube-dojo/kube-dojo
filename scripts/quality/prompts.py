@@ -90,7 +90,7 @@ def rewrite_prompt(
 
 ## Your task
 
-Produce a complete, replacement module that teaches the topic from beginner to senior level. Output ONLY the module markdown — no preamble, no code-fence wrap. Start with the `---` frontmatter line, end with a trailing newline.
+Produce a complete, replacement module that teaches the topic from beginner to senior level. For a complete module, output ONLY its markdown — no preamble, no code-fence wrap, starting with `---` frontmatter and ending with a newline. If verified material is insufficient, return a shortfall report instead of a replacement module; do not disguise that report as publishable lesson content.
 
 Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
@@ -101,29 +101,29 @@ Mandatory:
 - **NEVER replace an ` ```ascii ` or ` ```text ` block with a Markdown table.** If a table reads better in your judgment, **add the table next to the ASCII block** — do not remove the ASCII. The same applies to Mermaid: never replace ASCII with Mermaid; keep both. The visual-aid count is checked PER TYPE (mermaid count, ascii count, table count) — substituting one type for another is detected and rejected.
 - Preserve any existing `## Sources` section verbatim (heading, ordering, citation lines, URLs). Do NOT modify, reorder, deduplicate, or "improve" entries. Do NOT add a NEW `## Sources` section if one isn't already present — citation insertion runs in a separate downstream stage.
 - Address each gap from the audit explicitly.
-- Minimum 600 content lines (250 for KCNA theory modules). Code/visuals don't count.
+- Plan enough substantive content to address the stated outcomes, exercise, assessment, sources, and topic. Counts can inform routing and review, but are not proof of factual support, learning, or acceptance. Do not pad with repeated prose, decorative structure, or unsupported facts. If verified material cannot support the requested scope, report the shortfall rather than inventing detail or claiming completion.
 - All quiz questions scenario-based (Bloom L3+). No recall questions.
 - Exactly 4 "Did You Know?" facts. 6-8 rows in "Common Mistakes". 6-8 quiz questions.
 - Do NOT use emojis. Do NOT use the number 47.
 
-**Prose density (HARD GATE — automatically enforced after merge):**
+**Prose density (v2 routing and pre-commit/merge behavior):**
 
-Your output is run through a density classifier before it can ship. Modules that fail bounce back to you and after 2 retries are FAILED for manual rewrite. The classifier rejects three patterns we've seen LLMs produce:
+The unchanged v2 classifier uses these tiers: REWRITE is below 1000 prose words, 12 words per non-blank line, or 18 words per prose paragraph; PASS is at least 1500 prose words, 18 words per non-blank line, and 22 words per prose paragraph; REVIEW is intermediate. REWRITE is the density rejection tier checked before commit/merge. PASS and REVIEW do not establish factual support, source verification, learning effectiveness, or acceptance; the other review and executable gates still apply. These figures are not a total line or word quota.
 
 1. **Pad-bomb (one-sentence-per-paragraph)** — every sentence on its own line, single newlines between sentences. Looks "structured" but reads like a stack of bullets without the bullets. Fail signal: words-per-line < 12.
 2. **Punchy-bullets / fragments** — short stubs, two-clause "headers" used as paragraphs, heavy bullet-only sections with no surrounding prose. Fail signal: words-per-paragraph < 18.
 3. **Essay-filler** — paragraphs that look dense but say nothing concrete (corporate generality, no examples, no sequencing). Fail signal: w/ln passes but reviewer + audit both downgrade teaching.
 
 **Required prose shape:**
-- **Average ≥ 22 words per prose paragraph** (target 25–60). A paragraph is text between blank lines, NOT counting code fences, lists, tables, or front-matter blocks.
-- **Average ≥ 18 words per non-blank line** (target ≥ 20). Wrap your sentences into multi-sentence paragraphs; do not put one sentence per line.
-- **Minimum 1500 prose words** (≥ 2500 strongly preferred). Prose words = words outside code fences, frontmatter, and tables.
+- Prefer an average of 22 words per prose paragraph (target 25–60) and 18 words per non-blank line (target ≥20). A paragraph is text between blank lines, NOT counting code fences, lists, tables, or front-matter blocks.
+- Treat 1500 prose words as the stronger PASS classifier tier, not a total-content quota. Prose words are outside code fences, frontmatter, and tables; a REVIEW result is intermediate and is not automatically blocked.
+- If verified material cannot support the requested scope or an active gate, use the shortfall-report exception above rather than fabricating detail or claiming completion. This prompt instruction does not create a new machine-enforced publication guard.
 - A teaching paragraph should typically be 3–6 sentences long, with the first sentence stating the claim and the rest grounding it with mechanism, example, or trade-off. Do not split that into 4 separate one-sentence paragraphs.
 - Bullets are allowed for genuine lists (steps, options, anti-patterns, rules). They are NOT a substitute for explanation. A section that's 90% bullets fails. If you find yourself writing 5+ consecutive single-line bullets where each is essentially a sentence of an argument, merge them into a paragraph.
 
 You are writing for a learner who reads the page top-to-bottom. Flowing multi-sentence paragraphs are how you teach mechanism, sequence, and nuance. Fragmented one-line "paragraphs" are how style guides for status pages are written, and that is the wrong genre.
 
-Return the complete module. Starting with `---`.
+Return the complete module starting with `---`, or a shortfall report if the honesty exception applies.
 """
 
 

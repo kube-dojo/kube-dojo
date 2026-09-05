@@ -1,9 +1,9 @@
 # #388 Module Rewriter — Density-First Brief Addendum
-Word-count target for THIS module: {{BODY_WORDS_TARGET}}. Replaced by dispatch with per-module budget if set, otherwise default 5000.
+Configured body-word budget for THIS module: {{BODY_WORDS_TARGET}}. Dispatch supplies a per-module budget when set, otherwise the pilot verifier uses its existing default of 5000. This prompt does not change that executable check or any acceptance state.
 
 This addendum is layered on top of `scripts/prompts/module-writer.md`. It is binding for all #388 site-wide rewrite dispatches. The audit gates here are derived from the Codex architectural consult of 2026-05-01 (bridge messages #3384 and #3386) and the empirical baseline established by the density fix-pass batch of the same session (PRs #720-723).
 
-The brief has historically optimized for visible structure and quotas (DYK count, sections, sources, "600+ content lines"). That conditioning produces choppy single-sentence prose and consistent failure on prose-density gates. This addendum reframes the contract.
+The brief has historically optimized for visible structure and quotas (DYK count, sections, and sources). That conditioning produces choppy single-sentence prose and consistent failure on prose-density gates. This addendum reframes the contract.
 
 ## PROSE DENSITY IS A HARD GATE
 
@@ -54,10 +54,9 @@ Meet the required counts for Did You Know, Common Mistakes, quiz questions, hand
 
 Before finalizing, scan every consecutive body-prose paragraph. If three paragraphs in a row each have fewer than 18 words, the module is invalid. Merge, expand, or rewrite those paragraphs until the maximum consecutive short-paragraph run is 2 or less.
 
-## DEPTH TARGET (REPLACES "600+ CONTENT LINES")
+## DEPTH AND EVIDENCE
 
-Target substantial depth: {{BODY_WORDS_TARGET}}-7,000 words of original instructional content. Do not satisfy depth by adding short lines, fragmented paragraphs, or decorative structure. Word count is the floor; density gates are the ceiling on how those words can be packaged.
-The {{BODY_WORDS_TARGET}}-7,000 target is a depth budget, not a quota. If a topic naturally fits in 4,500 words of substantive teaching, write 4,500 words. Padding to hit {{BODY_WORDS_TARGET}} with restated content is a hard failure of this contract (see NO RESTATEMENT ACROSS H2 SECTIONS above).
+Use the configured budget as a planning and reporting signal for substantial depth, guided by the topic, outcomes, assessment, and verified material. Do not satisfy it by adding short lines, fragmented paragraphs, decorative structure, or restated content. The pilot verifier separately checks its configured body-word value; that number is not proof of factual support, learning, or publication acceptance. If evidence cannot support the requested scope or the configured check, report the shortfall in the required output rather than inventing detail or claiming completion; do not create a placeholder.
 
 ## RUNNABILITY, FABRICATION, AND PRACTICE QUESTIONS
 
@@ -96,7 +95,7 @@ All must pass before commit. The deterministic verifier (`scripts/quality/verify
 2. median_wpp >= 28
 3. short_paragraph_rate <= 20%
 4. max_consecutive_short_run <= 2
-5. body_words >= {{BODY_WORDS_TARGET}} (absolute floor — not relative)
+5. The pilot verifier must check body words against its configured `{{BODY_WORDS_TARGET}}`; report its pass/fail result and any shortfall. A passing number is not evidence of factual support, learning effectiveness, or a v2 publication verdict.
 6. mean_sentence_length 12-28 words
 7. >= 2 inline active-learning prompts in core content (not just in the final hands-on)
 8. Each Learning Outcome maps to >= 1 core section AND >= 1 quiz item OR lab task
@@ -121,9 +120,9 @@ Per the Codex consult, classify each `revision_pending: true` module into one of
 After draft, the dispatched agent must report:
 - mean_wpp, median_wpp, short_paragraph_rate, max_consecutive_short_run, body_words, paragraph_count, mean_sentence_length
 - Which gates passed/failed
-- Body-words-before / body-words-after (and confirmation that absolute floor {{BODY_WORDS_TARGET}} is met)
+- Body-words-before / body-words-after, the configured budget result, and any shortfall
 - Salvageable assets preserved (count of code blocks, diagrams, tables before/after)
 - Forbidden tokens grep result
 - Sources verification status (200/redirect/404 + relevance assessment)
 
-If any gate fails, the agent revises before declaring complete. The orchestrator's verifier re-checks before commit.
+If any gate fails, revise when verified material supports the needed correction; otherwise report the failed gate and material shortfall instead of claiming completion. The orchestrator's verifier re-checks before commit. This prompt-level honesty exception does not create a new machine-enforced publication guard.
