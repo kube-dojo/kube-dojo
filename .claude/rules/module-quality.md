@@ -9,7 +9,7 @@ paths:
 ## Required Sections (in order)
 1. Title + metadata (complexity, time, prerequisites)
 2. Learning Outcomes — 3-5 measurable outcomes using Bloom's L3+ verbs (debug, design, evaluate, compare)
-3. Why This Module Matters — dramatic real-world opening (third person)
+3. Why This Module Matters — clear motivation and practical relevance; use a documented incident or explicitly labeled scenario only when it helps
 4. Core content (3-6 sections with code, ASCII diagrams, tables, inline active learning prompts)
 5. Did You Know? — exactly 4 facts
 6. Common Mistakes — table with 6-8 rows
@@ -49,7 +49,7 @@ paths:
 - Do NOT add a Markdown `# Module ...` heading after frontmatter. Starlight renders the page H1 from `title:` frontmatter, so a source H1 creates a duplicate visible title.
 - The top-of-module metadata must be a blockquote immediately after frontmatter:
   `> **Complexity**: ...`, blank quoted line, `> **Time to Complete**: ...`, blank quoted line, `> **Prerequisites**: ...`, then `---`, then `## What You'll Be Able to Do`.
-- 600-800+ lines of CONTENT minimum (250+ for KCNA theory modules). Visual aids (ASCII diagrams, code blocks for illustration) do NOT count toward the minimum — they supplement teaching, not substitute for it.
+- Depth follows the topic scope, measurable outcomes, runnable examples, assessment alignment, and verified evidence. Length estimates may guide planning and routing, but are not evidence of factual support, learning effectiveness, or acceptance. Do not pad with repeated prose, decorative structure, or unsupported facts. If verified material is insufficient, state the shortfall for review rather than claiming completion; a concise module does not automatically pass. Visual aids supplement teaching and do not replace explanation.
 - Explain "why" before "what"
 - All code must be runnable (not pseudocode)
 - Code blocks specify language (```bash, ```yaml, ```go)
@@ -59,3 +59,4 @@ paths:
 - Do NOT repeat the number 47 (known LLM pattern)
 - Do NOT use emojis
 - Do NOT write "list of facts" modules — if sections are just bullets, it's a reference doc, not a lesson
+- Stories and analogies are optional: real incidents require verifiable citations, hypothetical examples explicit labels, and analogies a clear mapping and limits. Do not manufacture mystery, clue hunts, or gamification to satisfy an engagement checklist.

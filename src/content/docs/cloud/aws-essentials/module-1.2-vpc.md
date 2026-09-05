@@ -465,18 +465,66 @@ Start with the **private subnet NACL inbound rules** for ephemeral ports (typica
 
 In this exercise you will use the AWS CLI to build a production-style VPC: multiple Availability Zones, public subnets for edge components, private subnets for compute, per-AZ NAT Gateways for resilient outbound access, chained security groups, and a restrictive NACL on the private tier. The diagram summarizes the target topology you will create with the commands that follow:
 
+### Preflight: Account, Region, Cost, and Cleanup
+
+Run this preflight in a Bash shell before creating anything. Use AWS CLI v2 with an isolated AWS account and a role authorized to create and delete the lab resources. Confirm that the role permits the EC2 networking create/describe/delete operations used below, `iam:CreateRole`, `iam:CreatePolicy`, `iam:AttachRolePolicy`, `iam:DetachRolePolicy`, `iam:DeletePolicy`, `iam:DeleteRole`, and `iam:PassRole` for the flow-log task. It also needs CloudWatch Logs create, retention, describe, and delete operations. Review your VPC/NAT/EIP quotas and confirm that `10.0.0.0/16` does not overlap with connected networks you need to keep reachable. Check command exit status and returned data: stop on any non-zero result, and record every resource ID as soon as it is returned so a partial run can be cleaned up.
+
+Read the cleanup section before starting. Keep an inventory of resources actually created, including resources left by a failed step; only delete this exercise's resources. Before provisioning, confirm that you can supply the same-account [flow-log IAM role](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html) required by Task 8. The identity check below does not prove all these permissions are available.
+
+Two NAT Gateways and two Elastic IPs are billable. Choose a spending limit and cleanup deadline before starting. Budget separately for NAT Gateway hours, processed data, transfer, public IPv4/EIP usage, and any CloudWatch Logs ingestion or storage. Check the current regional rates in [AWS VPC pricing](https://aws.amazon.com/vpc/pricing/) and [NAT Gateway pricing](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html) before provisioning; this page supplies no default budget or universal hourly quote. Stopping your terminal does not delete billable resources.
+
+Set your chosen region first, for example `export AWS_REGION=us-east-1`, and keep the AWS CLI variables consistent. The function discovers two available standard zones using [`describe-availability-zones`](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-availability-zones.html). It returns a failure instead of closing an interactive shell; do not continue after a failure message.
+
+```bash
+vpc_preflight() {
+  if [[ -z "${AWS_REGION:-}" && -z "${AWS_DEFAULT_REGION:-}" ]]; then
+    printf '%s\n' 'Set AWS_REGION (or AWS_DEFAULT_REGION) before continuing.' >&2
+    return 1
+  fi
+  if [[ -n "${AWS_REGION:-}" && -n "${AWS_DEFAULT_REGION:-}" && "$AWS_REGION" != "$AWS_DEFAULT_REGION" ]]; then
+    printf 'AWS_REGION (%s) and AWS_DEFAULT_REGION (%s) differ; choose one region.\n' "$AWS_REGION" "$AWS_DEFAULT_REGION" >&2
+    return 1
+  fi
+  export AWS_REGION="${AWS_REGION:-$AWS_DEFAULT_REGION}"
+  export AWS_DEFAULT_REGION="$AWS_REGION"
+  export AWS_PAGER=""
+
+  AWS_VERSION=$(aws --version 2>&1) || return 1
+  if [[ "$AWS_VERSION" != aws-cli/2.* ]]; then
+    printf 'AWS CLI v2 is required; found %s.\n' "$AWS_VERSION" >&2
+    return 1
+  fi
+  printf '%s\n' "$AWS_VERSION"
+  aws sts get-caller-identity --query '{Account:Account,Arn:Arn,UserId:UserId}' --output table || return 1
+
+  AZ_LIST=$(aws ec2 describe-availability-zones \
+    --region "$AWS_REGION" \
+    --filters "Name=state,Values=available" "Name=zone-type,Values=availability-zone" \
+    --query 'sort_by(AvailabilityZones,&ZoneName)[].ZoneName' --output text) || return 1
+  AZ_NAMES=$(printf '%s\n' "$AZ_LIST" | awk '{for (i = 1; i <= NF; i++) print $i}')
+  AZ1=$(printf '%s\n' "$AZ_NAMES" | sed -n '1p')
+  AZ2=$(printf '%s\n' "$AZ_NAMES" | sed -n '2p')
+  if [[ -z "$AZ1" || -z "$AZ2" ]]; then
+    printf 'Region %s has fewer than two available standard Availability Zones; stop here.\n' "$AWS_REGION" >&2
+    return 1
+  fi
+  printf 'Using %s and %s in %s.\n' "$AZ1" "$AZ2" "$AWS_REGION"
+}
+vpc_preflight
+```
+
 ```mermaid
 flowchart TB
     subgraph VPC ["VPC: 10.0.0.0/16 (Dojo-Prod-VPC)<br>Security: ALB-SG → App-SG → DB-SG (chained)<br>NACL: Block known-bad CIDR on private subnets<br>Internet: IGW → Public Subnets → NAT-GW → Private Subnets"]
         direction TB
         
-        subgraph AZ1 ["AZ: us-east-1a"]
+        subgraph AZ1 ["AZ 1 (selected by preflight)"]
             Pub1["Public: 10.0.1.0/24 [ALB, NAT-GW]"]
             Priv1["Private: 10.0.10.0/24 [App Servers]"]
             Pub1 --> Priv1
         end
         
-        subgraph AZ2 ["AZ: us-east-1b"]
+        subgraph AZ2 ["AZ 2 (selected by preflight)"]
             Pub2["Public: 10.0.2.0/24 [ALB, NAT-GW]"]
             Priv2["Private: 10.0.20.0/24 [App Servers]"]
             Pub2 --> Priv2
@@ -532,12 +580,10 @@ echo "IGW $IGW_ID attached to VPC $VPC_ID"
 
 ### Task 3: Create the Subnets Across Two AZs
 
-Next carve four `/24` subnets—two public and two private—each pinned to a different Availability Zone so the exercise mirrors a minimal multi-AZ layout even though the narrative diagrams showed three AZs for teaching purposes.
+Next carve four `/24` subnets—two public and two private—across the two Availability Zones selected by the preflight. The `AZ1` and `AZ2` variables below come from that gate; do not replace them with hardcoded names.
 
 ```bash
-# Define availability zones (adjust if your default region is different)
-AZ1="us-east-1a"
-AZ2="us-east-1b"
+# AZ1 and AZ2 were selected by the preflight in the explicit AWS_REGION.
 
 # --- Public Subnets ---
 
@@ -652,8 +698,6 @@ aws ec2 create-route --route-table-id $PRIV_RT2_ID --destination-cidr-block 0.0.
 aws ec2 associate-route-table --subnet-id $PRIV_SUB2_ID --route-table-id $PRIV_RT2_ID
 ```
 
-> **Cost Warning**: NAT Gateways cost ~$0.045/hr each. Two NAT Gateways running 24/7 cost ~$65/month before data charges. Delete them when you finish this exercise!
-
 ### Task 6: Configure Layered Security Groups
 
 Implement the chained SG pattern from the theory section: the ALB accepts web traffic from the internet, the application tier accepts only from the ALB security group, and the database tier accepts PostgreSQL only from the application security group.
@@ -748,27 +792,139 @@ echo "Custom NACL $NACL_ID associated with private subnets"
 
 ### Task 8: Enable VPC Flow Logs
 
-Flow logs require a destination and an IAM trust relationship so the VPC Flow Logs service can write on your behalf. The command below targets CloudWatch Logs; if you lack the `VPCFlowLogRole` in your account, use the S3 destination noted in the comment instead so you still complete the observability portion of the lab.
+This task uses a new CloudWatch Log Group, customer-managed policy, and role tied to the lab VPC ID. It is scoped to the commercial AWS partition (`arn:aws`) covered by the examples below; it refuses other partitions before mutating anything. If any name already exists, stop and finish the prior run's cleanup or choose a new lab VPC; this setup never adopts or overwrites an existing resource. `jq` is required to inspect the JSON response from `create-flow-logs`.
 
 ```bash
-# Create a CloudWatch Log Group for Flow Logs
-aws logs create-log-group --log-group-name /vpc/dojo-prod-flow-logs
+vpc_flowlog_setup() {
+  command -v jq >/dev/null || { printf '%s\n' 'Install jq before Task 8; it is required to inspect create-flow-logs JSON.' >&2; return 1; }
+  : "${FLOW_LOG_GROUP_CREATED:=0}"
+  : "${FLOW_LOG_ROLE_CREATED:=0}"
+  : "${FLOW_LOG_POLICY_CREATED:=0}"
+  : "${FLOW_LOG_POLICY_ATTACHED:=0}"
+  : "${FLOW_LOG_CREATED:=0}"
+  if [[ "$FLOW_LOG_CREATED" != 0 ]]; then
+    printf 'Flow-log ownership state is %s; inspect status and cleanup before retrying.\n' "$FLOW_LOG_CREATED" >&2
+    return 1
+  fi
 
-# Enable VPC Flow Logs (requires an IAM role with permissions -- see note below)
-# This exercise delivers to CloudWatch Logs; see the note below for the role-free S3 alternative.
-FLOW_LOG_ID=$(aws ec2 create-flow-logs \
-  --resource-type VPC \
-  --resource-ids $VPC_ID \
-  --traffic-type ALL \
-  --log-destination-type cloud-watch-logs \
-  --log-group-name /vpc/dojo-prod-flow-logs \
-  --deliver-logs-permission-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/VPCFlowLogRole \
-  --query 'FlowLogIds[0]' --output text)
+  IDENTITY=$(aws sts get-caller-identity --query '[Account,Arn]' --output text) || { printf '%s\n' 'Could not read the caller identity; no flow-log resources were changed.' >&2; return 1; }
+  read -r ACCOUNT_ID CALLER_ARN <<< "$IDENTITY"
+  if [[ -z "$ACCOUNT_ID" || -z "$CALLER_ARN" ]]; then
+    printf '%s\n' 'Could not determine the caller account; no flow-log resources were changed.' >&2
+    return 1
+  fi
+  case "$CALLER_ARN" in
+    arn:aws:*) AWS_PARTITION=aws ;;
+    *) printf '%s\n' 'This example is limited to commercial AWS (arn:aws); no resources were changed.' >&2; return 1 ;;
+  esac
 
-echo "Flow Logs enabled: $FLOW_LOG_ID"
+  CURRENT_FLOW_LOG_CONTEXT="${VPC_ID}|${ACCOUNT_ID}|${AWS_REGION}"
+  if [[ -z "${FLOW_LOG_CONTEXT:-}" ]]; then
+    FLOW_LOG_CONTEXT="$CURRENT_FLOW_LOG_CONTEXT"; FLOW_LOG_VPC_ID="$VPC_ID"; FLOW_LOG_ACCOUNT_ID="$ACCOUNT_ID"; FLOW_LOG_REGION="$AWS_REGION"
+    FLOW_LOG_GROUP_NAME="/vpc/dojo-prod-${VPC_ID}-flow-logs"; FLOW_LOG_ROLE_NAME="Dojo-Prod-${VPC_ID}-FlowLogRole"; FLOW_LOG_POLICY_NAME="Dojo-Prod-${VPC_ID}-FlowLogPolicy"
+  elif [[ "$FLOW_LOG_CONTEXT" != "$CURRENT_FLOW_LOG_CONTEXT" || -z "${FLOW_LOG_GROUP_NAME:-}" || -z "${FLOW_LOG_ROLE_NAME:-}" || -z "${FLOW_LOG_POLICY_NAME:-}" ]]; then
+    printf '%s\n' 'Flow-log context or saved names changed; restore the prior context before retrying or cleaning up.' >&2
+    return 1
+  fi
+  FLOW_LOG_GROUP_ARN="arn:${AWS_PARTITION}:logs:${AWS_REGION}:${ACCOUNT_ID}:log-group:${FLOW_LOG_GROUP_NAME}"
+  FLOW_LOG_STREAM_ARN="${FLOW_LOG_GROUP_ARN}:log-stream:*"
+  [[ "$FLOW_LOG_ROLE_CREATED" != 1 || -n "${FLOW_LOG_ROLE_ARN:-}" ]] || { printf '%s\n' 'Flow-log role ownership flag has no ARN; stop and inspect the saved IDs.' >&2; return 1; }
+  [[ "$FLOW_LOG_POLICY_CREATED" != 1 || -n "${FLOW_LOG_POLICY_ARN:-}" ]] || { printf '%s\n' 'Flow-log policy ownership flag has no ARN; stop and inspect the saved IDs.' >&2; return 1; }
+
+  if [[ "$FLOW_LOG_GROUP_CREATED" != 1 ]]; then
+    if ! aws logs create-log-group --region "$AWS_REGION" --log-group-name "$FLOW_LOG_GROUP_NAME"; then
+      printf 'Could not create %s; a collision is not adopted.\n' "$FLOW_LOG_GROUP_NAME" >&2
+      return 1
+    fi
+    FLOW_LOG_GROUP_CREATED=1
+  fi
+  aws logs put-retention-policy --region "$AWS_REGION" --log-group-name "$FLOW_LOG_GROUP_NAME" --retention-in-days 7 || { printf '%s\n' 'Retention setup failed; keep the group ID and clean it up only if this run created it.' >&2; return 1; }
+
+  FLOW_LOG_TRUST=$(cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "VpcFlowLogsAssumeRole",
+    "Effect": "Allow",
+    "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+    "Action": "sts:AssumeRole",
+    "Condition": {
+      "StringEquals": {"aws:SourceAccount": "$ACCOUNT_ID"},
+      "ArnLike": {"aws:SourceArn": "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${ACCOUNT_ID}:vpc-flow-log/*"}
+    }
+  }]
+}
+JSON
+)
+  if [[ "$FLOW_LOG_ROLE_CREATED" != 1 ]]; then
+    if ! FLOW_LOG_ROLE_ARN=$(aws iam create-role --role-name "$FLOW_LOG_ROLE_NAME" --assume-role-policy-document "$FLOW_LOG_TRUST" --query 'Role.Arn' --output text); then
+      printf 'Could not create %s; a collision is not adopted.\n' "$FLOW_LOG_ROLE_NAME" >&2
+      return 1
+    fi
+    FLOW_LOG_ROLE_CREATED=1
+  fi
+
+  FLOW_LOG_PERMISSIONS=$(cat <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FlowLogGroup",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:DescribeLogStreams"],
+      "Resource": "$FLOW_LOG_GROUP_ARN"
+    },
+    {
+      "Sid": "FlowLogStreams",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "$FLOW_LOG_STREAM_ARN"
+    },
+    {
+      "Sid": "FindFlowLogGroup",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
+    }
+  ]
+}
+JSON
+)
+  if [[ "$FLOW_LOG_POLICY_CREATED" != 1 ]]; then
+    if ! FLOW_LOG_POLICY_ARN=$(aws iam create-policy --policy-name "$FLOW_LOG_POLICY_NAME" --policy-document "$FLOW_LOG_PERMISSIONS" --query 'Policy.Arn' --output text); then
+      printf 'Could not create %s; a collision is not adopted.\n' "$FLOW_LOG_POLICY_NAME" >&2
+      return 1
+    fi
+    FLOW_LOG_POLICY_CREATED=1
+  fi
+  if [[ "$FLOW_LOG_POLICY_ATTACHED" != 1 ]]; then
+    aws iam attach-role-policy --role-name "$FLOW_LOG_ROLE_NAME" --policy-arn "$FLOW_LOG_POLICY_ARN" || { printf '%s\n' 'Policy attachment failed; inspect the IAM error and retain the ownership flags.' >&2; return 1; }
+    FLOW_LOG_POLICY_ATTACHED=1
+  fi
+
+  FLOW_LOG_RESPONSE=$(aws ec2 create-flow-logs --region "$AWS_REGION" --resource-type VPC --resource-ids "$VPC_ID" --traffic-type ALL --log-destination-type cloud-watch-logs --log-group-name "$FLOW_LOG_GROUP_NAME" --deliver-logs-permission-arn "$FLOW_LOG_ROLE_ARN" --output json 2>&1)
+  FLOW_LOG_EXIT=$?
+  if (( FLOW_LOG_EXIT != 0 )); then
+    FLOW_LOG_CREATED=unknown
+    printf 'create-flow-logs failed (including possible IAM propagation):\n%s\n' "$FLOW_LOG_RESPONSE" >&2
+    return 1
+  fi
+  FLOW_LOG_UNSUCCESSFUL=$(printf '%s' "$FLOW_LOG_RESPONSE" | jq -c '.Unsuccessful // []') || { FLOW_LOG_CREATED=unknown; printf '%s\n' 'Could not parse the create-flow-logs response; retain all IDs and flags.' >&2; return 1; }
+  FLOW_LOG_IDS=$(printf '%s' "$FLOW_LOG_RESPONSE" | jq -r '.FlowLogIds // [] | join(" ")') || { FLOW_LOG_CREATED=unknown; return 1; }
+  [[ -n "$FLOW_LOG_IDS" ]] && FLOW_LOG_CREATED=1
+  if [[ "$FLOW_LOG_UNSUCCESSFUL" != '[]' ]]; then
+    FLOW_LOG_CREATED=unknown
+    printf 'create-flow-logs reported Unsuccessful: %s\n' "$FLOW_LOG_UNSUCCESSFUL" >&2
+    return 1
+  fi
+  [[ -n "$FLOW_LOG_IDS" ]] || { FLOW_LOG_CREATED=unknown; printf '%s\n' 'create-flow-logs returned no actual FlowLogIds; do not claim success.' >&2; return 1; }
+  printf 'Created FlowLogIds: %s\n' "$FLOW_LOG_IDS"
+  aws ec2 describe-flow-logs --region "$AWS_REGION" --flow-log-ids $FLOW_LOG_IDS --query 'FlowLogs[].{ResourceId:ResourceId,LogGroupName:LogGroupName,FlowLogStatus:FlowLogStatus,DeliverLogsStatus:DeliverLogsStatus,DeliverLogsErrorMessage:DeliverLogsErrorMessage}' --output table || { printf '%s\n' 'Flow-log status lookup failed; retain IDs and flags.' >&2; return 1; }
+}
+vpc_flowlog_setup
 ```
 
-> **Note**: The `create-flow-logs` command requires an IAM role that allows the VPC Flow Log service to publish to CloudWatch Logs. If you do not have this role set up, you can skip this task or deliver logs to an S3 bucket instead using `--log-destination-type s3 --log-destination arn:aws:s3:::your-bucket-name`.
+`ACTIVE` and a successful delivery status show configuration and delivery readiness only; they are not evidence that a packet was generated or a log event was received. IAM propagation failures, `Unsuccessful` entries, pending delivery, and non-empty delivery errors remain actionable failures for this task.
 
 ### Clean Up
 
@@ -777,9 +933,77 @@ Tear-down is where labs earn their keep: AWS bills NAT Gateways and Elastic IPs 
 **Important**: Delete resources in reverse order of dependency to avoid errors. NAT Gateways take 1-2 minutes to delete.
 
 ```bash
-# 1. Delete Flow Logs
-aws ec2 delete-flow-logs --flow-log-ids $FLOW_LOG_ID
-aws logs delete-log-group --log-group-name /vpc/dojo-prod-flow-logs
+vpc_lab_cleanup() {
+# 1. Delete only flow-log resources created by this run.
+if [[ -z "${FLOW_LOG_CONTEXT:-}" && ( "${FLOW_LOG_CREATED:-0}" != 0 || "${FLOW_LOG_GROUP_CREATED:-0}" != 0 || "${FLOW_LOG_ROLE_CREATED:-0}" != 0 || "${FLOW_LOG_POLICY_CREATED:-0}" != 0 || "${FLOW_LOG_POLICY_ATTACHED:-0}" != 0 ) ]]; then
+  printf '%s\n' 'Flow-log ownership flags exist without a saved context; cleanup is stopped.' >&2
+  return 1
+fi
+if [[ -n "${FLOW_LOG_CONTEXT:-}" ]]; then
+  FLOW_LOG_CLEANUP_IDENTITY=$(aws sts get-caller-identity --query '[Account,Arn]' --output text) || {
+    printf '%s\n' 'Could not verify the current caller identity; flow-log cleanup is stopped.' >&2
+    return 1
+  }
+  read -r FLOW_LOG_CLEANUP_ACCOUNT FLOW_LOG_CLEANUP_ARN <<< "$FLOW_LOG_CLEANUP_IDENTITY"
+  if [[ "${VPC_ID}|${FLOW_LOG_CLEANUP_ACCOUNT}|${AWS_REGION}" != "$FLOW_LOG_CONTEXT" ]]; then
+    printf '%s\n' 'Flow-log VPC/account/region changed; restore the saved context before cleanup.' >&2
+    return 1
+  fi
+  case "$FLOW_LOG_CLEANUP_ARN" in
+    arn:aws:*) ;;
+    *) printf '%s\n' 'This cleanup example is limited to commercial AWS (arn:aws); no resources were changed.' >&2; return 1 ;;
+  esac
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" == 1 && -n "${FLOW_LOG_IDS:-}" ]]; then
+  FLOW_LOG_DELETE_RESPONSE=$(aws ec2 delete-flow-logs --region "$AWS_REGION" --flow-log-ids $FLOW_LOG_IDS --output json 2>&1)
+  FLOW_LOG_DELETE_EXIT=$?
+  FLOW_LOG_DELETE_UNSUCCESSFUL=$(printf '%s' "$FLOW_LOG_DELETE_RESPONSE" | jq -c '.Unsuccessful // []') || FLOW_LOG_DELETE_UNSUCCESSFUL=unknown
+  if (( FLOW_LOG_DELETE_EXIT != 0 )) || [[ "$FLOW_LOG_DELETE_UNSUCCESSFUL" != '[]' ]]; then
+    printf 'Flow-log deletion failed (exit=%s, Unsuccessful=%s); retain IDs and flags.\n' "$FLOW_LOG_DELETE_EXIT" "$FLOW_LOG_DELETE_UNSUCCESSFUL" >&2
+  else
+    FLOW_LOG_REMAINING=$(aws ec2 describe-flow-logs --region "$AWS_REGION" --filter "Name=flow-log-id,Values=${FLOW_LOG_IDS// /,}" --output json 2>&1)
+    FLOW_LOG_REMAINING_EXIT=$?
+    FLOW_LOG_REMAINING_COUNT=$(printf '%s' "$FLOW_LOG_REMAINING" | jq -e -r 'if (type == "object" and (.FlowLogs | type) == "array") then (.FlowLogs | length) else error("FlowLogs must be an array") end') || FLOW_LOG_REMAINING_COUNT=unknown
+    if (( FLOW_LOG_REMAINING_EXIT == 0 )) && [[ "$FLOW_LOG_REMAINING_COUNT" == 0 ]]; then
+      FLOW_LOG_CREATED=0
+      printf '%s\n' 'Flow-log deletion confirmed: no requested FlowLogIds remain.'
+    else
+      printf '%s\n' 'Flow-log deletion is not confirmed; retain IDs and flags for retry.' >&2
+    fi
+  fi
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" == 0 && "${FLOW_LOG_POLICY_ATTACHED:-0}" == 1 ]]; then
+  if aws iam detach-role-policy --role-name "$FLOW_LOG_ROLE_NAME" --policy-arn "$FLOW_LOG_POLICY_ARN"; then
+    FLOW_LOG_POLICY_ATTACHED=0
+  else
+    printf '%s\n' 'Flow-log policy detach failed; retain FLOW_LOG_POLICY_ATTACHED for retry.' >&2
+  fi
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" == 0 && "${FLOW_LOG_POLICY_ATTACHED:-0}" == 0 && "${FLOW_LOG_POLICY_CREATED:-0}" == 1 ]]; then
+  if aws iam delete-policy --policy-arn "$FLOW_LOG_POLICY_ARN"; then
+    FLOW_LOG_POLICY_CREATED=0
+  else
+    printf '%s\n' 'Flow-log policy deletion failed; retain FLOW_LOG_POLICY_CREATED for retry.' >&2
+  fi
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" == 0 && "${FLOW_LOG_POLICY_ATTACHED:-0}" == 0 && "${FLOW_LOG_ROLE_CREATED:-0}" == 1 ]]; then
+  if aws iam delete-role --role-name "$FLOW_LOG_ROLE_NAME"; then
+    FLOW_LOG_ROLE_CREATED=0
+  else
+    printf '%s\n' 'Flow-log role deletion failed; retain FLOW_LOG_ROLE_CREATED for retry.' >&2
+  fi
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" == 0 && "${FLOW_LOG_GROUP_CREATED:-0}" == 1 ]]; then
+  if aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$FLOW_LOG_GROUP_NAME"; then
+    FLOW_LOG_GROUP_CREATED=0
+  else
+    printf '%s\n' 'Flow-log group deletion failed; retain FLOW_LOG_GROUP_CREATED for retry.' >&2
+  fi
+fi
+if [[ "${FLOW_LOG_CREATED:-0}" != 0 || "${FLOW_LOG_GROUP_CREATED:-0}" != 0 || "${FLOW_LOG_ROLE_CREATED:-0}" != 0 || "${FLOW_LOG_POLICY_CREATED:-0}" != 0 || "${FLOW_LOG_POLICY_ATTACHED:-0}" != 0 ]]; then
+  printf '%s\n' 'Flow-log cleanup remains incomplete; inspect and retry before continuing dependent cleanup.' >&2
+  return 1
+fi
 
 # 2. Delete NAT Gateways (they take ~60s to fully delete)
 aws ec2 delete-nat-gateway --nat-gateway-id $NAT1_ID
@@ -820,12 +1044,14 @@ aws ec2 detach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID
 aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
 aws ec2 delete-vpc --vpc-id $VPC_ID
 
-echo "All resources cleaned up."
+printf '%s\n' 'Cleanup commands were attempted. Inspect command output and remaining resource IDs before declaring the lab clean.'
+}
+vpc_lab_cleanup
 ```
 
 ### Success Criteria
 
-If every checkbox below is true after cleanup, you have reproduced the core production patterns this module teaches: tiered subnets, routed internet edge, per-AZ NAT egress, chained security groups, subnet NACL policy, and flow-log visibility. Capture the VPC ID and route table IDs in your notes so you can compare them when Module 1.3 launches EC2 instances into the same address plan.
+If every checkbox below is true after cleanup, you have reproduced the core production patterns this module teaches: tiered subnets, routed internet edge, per-AZ NAT egress, chained security groups, subnet NACL policy, and flow-log configuration. A separate traffic test is still required for an observed packet and log event. Capture the VPC ID and route table IDs in your notes so you can compare them when Module 1.3 launches EC2 instances into the same address plan.
 
 - [ ] I created a VPC with a `/16` CIDR block and enabled DNS hostnames
 - [ ] I carved the VPC into 4 subnets spread across 2 Availability Zones
@@ -834,7 +1060,7 @@ If every checkbox below is true after cleanup, you have reproduced the core prod
 - [ ] I created separate private route tables per AZ, each pointing to its own NAT Gateway
 - [ ] I implemented a three-tier chained Security Group architecture (ALB -> App -> DB)
 - [ ] I created a custom NACL that blocks a specific CIDR range on the private subnets
-- [ ] I enabled VPC Flow Logs for traffic visibility
+- [ ] I created VPC Flow Logs, recorded the actual FlowLogIds, and inspected delivery status; this does not count as a traffic receipt
 - [ ] I successfully cleaned up all resources to avoid ongoing charges
 
 ---
@@ -865,3 +1091,7 @@ With routing, NAT, layered firewalls, and observability in place, you have the s
 - [VPC Basics](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-subnet-basics.html) — Good canonical reference for VPC, subnet, and built-in component behavior.
 - [Regional NAT Gateways for Automatic Multi-AZ Expansion](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html) — Covers the newer regional NAT option that changes the HA guidance in this module.
 - [Logging IP Traffic Using VPC Flow Logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html) — Deepens the troubleshooting section with official record, destination, and limitation details.
+- [VPC Flow Logs IAM role](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html) — Documents the service trust relationship and CloudWatch Logs permissions used by Task 8.
+- [CloudWatch Logs service authorization](https://docs.aws.amazon.com/service-authorization/latest/reference/list_logs.html) — Defines resource scoping for the log-group and log-stream actions used here.
+- [AWS CLI create-flow-logs](https://docs.aws.amazon.com/cli/latest/reference/ec2/create-flow-logs.html) — Defines `FlowLogIds` and `Unsuccessful` response fields.
+- [AWS CLI describe-flow-logs](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-flow-logs.html) — Defines flow-log status and delivery error fields used for setup verification.

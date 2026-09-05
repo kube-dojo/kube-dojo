@@ -497,11 +497,11 @@ The timeline should record the first known impact, key observations, hypotheses 
 
 ### Practicing Systematic Troubleshooting
 
-**Objective**: Apply troubleshooting methodology to a simulated problem.
+**Objective**: Apply troubleshooting methodology to a bounded storage experiment.
 
 **Environment**: Any Linux system
 
-This exercise is intentionally local and safe. You will collect a baseline, simulate a small disk-space symptom in `/tmp`, test hypotheses, inspect recent changes, and document the session. The commands should run on a normal Linux workstation or lab VM, though service names and permissions can vary by distribution.
+This exercise is intentionally local and bounded. You will collect a baseline, test a small storage hypothesis with real write probes, inspect recent changes, and document the session. The commands should run on a normal Linux workstation or lab VM, though service names and permissions can vary by distribution.
 
 #### Part 1: Initial Triage Script
 
@@ -546,38 +546,112 @@ The expected result is a readable system snapshot. If some commands require priv
 
 </details>
 
-#### Part 2: Simulate and Diagnose
+#### Part 2: Test a Storage Hypothesis
 
-The simulation uses a temporary file to create a visible storage change without touching application data. The point is not that every incident is disk space; the point is that the symptom, hypothesis, test, conclusion, and fix are separated so you can see the method.
+This is a guided storage experiment, not a simulated outage. It creates one unique temporary directory, records filesystem and directory baselines, makes one bounded 256 KiB allocation only when the path reports at least 1 MiB available, and runs real write probes before and after that allocation. It does not intentionally fill a filesystem, invent an application alert, or establish a production root cause. Predict the outcomes before running the block, then record the exit status and error text you actually observe.
+
+Run the block in a child shell. The cleanup trap removes only the unique directory created by this run, including its probe files and captured errors.
 
 ```bash
-# Simulate: Fill up /tmp (safely)
-dd if=/dev/zero of=/tmp/bigfile bs=1M count=100 2>/dev/null
+bash <<'EOF'
+set -u
+umask 077
+probe_dir=''
 
-# Now imagine you get alert: "Application failing"
-# Apply methodology:
+cleanup() {
+  local exit_code=$?
+  if [ -n "$probe_dir" ] && [ -d "$probe_dir" ]; then
+    if rm -rf -- "$probe_dir"; then
+      echo "cleanup=removed_this_run_directory"
+    else
+      echo "cleanup_failed=$probe_dir" >&2
+      [ "$exit_code" -eq 0 ] && exit_code=1
+    fi
+  fi
+  exit "$exit_code"
+}
+trap cleanup EXIT
 
-# 1. OBSERVE: What's the symptom?
-echo "Symptom: Application reports 'cannot write file'"
+probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/kubedojo-storage.XXXXXX")"
+setup_rc=$?
+if [ "$setup_rc" -ne 0 ] || [ -z "$probe_dir" ]; then
+  [ "$setup_rc" -eq 0 ] && setup_rc=1
+  echo "setup_failed=mktemp_exit_$setup_rc" >&2
+  exit "$setup_rc"
+fi
+echo "probe_dir=$probe_dir"
 
-# 2. HYPOTHESIZE: What could cause this?
-echo "Hypotheses: 1) Disk full, 2) Permissions, 3) Process limit"
+probe_write() {
+  local label=$1 target=$2 error_file rc
+  error_file="$probe_dir/${label}.stderr"
+  echo "--- $label write probe ---"
+  dd if=/dev/zero of="$target" bs=4K count=1 2>"$error_file"
+  rc=$?
+  echo "write_exit=$rc"
+  if [ -s "$error_file" ]; then
+    echo "stderr:"
+    cat "$error_file"
+  fi
+  return "$rc"
+}
 
-# 3. TEST Hypothesis 1
-df -h /tmp
-# Shows /tmp usage
+echo "--- baseline filesystem ---"
+df -P "$probe_dir"
+echo "--- baseline directory ---"
+du -sh "$probe_dir"
 
-# 4. CONCLUDE
-echo "Root cause: /tmp filled by bigfile"
+probe_write baseline "$probe_dir/baseline.bin"
+baseline_rc=$?
+if [ "$baseline_rc" -ne 0 ]; then
+  echo "baseline_failed=investigate_before_allocation" >&2
+  exit "$baseline_rc"
+fi
 
-# 5. FIX
-rm /tmp/bigfile
-df -h /tmp
+available_kib="$(df -Pk "$probe_dir" | awk 'NR == 2 {print $4}')"
+echo "available_before_allocation_kib=$available_kib"
+case "$available_kib" in
+  ''|*[!0-9]*)
+    echo "capacity_guard=unreadable_no_allocation_attempted" >&2
+    exit 2
+    ;;
+esac
+if [ "$available_kib" -lt 1024 ]; then
+  echo "capacity_guard=less_than_1MiB_no_allocation_attempted" >&2
+  exit 2
+fi
+
+echo "--- bounded allocation: 256 KiB ---"
+allocation_error="$probe_dir/allocation.stderr"
+dd if=/dev/zero of="$probe_dir/allocation.bin" bs=64K count=4 2>"$allocation_error"
+allocation_rc=$?
+echo "allocation_exit=$allocation_rc"
+if [ -s "$allocation_error" ]; then
+  echo "stderr:"
+  cat "$allocation_error"
+fi
+if [ "$allocation_rc" -ne 0 ]; then
+  echo "allocation_failed=record_evidence_and_investigate" >&2
+  exit "$allocation_rc"
+fi
+
+echo "--- post-allocation filesystem ---"
+df -P "$probe_dir"
+echo "--- post-allocation directory ---"
+du -sh "$probe_dir"
+
+probe_write post_allocation "$probe_dir/post.bin"
+post_rc=$?
+if [ "$post_rc" -ne 0 ]; then
+  echo "post_probe_failed=not_proof_of_full_filesystem" >&2
+  exit "$post_rc"
+fi
+echo "post_probe_succeeded=observed_in_this_run"
+EOF
 ```
 
 <details><summary>Solution notes for Part 2</summary>
 
-The correct diagnosis is that `/tmp` usage changed because the exercise created `/tmp/bigfile`. In a real incident you would also ask why the file appeared, whether other filesystems are affected, and whether cleanup is safe. Here the file is intentionally known and removable.
+Record the actual `df -P`, `du -sh`, exit-status, and stderr output; do not replace it with an expected transcript. A successful baseline and post-allocation probe means this bounded test did not support the hypothesis that this path could not accept a write during this run. It does not prove that a service's path, user, quota, inode availability, or filesystem state is healthy. A failed probe is evidence to investigate, not proof by itself that the filesystem is full: compare the relevant `df` result with permissions, read-only state, quotas, inode state, and the service's own error logs. The filesystem-wide `df` result and this run's directory `du` result answer different questions. Explain what additional service-path evidence would be needed before naming a production root cause. The trap removes only resources created under `probe_dir`.
 
 </details>
 
@@ -674,7 +748,7 @@ Your log should show a clear sequence rather than a pile of unrelated output. If
 
 ### Success Criteria
 
-- [ ] Diagnose Linux service failures by applying the scientific method to the simulated problem.
+- [ ] Diagnose a storage hypothesis by applying the scientific method to the guided experiment and recording actual observations.
 - [ ] Triage severity and resource scope using the first minute checks for CPU, memory, disk, network, and failed services.
 - [ ] Reproduce and compare symptoms across users, hosts, pods, or time windows before making changes.
 - [ ] Evaluate hypotheses with read-only tests, one change at a time, and recorded evidence.
@@ -695,6 +769,9 @@ Next, continue to [Module 6.2: Log Analysis](/linux/operations/troubleshooting/m
 ## Sources
 
 - [Google SRE Book - Effective Troubleshooting](https://sre.google/sre-book/effective-troubleshooting/)
+- [GNU coreutils mktemp manual](https://man7.org/linux/man-pages/man1/mktemp.1.html) — Unique temporary directories for the storage experiment.
+- [GNU coreutils df manual](https://man7.org/linux/man-pages/man1/df.1.html) — Filesystem-wide capacity and explicit output units.
+- [GNU coreutils dd manual](https://man7.org/linux/man-pages/man1/dd.1.html) — Bounded block writes and diagnostic output.
 - [Brendan Gregg's USE Method](https://www.brendangregg.com/usemethod.html)
 - [How to Debug Anything — GoRuCo 2014](https://www.youtube.com/watch?v=VV7b7fs4VI8)
 - [Rubber Duck Debugging](https://rubberduckdebugging.com/)

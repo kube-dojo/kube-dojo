@@ -88,10 +88,10 @@ follow-up, not silently re-tiered. Locked via #2141 / #2146 / #2181 / #2187 / #2
 | Score | Description |
 |-------|-------------|
 | **1** | No real-world context. Pure theory or command reference. |
-| **2** | Mentions "in production" but no specific examples or stories. |
-| **3** | Has "Did You Know?" or equivalent. Some real numbers/dates. Generic examples. |
-| **4** | Has war stories with specific (anonymized) companies, financial impact, timeline. "Why This Matters" section opens with a real incident. Common Mistakes table with production-relevant pitfalls. |
-| **5** | Real-world context is integrated throughout, not just in designated sections. Examples use realistic scenarios. Trade-offs are discussed honestly. Reader feels why this matters viscerally. |
+| **2** | Mentions "in production" but gives no concrete context, consequence, or tradeoff. |
+| **3** | Connects the concept to a concrete use case, consequence, or decision; examples may remain generic. |
+| **4** | Explains practical relevance with specific, evidence-backed context, consequences, failure modes, or tradeoffs; common mistakes are tied to realistic decisions. |
+| **5** | Integrates practical context throughout with accurate, bounded examples, competing tradeoffs, and decision guidance; the explanation makes when and why the concept matters clear. |
 
 ### Dimension 5: Assessment Alignment
 
@@ -117,11 +117,11 @@ follow-up, not silently re-tiered. Locked via #2141 / #2146 / #2181 / #2187 / #2
 
 | Score | Description |
 |-------|-------------|
-| **1** | Dry, robotic tone. No hook. Reader would close the tab. |
-| **2** | Functional but boring. Gets the job done but nothing memorable. |
-| **3** | Some personality. "Why This Matters" section present. Analogies used occasionally. |
-| **4** | Conversational, authoritative tone. Strong opening hook. Good analogies. "Did You Know?" facts are genuinely interesting. Reader feels mentored by a senior engineer. |
-| **5** | Memorable. Reader would recommend this module to a colleague. Stories stick. Analogies are vivid and accurate. Humor used sparingly but effectively. Reader feels they understand the topic at a level they couldn't get from official docs. |
+| **1** | Tone or organization obstructs learning; prose is confusing or inaccessible. |
+| **2** | Functional but flat or inconsistent; explanations are readable but weakly signposted. |
+| **3** | Clear, respectful tone with purposeful signposting and examples; engagement comes from relevance and active practice. |
+| **4** | Conversational, authoritative, well-paced explanation with precise examples and useful emphasis; optional devices, when used, are accurate and restrained. |
+| **5** | Memorable through exceptional clarity, cohesion, and usefulness; examples and emphasis deepen the explanation without relying on stories, analogies, humor, mystery, or gamification. |
 
 ### Dimension 8: Practitioner Depth (complexity-scaled)
 

@@ -29,20 +29,20 @@ TASK: Write a complete KubeDojo educational module.
 
 ### Quality Standard: 10/10 on the Dojo Scale
 
-**LENGTH**: 600-800 lines of **content** minimum. This is a deep, rich learning module — not an outline or reference doc. Visual aids (ASCII diagrams, mermaid charts, code blocks used purely for illustration) do NOT count toward the line minimum — they are supplements to the teaching, not substitutes for it.
+**DEPTH AND LENGTH**: Set the module's substantive scope from its topic, measurable outcomes, exercise, assessment, and verified evidence. Line and word counts are planning signals for routing and review; they are not proof of factual support, learning quality, or acceptance. Do not add repeated prose, decorative structure, or unsupported facts to reach a number. If verified material cannot support the requested scope, report the shortfall in the requested output format instead of inventing detail or claiming completion. Visual aids supplement teaching; they do not replace explanation.
 
 **REQUIRED SECTIONS** (in this exact order):
 
 1. **Frontmatter and metadata blockquote** — frontmatter `title:` + `slug:` + `sidebar.order:` (Starlight renders the page H1 from `title:`, so do NOT add a source `# Module X.Y` heading after the frontmatter — this would render as a duplicate visible title). Then a blockquote with `> **Complexity**: ...`, `> **Time to Complete**: ...`, `> **Prerequisites**: ...`, separated by `>` blank-quote lines, terminated with `---`.
 2. **Learning Outcomes** — 3-5 measurable outcomes using Bloom's Taxonomy Level 3+ action verbs: "debug", "design", "evaluate", "compare", "diagnose", "implement". NOT "understand" or "know". Each outcome must be testable by the quiz or exercise.
-3. **Why This Module Matters** — Open with a concrete scenario that makes the operational stakes clear, then transition to what the learner will build or diagnose. Use a real incident only when it is sourced and specific enough to verify. Otherwise label it explicitly with `Hypothetical scenario:` or `Exercise scenario:` so the reader never mistakes invented framing for a real event. 2-3 paragraphs minimum.
+3. **Why This Module Matters** — Open with a clear explanation of why the topic matters and what the learner will build or diagnose. Use a sourced incident or explicitly labeled `Hypothetical scenario:`/`Exercise scenario:` only when it clarifies the outcome. Give the learner enough explanation to connect the stakes to the stated outcome; do not pad this section to meet a paragraph count.
 4. **Core content sections** (3-6 sections) — Each section should include:
    - **Theory before practice** — explain WHY this approach exists, what problem it solves, and what tradeoffs it makes BEFORE showing the commands. Prose must explain concepts between code blocks — never stack 3 code blocks without explanation.
-   - Clear explanations with analogies (treat the reader as a smart beginner)
+   - Clear explanations for a smart beginner; use an analogy only when it clarifies the outcome and state its limits
    - Runnable code blocks (bash, YAML, Go, Python — whatever fits)
    - ASCII diagrams where architecture or flow needs visualization
    - Tables for comparisons, decision matrices, or reference data
-   - Sourced real incident or clearly labeled hypothetical practical example within the section
+   - Sourced real incident or clearly labeled hypothetical practical example when it materially supports the section; omit it when evidence is insufficient
    - **At least 2 inline active learning prompts** across all sections: "Pause and predict: what do you think happens if...?", "Before running this, what output do you expect?", or "Which approach would you choose here and why?"
    - **Cost lens (cross-cutting)** — If the module covers any cloud service, infrastructure component, or operational practice with a measurable price tag, the core content MUST address the cost dimension. At minimum: (a) what does this cost in production at moderate scale, (b) which knobs reduce cost (rightsizing, scheduling, tiering, autoscaling), (c) what makes cost spike unexpectedly (cross-AZ traffic, idle resources, log volume, log-retention defaults). Treat "what does it cost" as a first-class engineering concern alongside "how does it work." Skip only for pure-theory modules (mental models, philosophy, prerequisite concepts) where no cost surface exists.
 5. **Patterns & Anti-Patterns** — Required for `[MEDIUM]`, `[COMPLEX]`, `[ADVANCED]`, `[EXPERT]` modules. For `[QUICK]` introductory modules, this can be a single "When This Doesn't Apply" subsection instead of full patterns/anti-patterns.
@@ -69,7 +69,7 @@ TASK: Write a complete KubeDojo educational module.
 **TONE**:
 - Conversational but authoritative — like a senior engineer mentoring you
 - Explain "why" before "what" — motivation before instruction
-- Use analogies from everyday life to explain abstract concepts
+- Use familiar analogies only when they clarify abstract concepts; state where the mapping stops
 - Be direct and practical — no filler, no corporate-speak
 - When discussing tools, be honest about trade-offs (no marketing language)
 
@@ -110,6 +110,7 @@ TASK: Write a complete KubeDojo educational module.
 **WHAT TO AVOID**:
 - Do NOT repeat the number 47 in timestamps, durations, or counts (this is a known LLM pattern — vary your numbers)
 - Do NOT invent business incidents, client stories, anonymized companies, or anecdotal incident claims. Use sourced real incidents or clearly labeled hypothetical/exercise scenarios.
+- Do NOT add a mystery, clue hunt, or gamification layer solely to make a module engaging.
 - Do NOT write thin outlines — every section needs depth, examples, and explanation
 - Do NOT skip the exercise — it's the most important part for learning
 - Do NOT use emojis

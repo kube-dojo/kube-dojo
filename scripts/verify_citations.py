@@ -6,11 +6,9 @@ cached URL page text and returns a per-claim verdict:
 
     SUPPORTED / UNSUPPORTED / CONTRADICTED / UNREADABLE
 
-This gives 2-LLM independence: Codex researched the claim→URL pairing;
-a different LLM (Gemini by default) now reads the page and decides
-whether the URL actually backs the claim. Session 5 identified this
-as the missing high-trust gate. The fetcher's on-disk cache means the
-verifier never touches the network.
+Cache inputs are read offline without refetching source content. Semantic
+review may call the configured provider; this cache-integrity gate does not
+establish provider identity or author/reviewer independence.
 
 Usage:
     python scripts/verify_citations.py <module-key>
@@ -22,20 +20,26 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from citation_backfill import (  # type: ignore  # noqa: E402
-    CITED_DISPOSITIONS, DOCS_ROOT, REPO_ROOT,
-    dispatch_codex, dispatch_agy, parse_agent_response,
-    resolve_claim_source_urls, resolve_module_path, seed_path_for,
+from citation_backfill import (  # type: ignore
+    CITED_DISPOSITIONS,
+    DOCS_ROOT,
+    REPO_ROOT,
+    dispatch_agy,
+    dispatch_codex,
     load_section_pool,
+    parse_agent_response,
+    resolve_claim_source_urls,
+    resolve_module_path,
+    seed_path_for,
 )
-from fetch_citation import cached_text_path, fetch  # type: ignore  # noqa: E402
-
+from fetch_citation import cached_text_path  # type: ignore
 
 VERDICT_DIR = REPO_ROOT / ".pipeline" / "citation-verdicts"
 MAX_PAGE_CHARS = 40_000
@@ -102,14 +106,101 @@ def build_verify_prompt(claim_text: str, claim_class: str,
     )
 
 
+def _read_cached_source(url: str) -> dict[str, Any]:
+    text_path = cached_text_path(url)
+    meta_path = text_path.with_suffix(".json")
+    if not text_path.exists():
+        return {"error": "cache_text_missing"}
+    if not meta_path.exists():
+        return {"error": "cache_metadata_missing"}
+    try:
+        metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {"error": "cache_metadata_malformed"}
+    if not isinstance(metadata, dict):
+        return {"error": "cache_metadata_not_object"}
+
+    required = ("url", "final_url", "status", "issues", "truncated",
+                "text_sha256", "text_bytes", "fetch_attempt_completed_at")
+    missing = next((key for key in required if key not in metadata), None)
+    if missing:
+        return {"error": f"cache_metadata_missing_{missing}"}
+    if metadata["url"] != url:
+        return {"error": "cache_source_url_mismatch"}
+    final_url = metadata["final_url"]
+    if not isinstance(final_url, str) or not final_url:
+        return {"error": "cache_final_url_invalid"}
+    status = metadata["status"]
+    if not isinstance(status, int) or isinstance(status, bool):
+        return {"error": "cache_status_invalid"}
+    if status < 200 or status >= 400:
+        return {"error": f"cache_http_status_{status}"}
+    issues = metadata["issues"]
+    if not isinstance(issues, list):
+        return {"error": "cache_issues_invalid"}
+    if issues:
+        return {"error": "cache_issues:" + ",".join(map(str, issues))}
+    if metadata["truncated"] is not False:
+        return {"error": "cache_text_truncated"}
+    digest = metadata["text_sha256"]
+    if not isinstance(digest, str) or len(digest) != 64 or any(
+        char not in "0123456789abcdef" for char in digest
+    ):
+        return {"error": "cache_text_sha256_invalid"}
+    byte_count = metadata["text_bytes"]
+    if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count < 0:
+        return {"error": "cache_text_bytes_invalid"}
+    completed_at = metadata["fetch_attempt_completed_at"]
+    if not isinstance(completed_at, str) or not completed_at:
+        return {"error": "cache_fetch_attempt_completed_at_missing"}
+    try:
+        _dt.datetime.fromisoformat(completed_at)
+    except ValueError:
+        return {"error": "cache_fetch_attempt_completed_at_invalid"}
+    try:
+        body = text_path.read_bytes()
+    except OSError:
+        return {"error": "cache_text_unreadable"}
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"error": "cache_text_invalid_utf8"}
+    if hashlib.sha256(body).hexdigest() != digest:
+        return {"error": "cache_text_sha256_mismatch"}
+    if len(body) != byte_count:
+        return {"error": "cache_text_bytes_mismatch"}
+    return {
+        "text": text,
+        "source_url": url,
+        "final_url": final_url,
+        "text_sha256": digest,
+        "text_bytes": byte_count,
+        "fetch_attempt_completed_at": completed_at,
+    }
+
+
 def load_page_text(url: str) -> str | None:
-    """Return cached text for a URL, fetching if cache miss."""
-    cache_path = cached_text_path(url)
-    if not cache_path.exists():
-        fetch(url)
-    if not cache_path.exists():
-        return None
-    return cache_path.read_text(encoding="utf-8", errors="replace")
+    """Return validated cached text without fetching or repairing cache state."""
+    record = _read_cached_source(url)
+    return record.get("text") if "text" in record else None
+
+
+def _verdict_provenance(record: dict[str, Any], prompt: str,
+                        page_text: str) -> dict[str, Any]:
+    source_chars = len(page_text)
+    clipped_chars = max(source_chars - MAX_PAGE_CHARS, 0)
+    return {
+        "source_url": record["source_url"],
+        "final_url": record["final_url"],
+        "text_sha256": record["text_sha256"],
+        "text_bytes": record["text_bytes"],
+        "fetch_attempt_completed_at": record["fetch_attempt_completed_at"],
+        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "source_text_clipped": bool(clipped_chars),
+        "source_text_chars": source_chars,
+        "source_text_chars_used": min(source_chars, MAX_PAGE_CHARS),
+        "source_text_chars_clipped": clipped_chars,
+    }
 
 
 def verify_claim(claim: dict[str, Any], *, agent: str,
@@ -123,12 +214,18 @@ def verify_claim(claim: dict[str, Any], *, agent: str,
     if not url or not claim_text:
         return {"claim_id": claim_id, "verdict": "UNREADABLE",
                 "reason": "missing_url_or_claim_text"}
-    page_text = load_page_text(url)
-    if page_text is None or len(page_text) < 200:
+    cached = _read_cached_source(url)
+    if "error" in cached:
+        return {"claim_id": claim_id, "verdict": "UNREADABLE",
+                "reason": cached["error"]}
+    page_text = cached["text"]
+    if len(page_text) < 200:
         return {"claim_id": claim_id, "verdict": "UNREADABLE",
                 "reason": f"cached_text_missing_or_too_short"
-                          f"({len(page_text or '')})"}
+                          f"({len(page_text)})"}
     prompt = build_verify_prompt(claim_text, claim_class, url, page_text)
+    provenance = _verdict_provenance(cached, prompt, page_text)
+    base = {"claim_id": claim_id, "url": url, **provenance}
     ts = _dt.datetime.now(_dt.UTC).strftime("%H%M%SZ")
     task_id = f"verify-{module_key.replace('/', '-')}-{claim_id}-{ts}"
     if agent == "codex":
@@ -136,19 +233,18 @@ def verify_claim(claim: dict[str, Any], *, agent: str,
     elif agent == "agy":
         ok, raw = dispatch_agy(prompt)
     else:
-        return {"claim_id": claim_id, "verdict": "UNREADABLE",
+        return {**base, "verdict": "UNREADABLE",
                 "reason": f"unknown_agent:{agent}"}
     if not ok:
-        return {"claim_id": claim_id, "verdict": "UNREADABLE",
+        return {**base, "verdict": "UNREADABLE",
                 "reason": f"dispatch_failed:{raw[-200:]}"}
     try:
         parsed = parse_agent_response(raw)
     except Exception as exc:  # noqa: BLE001
-        return {"claim_id": claim_id, "verdict": "UNREADABLE",
+        return {**base, "verdict": "UNREADABLE",
                 "reason": f"parse_failed:{exc}",
                 "raw_tail": raw[-200:]}
-    parsed["claim_id"] = claim_id
-    parsed["url"] = url
+    parsed.update(base)
     return parsed
 
 

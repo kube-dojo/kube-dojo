@@ -5,14 +5,14 @@ sidebar:
   label: "Fundamentals"
 ---
 
-**Start here if you want the shortest path from beginner fundamentals to Kubernetes and platform work.**
+**Start here for the beginner foundations that lead into Kubernetes and platform work.**
 
 This hub is the front door to KubeDojo. It covers the terminal, containers, Kubernetes basics, declarative thinking, Git, and modern delivery practices.
 
 ## Who This Is For
 
 - absolute beginners who need a real starting point
-- learners who want the shortest route into cloud-native systems
+- learners who want a structured route into cloud-native systems
 - people who need enough fundamentals before choosing Linux, Kubernetes, cloud, platform, AI literacy, or AI/ML depth
 
 ## Do Not Skip This If
@@ -21,7 +21,9 @@ This hub is the front door to KubeDojo. It covers the terminal, containers, Kube
 - Kubernetes terminology still feels abstract
 - you are tempted to jump straight into advanced tracks because they look interesting
 
-Most confusion later in the curriculum comes from skipping this layer too early.
+This layer gives later tracks a shared foundation; use it when these topics are unfamiliar.
+
+> **Optional first-terminal preview:** You can preview the existing [terminal opening and prompt guide](zero-to-terminal/module-0.2-what-is-a-terminal/#opening-the-terminal-and-reading-the-prompt) and [first safe-command exercise](zero-to-terminal/module-0.2-what-is-a-terminal/#hands-on-exercise-your-first-terminal-session) before starting the full sequence. Return here and follow [Zero to Terminal](zero-to-terminal/) in order; the preview does not replace its modules. Use Module 0.2's own platform guidance before attempting its exercise.
 
 ---
 
@@ -157,7 +159,7 @@ If a learner skips the Git path, they can still read later modules, but they wil
 - `Prerequisites -> AI/ML Engineering` if you already know you want to build AI systems, run local models, or move toward MLOps
 - `Prerequisites -> Modern DevOps` should usually mean `Zero to Terminal -> Git Deep Dive -> Modern DevOps`, not a direct jump that skips Git maturity
 
-`Platform Engineering` is usually not the immediate next stop for beginners. Most learners should reach it through Kubernetes, Linux, or Cloud first.
+For a beginner route, place `Platform Engineering` after Kubernetes, Linux, or Cloud foundations rather than making it the immediate next stop.
 
 ---
 

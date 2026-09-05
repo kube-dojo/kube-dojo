@@ -314,7 +314,7 @@ A spam filter may combine rules and machine learning because it can block messag
 
 ## Next Module
 
-Continue to [What Are LLMs?](./module-1.2-what-are-llms/) to learn why modern chatbots can respond in natural language and why that ability is useful but not the same as guaranteed understanding.
+Continue to [What Are LLMs?](/ai/foundations/module-1.2-what-are-llms/) to learn why modern chatbots can respond in natural language and why that ability is useful but not the same as guaranteed understanding.
 
 ## Sources
 
