@@ -48,37 +48,6 @@ function isComplete(slug: string): boolean {
   return slug in getProgress();
 }
 
-function getTrackProgress(trackPrefix: string): { completed: number; total: number } {
-  const data = getProgress();
-  const sidebarLinks = document.querySelectorAll('.kd-sb a[href]');
-  let total = 0;
-  let completed = 0;
-  sidebarLinks.forEach((link) => {
-    const href = (link as HTMLAnchorElement).pathname;
-    if (href.startsWith(`/${trackPrefix}`)) {
-      total++;
-      const slug = href.replace(/^\/|\/$/g, '');
-      if (data[slug]) completed++;
-    }
-  });
-  return { completed, total };
-}
-
-function exportProgress(): string {
-  return JSON.stringify(getProgress(), null, 2);
-}
-
-function importProgress(json: string): boolean {
-  try {
-    const data = JSON.parse(json);
-    if (typeof data !== 'object') return false;
-    saveProgress(data);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ===== UI: Mark Complete Button =====
 
 function injectCompleteButton(): void {
