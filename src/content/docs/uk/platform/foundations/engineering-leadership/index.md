@@ -1,6 +1,6 @@
 ---
 title: "Інженерне лідерство"
-slug: uk/platform/foundations/engineering-leadership/index
+slug: uk/platform/foundations/engineering-leadership
 sidebar:
   order: 0
   label: "Інженерне лідерство"

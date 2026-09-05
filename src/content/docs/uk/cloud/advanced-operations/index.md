@@ -1,6 +1,6 @@
 ---
 title: "Просунуті хмарні операції"
-slug: uk/cloud/advanced-operations/index
+slug: uk/cloud/advanced-operations
 sidebar:
   order: 0
   label: "Просунуті операції"

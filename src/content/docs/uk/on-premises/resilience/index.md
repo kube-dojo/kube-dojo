@@ -1,6 +1,6 @@
 ---
 title: "Відмовостійкість та міграція"
-slug: uk/on-premises/resilience/index
+slug: uk/on-premises/resilience
 sidebar:
   order: 0
 en_commit: "b786b1cd55e06502c1f698c42c8b5cb69a303e93"

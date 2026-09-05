@@ -1,6 +1,6 @@
 ---
 title: "Просунуті мережі"
-slug: "uk/platform/foundations/advanced-networking/index"
+slug: "uk/platform/foundations/advanced-networking"
 sidebar:
   order: 0
   label: "Просунуті мережі"
