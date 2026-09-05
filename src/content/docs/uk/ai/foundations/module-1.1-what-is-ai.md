@@ -16,7 +16,7 @@ en_file: "src/content/docs/ai/foundations/module-1.1-what-is-ai.md"
 
 ---
 
-## Результати навчання
+## Що ви зможете зробити
 
 Після цього модуля ви зможете:
 
