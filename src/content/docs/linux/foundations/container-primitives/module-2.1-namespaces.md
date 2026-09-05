@@ -238,33 +238,13 @@ flowchart TD
     HostVethB --- EthB
 ```
 
-Create a named network namespace with `ip netns`. Named namespaces are convenient for learning because the `ip` tool stores bind mounts under `/var/run/netns`, making the namespace easy to list, enter, and delete. This is not exactly how every container runtime manages namespaces, but it teaches the same kernel mechanism.
+Create a named network namespace with `ip netns`. Named namespaces are convenient for learning because the `ip` tool stores bind mounts under `/var/run/netns`, making the namespace easy to list, enter, and delete. This is not exactly how every container runtime manages namespaces, but it teaches the same kernel mechanism. [Part 3 of the hands-on exercise](#part-3-create-a-network-namespace) combines these observations with ownership checks and cleanup traps.
 
-```bash
-sudo ip netns add lab-net
-ip netns list
-sudo ip netns exec lab-net ip addr
-```
+In the exercise's test run, the fresh namespace showed only a loopback interface, initially down. Bringing `lo` up configured loopback addresses; the exercise did not add an interface connecting this namespace to another network. Loopback is local delivery, not an external connection.
 
-The loopback interface is usually present but down. Bring it up and inspect the route table. You should still have no external connectivity because a loopback device is not a path to any other network namespace.
+The route table deserves one precise distinction. Linux keeps several routing tables: per [ip-route(8)](https://man7.org/linux/man-pages/man8/ip-route.8.html), normal routes go into the `main` table (ID 254), while routes for local and broadcast addresses live in the `local` table (ID 255), which the kernel maintains automatically. `ip route show` displays table `main` by default. When you bring `lo` up, the kernel places the loopback routes in the `local` table, so the IPv4 `main` table stays empty. An empty `main` table is therefore not the same as "no routes at all": the namespace can still deliver to its own loopback addresses, it just has no route toward anything beyond itself.
 
-```bash
-sudo ip netns exec lab-net ip link set lo up
-sudo ip netns exec lab-net ip addr show lo
-sudo ip netns exec lab-net ip route
-```
-
-Now try a ping from inside the namespace. This command is expected to fail on many systems because there is no route out, and some environments also block ICMP. The failure is useful because it proves that creating a namespace alone does not create connectivity.
-
-```bash
-sudo ip netns exec lab-net ping -c 1 8.8.8.8
-```
-
-Delete the namespace when you finish the observation. Cleaning up matters because named network namespaces persist until deleted. Leaving lab namespaces behind can confuse later experiments and make `ip netns list` look like a production state.
-
-```bash
-sudo ip netns delete lab-net
-```
+Deleting the name is also more subtle than it looks. Per [ip-netns(8)](https://man7.org/linux/man-pages/man8/ip-netns.8.html), `ip netns delete` unmounts and removes the named entry under `/var/run/netns`, but the namespace itself is freed only when its last user goes away. A running process or an open file descriptor can keep the namespace alive after its name is gone, so a missing entry in `ip netns list` does not by itself prove the namespace ceased to exist.
 
 > **Active learning prompt:** Two containers in the same pod can both reach an application on `localhost`, but two containers in different pods cannot use `localhost` to reach each other. Decide which namespace sharing decision explains the difference before reading the Kubernetes section.
 
@@ -591,7 +571,7 @@ This sequence is slower than guessing for the first five minutes and faster for 
 | Enabling `hostNetwork` to fix unknown network failures | It removes network isolation and introduces node-level port conflicts | Diagnose routes, DNS, and Services before choosing host networking |
 | Confusing container root with host root | User namespace mappings and capabilities change what UID `0` can actually do | Inspect `uid_map`, capabilities, and mounted host paths before judging privilege |
 | Entering every namespace at once during debugging | A full namespace entry can hide which boundary mattered and increases accidental change risk | Enter the smallest namespace set needed for the symptom |
-| Leaving lab network namespaces or mounts behind | Persistent named namespaces and mounts can pollute later tests | Delete `ip netns` labs and unmount temporary filesystems after experiments |
+| Leaving lab network namespaces or mounts behind | Persistent named namespaces and mounts can pollute later tests | Clean up only names and paths created by your run; investigate failed cleanup instead of deleting unrelated resources |
 
 ## Quiz
 
@@ -745,34 +725,72 @@ exit
 
 ### Part 3: Create a Network Namespace
 
-Create a named network namespace and inspect its default state. Expect isolation, not connectivity. A new namespace with only loopback and no route is working as designed.
+Use a **root shell on a disposable Linux lab machine** with `iproute2`, `mktemp`, and `rmdir` available. The block below was exercised as root (UID 0) with iproute2-6.1.0 on kernel 7.0.14-orbstack. It does not test your machine's `sudo` policy, and its observations are not proof of identical behavior on other kernels, distributions, or `iproute2` versions.
+
+Before running it, predict what will change when loopback comes up. Which output would show a local address, and which would show a route beyond the namespace? Compare your prediction with the address and route-table observations below. This exercise inspects configuration; it does not send a ping or test external connectivity.
+
+Paste the complete block into the root shell. `bash` is explicit because the script uses Bash syntax, and the quoted `<<'LAB'` delimiter matters: without the quotes, your interactive shell would expand variables such as `$lab_dir` before the script ever runs. Do not paste the inner commands directly into your session, because `set -eu` and the exit trap are meant for a lab shell that exits when the block ends.
 
 ```bash
-sudo ip netns add kd-lab-net
-ip netns list
-sudo ip netns exec kd-lab-net ip addr
-sudo ip netns exec kd-lab-net ip route
+bash <<'LAB'
+set -eu
+for tool in ip mktemp rmdir; do
+    command -v "$tool" >/dev/null || { printf 'Missing tool: %s\n' "$tool" >&2; exit 1; }
+done
+lab_dir=''
+lab_name=''
+created=0
+cleanup() {
+    status=$?
+    trap - EXIT
+    trap '' INT TERM
+    if [ "$created" -eq 1 ]; then
+        if ! ip netns delete "$lab_name"; then
+            printf 'Namespace cleanup failed: %s\n' "$lab_name" >&2
+            if [ "$status" -eq 0 ]; then status=1; fi
+        fi
+    fi
+    if [ -n "$lab_dir" ] && ! rmdir -- "$lab_dir"; then
+        printf 'Directory cleanup refused: %s\n' "$lab_dir" >&2
+        if [ "$status" -eq 0 ]; then status=1; fi
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+lab_dir=$(mktemp -d /tmp/kd-netns.XXXXXX)
+lab_name=${lab_dir##*/}
+printf 'Reserved directory: %s\nNamespace name: %s\n' "$lab_dir" "$lab_name"
+ip netns add "$lab_name"
+created=1
+ip -n "$lab_name" -brief address show
+ip -n "$lab_name" link set lo up
+ip -n "$lab_name" -brief address show lo
+routes=$(ip -n "$lab_name" -4 route show table main)
+if [ -n "$routes" ]; then
+    printf 'FAIL: unexpected IPv4 main routes:\n%s\n' "$routes" >&2
+    exit 1
+fi
+printf 'PASS: loopback is configured; the IPv4 main route table is empty\n'
+LAB
 ```
 
-Bring up loopback and try a connectivity test. The ping may fail because there is still no external route. That failure is useful evidence that namespaces do not automatically create network plumbing.
+The name comes from a temporary directory on purpose. `mktemp -d` creates a fresh, uniquely named directory, and its basename is only a *candidate* string for the namespace name. The name is actually reserved by `ip netns add`, which per [ip-netns(8)](https://man7.org/linux/man-pages/man8/ip-netns.8.html) creates the namespace only if the name is available in `/var/run/netns` and fails on a collision. The `created=1` flag is set only *after* `ip netns add` succeeds, so if the add fails because the name is already taken, cleanup will not delete a namespace that this run did not create.
 
-```bash
-sudo ip netns exec kd-lab-net ip link set lo up
-sudo ip netns exec kd-lab-net ip addr show lo
-sudo ip netns exec kd-lab-net ping -c 1 8.8.8.8
-```
+Cleanup is deliberately narrow. The exit trap deletes only the one named namespace this run successfully created and removes only the one empty directory this run created, with every variable quoted. `rmdir` refuses a non-empty directory, so a stray file left by something else produces a reported refusal instead of a recursive deletion. Remember also what deletion proves: as the theory section noted, removing the name does not by itself prove the namespace ceased to exist, because other users can keep it alive.
 
-Clean up the named namespace. Confirm it no longer appears in the list.
+The route check is precise about what it asserts. The script inspects the IPv4 `main` table explicitly with `ip -4 route show table main`. Per [ip-route(8)](https://man7.org/linux/man-pages/man8/ip-route.8.html), `main` (ID 254) holds normal routes while loopback's local and broadcast routes live in the kernel-maintained `local` table (ID 255). An empty IPv4 `main` table alongside a configured loopback is the expected, healthy state — not a claim that the namespace has no routes at all.
 
-```bash
-sudo ip netns delete kd-lab-net
-ip netns list
-```
+After the block exits, run `ip netns list` and check that the printed namespace name is absent. The `PASS` line describes the route observation before cleanup; a later cleanup error still requires investigation. Do not treat that line alone as completion.
+
+This exercise starts no background processes and moves no physical devices into the namespace. SIGKILL cannot run the trap, so a killed shell may leave resources for inspection. Interruption during creation or before `created=1` can also leave an entry that the trap does not remove. Cleanup attempts are not a guarantee against every interruption; use the printed name to investigate, and do not delete another run's namespace. Running through `sudo` and arbitrary terminal-interruption behavior were not tested.
 
 #### Success Criteria for Part 3
 
-- [ ] You created and deleted a named network namespace.
-- [ ] You observed that a new network namespace does not automatically have an external route.
+- [ ] You created a named network namespace and confirmed its printed name was absent after cleanup.
+- [ ] You observed a configured loopback and an empty IPv4 `main` route table; you can explain why neither adds an external connection.
+- [ ] You can explain why the `created` flag is set only after `ip netns add` succeeds.
 - [ ] You can explain why `localhost` changes meaning across network namespaces.
 
 ### Part 4: Create a Mount Namespace
@@ -887,7 +905,7 @@ Scenario D: A minimal image has no network tools, but you need to inspect its ro
 
 - [ ] You inspected namespace membership through `/proc/<pid>/ns`.
 - [ ] You created PID, network, mount, UTS, and IPC namespaces in a lab.
-- [ ] You cleaned up the named network namespace after use.
+- [ ] You cleaned up the named network namespace after use, or confirmed the lab script's exit trap removed it.
 - [ ] You explained at least one interaction between two namespace types.
 - [ ] You designed a targeted debugging plan for a realistic container symptom.
 
@@ -899,6 +917,8 @@ Scenario D: A minimal image has no network tools, but you need to inspect its ro
 - [Linux mount_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/mount_namespaces.7.html)
 - [util-linux unshare: namespace lifetime and explicit propagation](https://man7.org/linux/man-pages/man1/unshare.1.html)
 - [util-linux findmnt: mount-table queries and exit status](https://man7.org/linux/man-pages/man8/findmnt.8.html)
+- [iproute2 ip-netns: named namespace creation, deletion, and name lifetime](https://man7.org/linux/man-pages/man8/ip-netns.8.html)
+- [iproute2 ip-route: main and local routing tables](https://man7.org/linux/man-pages/man8/ip-route.8.html)
 - [Linux user_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/user_namespaces.7.html)
 - [Linux ipc_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/ipc_namespaces.7.html)
 - [Linux uts_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/uts_namespaces.7.html)
