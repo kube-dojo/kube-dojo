@@ -49,7 +49,7 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **All-or-none neuron** — Idealisation of the biological neuron in which firing is binary: at any time step the neuron either fires (output 1) or does not (output 0). One of the five assumptions on visible p. 101 of the 1990 reprint of the 1943 paper.
-- **Threshold-logic gate** — A unit that fires when enough excitatory synapses are active and no inhibitory input blocks it. The paper constructs conjunction, disjunction, and *conjoined negation*: one input excites the output while another can inhibit it. Inhibition alone does not supply excitation.
+- **Threshold-logic gate** — A unit that fires when enough excitatory synapses are active and no inhibitory input blocks it. The paper constructs conjunction, disjunction, and *conjoined negation*: one input excites the output while another can inhibit it.
 - **Net without circles** — A McCulloch-Pitts network with no feedback loops. Its realizability results require the paper's stated truth-table and temporal-expression conditions; they do not license an unqualified claim about every logical form.
 - **Net with circles** — A network containing feedback loops, so present firing can depend on earlier activity. Kleene later treats such nets in a finite-state framework under stated conditions; this does not make an entire biological nervous system a finite automaton.
 - **Theorem 7** — A representation result for the paper's specified rule of synaptic alteration: the assumed connection changes can be represented by a fixed net with circles ([1990 reprint, visible p. 108](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=10)). This does not guarantee that the rule will train a network to perform a chosen task.
@@ -75,9 +75,9 @@ It is a common misconception that McCulloch and Pitts were the first to bring ma
 
 McCulloch had been searching for a logical foundation for nervous activity since his years at Yale and Columbia. He envisioned a Leibnizian project—an "alphabet of thought" where the complex, messy operations of the mind could be reduced to discrete, fundamental logical units. However, the prevailing mathematical biophysics of the Rashevsky school was built on continuous mathematics. It modeled the diffusion of chemical exciters and the smooth, continuous dynamics of electrical potentials in the cell membrane. McCulloch required a different symbolic apparatus to represent thought as computation.
 
-He found it in the mathematical logic of the era. The 1943 paper explicitly adopted the symbolic notation of Rudolf Carnap's 1938 *The Logical Syntax of Language*, referring to it as "Language II of Carnap," and augmented it with notations drawn from the second edition of Russell and Whitehead's *Principia Mathematica* (published between 1925 and 1927). The literature list at page 131 of the paper named a third borrowing as well: David Hilbert and Wilhelm Ackermann's 1928 *Grundzüge der Theoretischen Logik*, the textbook of mathematical logic from whose machinery the paper would later derive the Hilbert disjunctive normal form used in its handling of recursive predicates. The 1943 paper did not take its decisive novelty from Rashevsky-style biophysics; it borrowed the symbolic technology of the 1920s and 1930s mathematical-logic tradition. Carnap, Russell, and Hilbert provided the syntax; Pitts provided the technical capability to wield it.
+He found it in the mathematical logic of the era. The 1943 paper explicitly adopted the symbolic notation of Rudolf Carnap's 1938 *The Logical Syntax of Language*, referring to it as "Language II of Carnap," and augmented it with notations drawn from the second edition of Russell and Whitehead's *Principia Mathematica* (published between 1925 and 1927). Hilbert and Ackermann appear too, but the paper's citations disagree: the literature list prints 1927, while the Theorem 3 discussion prints 1938 ([reprint pp. 104 and 115](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=17)). Independent edition metadata identifies a 1928 edition of their *Grundzüge der theoretischen Logik*; that does not establish which edition the authors used. The 1943 paper did not take its decisive novelty from Rashevsky-style biophysics; it borrowed the symbolic technology of the 1920s and 1930s mathematical-logic tradition. Carnap, Russell, and Hilbert provided the syntax; Pitts provided the technical capability to wield it.
 
-The choice of venue carried its own weight. The *Bulletin of Mathematical Biophysics* was a Rashevsky-controlled journal, and to publish there was to publish inside the existing community rather than outside it. McCulloch's joint affiliation across the Illinois Neuropsychiatric Institute and the University of Chicago—reproduced verbatim in the author block on page 115—placed the paper at the seam between clinical neurophysiology and the Chicago mathematical-biophysics circle. Pitts, with no formal affiliation, appeared on the page as McCulloch's collaborator rather than as anyone's student.
+The choice of venue carried its own weight. The *Bulletin of Mathematical Biophysics* was a Rashevsky-controlled journal, and to publish there was to publish inside the existing community rather than outside it. McCulloch's joint affiliation across the Illinois Neuropsychiatric Institute and the University of Chicago—reproduced verbatim in the author block on [visible reprint p. 99](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=1)—placed the paper at the seam between clinical neurophysiology and the Chicago mathematical-biophysics circle. Pitts, with no formal affiliation, appeared on the page as McCulloch's collaborator rather than as anyone's student.
 
 Piccinini locates the 1943 paper's contribution in its use of symbolic logic and computation within an existing mathematical-biophysics community. Hebb's 1949 introduction names Rashevsky, Pitts, Householder, Landahl, McCulloch and others working mathematically on populations of neurons. He also qualifies the discussion: the preliminary studies had greatly simplified the psychological problem, and further results were needed before their success could be judged ([printed xi–xii; scan pages 7–8](https://pure.mpg.de/rest/items/item_2346268/component/file_2346267/content#page=7)). The list supplies context; it does not establish a chain of influence.
 
@@ -91,7 +91,38 @@ The five assumptions begin on visible p. 101 of the [1990 reprint](https://www.c
 
 Having established these physical constraints, McCulloch and Pitts introduced their symbolic notation. They denoted the proposition "neuron $i$ fires at time $t$" by the expression $N_i(t)$. To handle the progression of time across synapses, they defined a temporal-shift functor $S$, such that $S(P)(t) \equiv P(t-1)$. This meant that if a neuron fired, the logical consequence of that firing would propagate to the next neuron with a precise delay of one time step. The notational apparatus drew on three traditions at once: Carnap's syntactical conventions appeared in boldface, the *Principia* tradition supplied dots as grouping devices, and an inverted-E existential operator was, for typographical convenience in the journal's typesetting, replaced by an upright `E`. An arrow stood for implication. The reader of the 1943 paper was assumed to have absorbed *Principia Mathematica* and *The Logical Syntax of Language* as background; the paper made no concession to a reader unfamiliar with formal logic.
 
-Figure 1 turns the notation into small networks. Its conjunction network needs both inputs; its disjunction network needs either one. The inhibition example is more revealing: Figure 1d represents $N_3(t) \equiv N_1(t-1) \land \neg N_2(t-1)$. Input 1 must excite the output, and input 2 must not inhibit it. If neither input fires, the output stays silent: removing inhibition does not create the excitation it needs. This is **conjoined negation**, not a standalone NOT gate. The one-step delay also matters: the output at time $t$ depends on the inputs at the preceding step (reprint pp. 104–105).
+Figure 1 turns the notation into small networks. Its conjunction network needs both inputs; its disjunction network needs either one. The inhibition example is more revealing: Figure 1d represents $N_3(t) \equiv N_1(t-1) \land \neg N_2(t-1)$. Input 1 must excite the output, and input 2 must not inhibit it. This is **conjoined negation**, not a standalone NOT gate. The one-step delay also matters: the output at time $t$ depends on the inputs at the preceding step (reprint pp. 104–105).
+
+### Try the Abstraction: Will the Output Fire?
+
+Try Figure 1d in the [1990 reprint, visible p. 105](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=7). This is a reader exercise derived from its formula, not a historical experiment or a measurement of biological neurons. Input 1 supplies excitation; input 2 supplies inhibition. The output at the next step is:
+
+$N_3(t) = N_1(t-1) \land \neg N_2(t-1).$
+
+Before opening the answer, fill in the four outputs. A `1` means firing; a `0` means silence.
+
+| Input 1 at the preceding step | Input 2 at the preceding step | Output at the next step |
+|---|---|---|
+| 0 | 0 | Predict |
+| 0 | 1 | Predict |
+| 1 | 0 | Predict |
+| 1 | 1 | Predict |
+
+<details>
+<summary>Check your four predictions</summary>
+
+The outputs, in row order, are **0, 0, 1, 0**. Only the third row provides excitation without inhibition. In the first row nothing inhibits the output, but nothing excites it either. That is why this circuit expresses *input 1 AND NOT input 2*, rather than simply *NOT input 2*. All four answers concern the next step; they do not imply an instantaneous response.
+
+</details>
+
+Now change the question: suppose the desired next-step outputs are `1, 0, 1, 0`. Can this same formula produce them? Identify the row that decides the question before opening the explanation.
+
+<details>
+<summary>Check the changed specification</summary>
+
+No. The first row now requires firing when both inputs are silent, but the formula produces `0`. Those desired outputs describe NOT input 2. This mismatch proves that the displayed formula does not meet the new specification; it does not prove that every possible network construction is incapable of doing so. Specifying a behavior, constructing a network that realizes it, and finding a way to learn that behavior are separate tasks. The four-row calculation addresses the first two for this one fixed circuit; it supplies no learning procedure.
+
+</details>
 
 The paper builds larger networks from these operations and delays, but it states conditions on the expressions it can realize. Theorem 2 concerns its defined *temporal propositional expressions* and nets of order zero—nets without circles. The preceding discussion distinguishes narrow and extended realizability and uses the extended sense for the following theorems. Theorem 3 supplies further conditions on when a logical sentence qualifies (reprint pp. 102–104). The result is a correspondence within that formal model, not a promise that any arbitrarily written logical sentence has the same construction.
 
@@ -130,44 +161,15 @@ In these inspected passages, Hebb offers a verbal cellular hypothesis, not a wor
 
 The two questions should remain separate. Theorem 7 concerns a model's assumed connection changes and their representation by circuits; it does not establish that every form of biological learning preserves a logical structure. The authors themselves distinguish formal equivalence from physiological explanation ([reprint p. 101](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=3)). We can now distinguish three questions: what might change in nervous tissue, what a chosen circuit represents, and how a system could learn a desired behavior. A construction that answers one does not automatically answer the others.
 
-Piccinini's historical interpretation identifies four major contributions of the 1943 paper: it introduced a formalism whose refinement led directly to the theory of finite automata; it provided a technique that inspired digital logic design; it marked the first use of computation to address the mind-body problem; and it stood as the first modern computational theory of mind and brain.
+## What the Abstraction Made Possible
 
-What could an idealized neuron have to do with a computing machine? John von Neumann's *First Draft of a Report on the EDVAC*, dated June 30, 1945, gives us a concrete connection. In §4.2, the report explicitly cites Pitts and McCulloch's 1943 paper while setting aside complications of neuron functioning. The following paragraph says that the simplified functions can be imitated by telegraph relays or vacuum tubes ([printed pp. 12–13; archive scan pages 35 and 37](https://archive.org/download/firstdraftofrepo00vonn/firstdraftofrepo00vonn.pdf#page=35)). The interesting move is the comparison itself: a proposed computing element and an idealized neuron could perform the same simplified function. This passage documents that connection; it does not establish that the paper was the report's only citation or explain the whole subsequent development of computer architecture.
+These distinctions also help us assess the paper's historical reach. Piccinini's historical interpretation identifies four major contributions of the 1943 paper: it introduced a formalism whose refinement led directly to the theory of finite automata; it provided a technique that inspired digital logic design; it marked the first use of computation to address the mind-body problem; and it stood as the first modern computational theory of mind and brain.
 
-In 1959, Lettvin, Maturana, McCulloch, and Pitts investigated a different question: what information does a frog's eye send to its brain? Recording individual optic-nerve fibers, they found responses chiefly associated with local patterns of light variation. Their paper, [*What the Frog's Eye Tells the Frog's Brain*](https://stuff.mit.edu/afs/athena/course/9/9.49/www/Supplementary/Frog.pdf#page=1), argued that the eye was already organizing visual information before sending it onward. The authors explicitly restricted their interpretation to frogs. That gives us a concrete question to carry forward: how much processing has already happened before a signal reaches the brain?
+One connection can be checked directly in a later technical report. What could an idealized neuron have to do with a computing machine? John von Neumann's *First Draft of a Report on the EDVAC*, dated June 30, 1945, gives us a concrete connection. In §4.2, the report explicitly cites Pitts and McCulloch's 1943 paper while setting aside complications of neuron functioning. The following paragraph says that the simplified functions can be imitated by telegraph relays or vacuum tubes ([printed pp. 12–13; archive scan pages 35 and 37](https://archive.org/download/firstdraftofrepo00vonn/firstdraftofrepo00vonn.pdf#page=35)). The interesting move is the comparison itself: a proposed computing element and an idealized neuron could perform the same simplified function. This passage documents that connection; it does not establish that the paper was the report's only citation or explain the whole subsequent development of computer architecture.
+
+The comparison with computing elements does not settle what real neurons do. In 1959, Lettvin, Maturana, McCulloch, and Pitts investigated a different question: what information does a frog's eye send to its brain? Recording individual optic-nerve fibers, they found responses chiefly associated with local patterns of light variation. Their paper, [*What the Frog's Eye Tells the Frog's Brain*](https://stuff.mit.edu/afs/athena/course/9/9.49/www/Supplementary/Frog.pdf#page=1), argued that the eye was already organizing visual information before sending it onward. The authors explicitly restricted their interpretation to frogs. That gives us a concrete question to carry forward: how much processing has already happened before a signal reaches the brain?
 
 The 1943 paper gives us a precise question to ask of a model: under its stated assumptions, which patterns of activity can a network express? McCulloch and Pitts answered that question through logical constructions using idealized neurons. A construction within those assumptions is not proof that the mind works that way. Keeping that boundary visible makes the result more useful: we can test what the abstraction does without confusing it with everything a living nervous system does.
-
-## Try the Abstraction: Will the Output Fire?
-
-Return to Figure 1d in the [1990 reprint, visible p. 105](https://www.cs.cmu.edu/~epxing/Class/10715/reading/McCulloch.and.Pitts.pdf#page=7). This is a reader exercise derived from its formula, not a historical experiment or a measurement of biological neurons. Input 1 supplies excitation; input 2 supplies inhibition. The output at the next step is:
-
-$$N_3(t) = N_1(t-1) \land \neg N_2(t-1).$$
-
-Before opening the answer, fill in the four outputs. A `1` means firing; a `0` means silence. Pay particular attention to the first row: is the absence of inhibition enough?
-
-| Input 1 at the preceding step | Input 2 at the preceding step | Output at the next step |
-|---|---|---|
-| 0 | 0 | Predict |
-| 0 | 1 | Predict |
-| 1 | 0 | Predict |
-| 1 | 1 | Predict |
-
-<details>
-<summary>Check your four predictions</summary>
-
-The outputs, in row order, are **0, 0, 1, 0**. Only the third row provides excitation without inhibition. In the first row nothing inhibits the output, but nothing excites it either. That is why this circuit expresses *input 1 AND NOT input 2*, rather than simply *NOT input 2*. All four answers concern the next step; they do not imply an instantaneous response.
-
-</details>
-
-Now change the question: suppose the desired next-step outputs are `1, 0, 1, 0`. Can this same formula produce them? Identify the row that decides the question before opening the explanation.
-
-<details>
-<summary>Check the changed specification</summary>
-
-No. The first row now requires firing when both inputs are silent, but the formula produces `0`. Those desired outputs describe NOT input 2. This mismatch proves that the displayed formula does not meet the new specification; it does not prove that every possible network construction is incapable of doing so. Specifying a behavior, constructing a network that realizes it, and finding a way to learn that behavior are separate tasks. The four-row calculation addresses the first two for this one fixed circuit; it supplies no learning procedure.
-
-</details>
 
 ## Sources and reading notes
 
