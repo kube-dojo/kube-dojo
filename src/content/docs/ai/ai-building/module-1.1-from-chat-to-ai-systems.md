@@ -408,4 +408,4 @@ Use evidence from your own design rather than optimism. If the model only drafts
 
 ## Next Module
 
-Continue to [Models, APIs, Context, and Structured Output](./module-1.2-models-apis-context-structured-output/) to turn this system map into concrete model calls and validated outputs.
+Continue to [Models, APIs, Context, and Structured Output](../module-1.2-models-apis-context-structured-output/) to turn this system map into concrete model calls and validated outputs.

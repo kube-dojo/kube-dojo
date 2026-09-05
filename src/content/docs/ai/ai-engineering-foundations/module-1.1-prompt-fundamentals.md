@@ -702,7 +702,7 @@ Use the exercise setup above to produce one prompt contract that can be reviewed
 
 This module gives the baseline contract model for the prompt layer.
 
-Next Module: [Reasoning and Logic Prompts](module-1.2-reasoning-and-logic-prompts/) builds on this baseline by separating task instructions from reasoning-control instructions and by deciding when the prompt should ask for explanation, hidden deliberation, direct answers, or proof-like structure.
+Next Module: [Reasoning and Logic Prompts](../module-1.2-reasoning-and-logic-prompts/) builds on this baseline by separating task instructions from reasoning-control instructions and by deciding when the prompt should ask for explanation, hidden deliberation, direct answers, or proof-like structure.
 
 [Prompt Safety and Evaluation](module-1.3-prompt-safety-and-evaluation/) extends the same contract model into adversarial input, refusal behavior, jailbreak resistance, and evaluation suites that make prompt safety reviewable instead of anecdotal.
 

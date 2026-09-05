@@ -698,7 +698,7 @@ You will build a five-prompt LLM-as-judge eval suite for a content moderation ta
 
 ## Next Module
 
-Next module: [Prompt Libraries and Contracts](module-1.4-prompt-libraries-and-contracts/).
+Next module: [Prompt Libraries and Contracts](../module-1.4-prompt-libraries-and-contracts/).
 
 That module turns the harness mindset into a reusable prompt system: versioned prompt libraries, explicit prompt contracts, migration notes, compatibility checks, and reviewable change control for teams that maintain more than one prompt.
 
