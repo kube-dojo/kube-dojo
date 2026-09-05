@@ -12,7 +12,7 @@ Minimum requirements:
 - each upgraded module must include a `## Sources` section
 - uncited modules may be improved, but they are still **not review-passed**
 
-This gate applies before the 7-dimension score is considered valid.
+This gate applies before the 8-dimension score is considered valid.
 
 ---
 
@@ -51,7 +51,7 @@ follow-up, not silently re-tiered. Locked via #2141 / #2146 / #2181 / #2187 / #2
 
 ---
 
-## Module Rubric (7 Dimensions, 1-5 Scale)
+## Module Rubric (8 Dimensions, 1-5 Scale)
 
 ### Dimension 1: Learning Outcomes
 
@@ -284,25 +284,35 @@ Copy this template when auditing a module:
 
 ## Score Interpretation
 
-Scoring uses **sum of all 7 dimensions** (max 35) with a **per-dimension floor**.
+Scoring uses **sum of all 8 dimensions** (max 40) with a **per-dimension floor**.
 
 | Sum | Rating | Action |
 |-----|--------|--------|
-| **29-35** | Pass | Ship it. Must excel in at least one dimension. |
-| **22-28** | Needs polish | Close — fix the weakest dimensions. |
-| **15-21** | Needs work | Significant gaps across multiple dimensions. |
-| **7-14** | Rewrite | Fundamentally broken. Start over. |
+| **33-40** | Pass | Ship it. Must excel in at least one dimension. |
+| **25-32** | Needs polish | Close — fix the weakest dimensions. |
+| **17-24** | Needs work | Significant gaps across multiple dimensions. |
+| **8-16** | Rewrite | Fundamentally broken. Start over. |
+
+This numeric rubric is separate from the binary per-track deterministic gates
+(structural, citation, Ukrainian checks): those gates pass or fail outright,
+while the rubric scores a module 1-5 per dimension. Both must be satisfied
+independently.
 
 ### Scoring Tool
 
 ```bash
-python scripts/score_module.py 4 5 4 4 5 4 4          # interactive
-python scripts/score_module.py 4 5 4 4 5 4 4 --json   # machine-readable
-echo "4 5 4 4 5 4 4" | python scripts/score_module.py -  # stdin
-python scripts/check_citations.py src/content/docs/ai/foundations/module-1.1-what-is-ai.md
+.venv/bin/python scripts/score_module.py 4 5 4 4 5 4 4 4          # interactive
+.venv/bin/python scripts/score_module.py 4 5 4 4 5 4 4 4 --json   # machine-readable
+echo "4 5 4 4 5 4 4 4" | .venv/bin/python scripts/score_module.py -  # stdin
+.venv/bin/python scripts/check_citations.py src/content/docs/ai/foundations/module-1.1-what-is-ai.md
 ```
 
-Dimension order: D1 Outcomes, D2 Scaffolding, D3 Active Learning, D4 Real-World, D5 Assessment, D6 Cognitive Load, D7 Engagement.
+Dimension order: D1 Outcomes, D2 Scaffolding, D3 Active Learning, D4 Real-World, D5 Assessment, D6 Cognitive Load, D7 Engagement, D8 Practitioner Depth.
+
+`score_module.py` is a standalone manual scorer for one module at a time. It
+is not currently invoked by the runtime pipelines (v1 defines the path but
+does not call it; v4 reads scalar scores and gaps via `local_api.build_quality_scores`), and nothing here
+implies a corpus-wide rescore.
 
 ---
 
@@ -318,7 +328,7 @@ A module passes the quality bar when **both** conditions are met:
 
 1. **Every dimension >= 4** — a score of 3 or below in ANY dimension is an automatic fail, regardless of sum. Every dimension matters equally. You cannot compensate for weak real-world connection with strong quizzes.
 
-2. **Sum >= 29 out of 35** — all 4s (sum=28) is not enough. At least one dimension must be at 5, meaning the module excels somewhere, not just meets the bar everywhere.
+2. **Sum >= 33 out of 40** — all 4s (sum=32) is not enough. At least one dimension must be at 5, meaning the module excels somewhere, not just meets the bar everywhere.
 
-A module that scores 3-5-5-5-5-5-5 (sum=33) **fails** — the floor is violated.
-A module that scores 4-4-4-4-4-4-4 (sum=28) **fails** — it needs to excel somewhere.
+A module that scores 3-5-5-5-5-5-5-5 (sum=38) **fails** — the floor is violated.
+A module that scores 4-4-4-4-4-4-4-4 (sum=32) **fails** — it needs to excel somewhere.
