@@ -478,7 +478,25 @@ Build a dedicated database observability dashboard showing active connections, q
    <details>
    <summary>Answer</summary>
 
-   To diagnose this incident, start by selecting the appropriate reasoning framework—stock-and-flow analysis—before diving into the logs, because the growing queue is fundamentally a question of inflow versus outflow. A growing queue depth indicates that the inflow of requests exceeds the outflow of processed requests. The diagnostic process branches into two mutually exclusive and collectively exhaustive possibilities. First, investigate whether inflow has increased above baseline by checking the load balancer's request rate—a spike here suggests external traffic growth, potentially from a marketing campaign, viral content, or an attack. Also check the retry rate and error rate simultaneously; if errors triggered client-side or internal retries, the increased inflow is being generated internally by a feedback mechanism rather than externally by users. Second, if inflow is normal, investigate whether outflow has decreased by checking the pod count and node status for recent evictions, failed deployments, or node failures that reduced worker capacity. Additionally, examine per-request latency breakdowns to identify whether a downstream dependency—the database, a payment gateway, an authentication service—has slowed down, increasing per-request duration and thus reducing effective throughput. This systematic branching eliminates entire categories of hypotheses with each check, focusing the investigation on the specific metrics that will confirm or refute the remaining possibilities.
+   Use stock-and-flow analysis, but measure inflow and outflow together: more arrivals and fewer departures can happen at the same time. First define the stock. If it counts waiting requests, starting service is an exit; if it includes requests in service, completion is an exit. Compare entries and exits across that same boundary and time window. Include retries that re-enter it and cancellations or dropped requests that leave it. Queue growth establishes a net imbalance over the interval, not its cause.
+
+   Compare arrival and retry rates with baseline, then inspect departures even if arrivals have increased. Check available workers, deployment changes and per-request dependency latency for evidence of reduced processing capacity. A load balancer's request count is useful only if you account for requests that never enter this queue. Use both measurements to test combined explanations rather than ruling out a slowdown after finding a traffic spike.
+   </details>
+
+   **Hypothetical calculation:** Start with 50 requests waiting or in service. Before the incident, entries and completions both average 200 requests/minute. Assume constant rates for the next four minutes, no other entries or exits, and enough waiting work to sustain the stated completion rates. Predict the final stock for each case before opening the answer.
+
+   | Case | Entries (requests/minute) | Completions (requests/minute) |
+   |---|---:|---:|
+   | More entries only | 250 | 200 |
+   | Fewer completions only | 200 | 80 |
+   | Both changes | 250 | 80 |
+
+   <details>
+   <summary>Check the calculation and your diagnosis</summary>
+
+   Final stock = initial stock + (entry rate − completion rate) × elapsed time. The three results are **250**, **530**, and **730 requests**. In the combined case, `50 + (250 − 80) × 4 = 730`: the observed growth is compatible with both changes together. These invented rates illustrate the calculation; they do not identify the cause of the quiz's incident. If your measured flows do not explain the stock change, recheck the boundary, missing flows and aligned sampling intervals before choosing a repair.
+
+   Source for the accumulation relationship: [MIT OpenCourseWare, Systems Thinking, slide 28 (PDF page 29)](https://ocw.mit.edu/courses/res-15-004-system-dynamics-systems-thinking-and-modeling-for-a-complex-world-january-iap-2020/65a2dc7433fcb6cce64b55da0342f0c0_MITRES15_004IAP20_slides.pdf#page=29). The request counts above are a teaching example, not MIT measurements.
    </details>
 
 3. **Your team implements a new caching layer in front of a database. During normal operation, cache hit rates are high, which reduces database load, which speeds up cache population queries, which encourages even more cache usage. However, after a cache flush, the database is immediately overwhelmed, which makes cache population queries fail, which keeps the cache cold, which means all queries continue to hit the overloaded database. Classify this feedback structure using causal loop notation: draw the links, count the polarities, and determine whether the loop is reinforcing or balancing. Explain what makes the system stable in one direction and fragile in the other.**
