@@ -72,6 +72,11 @@ record of Shannon's motives or a complete priority survey.
   *Österreichisches Ingenieur-Archiv* I (1946), 203–230. Printed p. 186
   references Nakashima/Hanzawa and Piesch; no Shannon reference is visible on
   the two reprinted pages.
+- The Plechl/Duschek p. 204 facsimile labels its Piesch references “1937.”
+  Do not silently normalize that printed detail: the [Piesch publisher record](https://link.springer.com/article/10.1007/BF01656419)
+  gives receipt on 28 February 1939 and publication in October 1939 (checked
+  2026-09-05). Use the publisher's date for Piesch's article chronology and
+  preserve the citation discrepancy when discussing Plechl/Duschek's footnotes.
 - **Bounded correction:** dates/titles and the accessible scope are supported.
   “First sustained German-language formulation,” “too late to be a true
   parallel discovery,” and a whole-publication claim that Plechl/Duschek’s
