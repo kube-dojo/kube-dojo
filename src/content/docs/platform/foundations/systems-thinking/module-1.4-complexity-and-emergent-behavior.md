@@ -53,9 +53,9 @@ Understanding complexity changes how you approach operations. You stop trying to
 
 > **The Weather Analogy**
 >
-> Weather is complex. You can model every air molecule perfectly, but you still can't predict weather beyond ~10 days. A butterfly's wingbeat in Brazil might cause a tornado in Texas—or might not. This isn't a measurement problem—it's fundamental to how complex systems behave.
+> Weather forecasting offers a useful example of prediction under uncertainty. [ECMWF explains](https://www.ecmwf.int/en/research/modelling-and-prediction/quantifying-forecast-uncertainty) that uncertainty in starting conditions and approximations in a numerical model both contribute to errors that grow with time. Better measurements matter, but they do not remove every limitation of a model.
 >
-> Your distributed system is the same. Perfect knowledge of each service, each container, each network packet doesn't give you perfect prediction of the whole system. New behaviors emerge from interactions that nobody designed.
+> Be careful with the comparison. [Lorenz's 1969 study](https://wind.mit.edu/~emanuel/Lorenz/EdLorenz/Predictability_Flow_Which_Possesses_1969.pdf#page=1) explores conditional limits at different scales in a simplified fluid model; it does not establish a universal ten-day cutoff or a theorem about distributed systems. Use this as a teaching analogy: before predicting an operational outcome, ask what you know about the starting state and which interactions your model leaves out.
 
 ---
 
