@@ -4,7 +4,7 @@ slug: uk/ai/foundations/module-1.1-what-is-ai
 sidebar:
   order: 1
 revision_pending: false
-en_commit: "a87be9cfd16afbdb0cd4ab1b088eb0e04443bff0"
+en_commit: "2829a2e0dd1e29bceef1022bb0cb5d9ef5cf08d7"
 en_file: "src/content/docs/ai/foundations/module-1.1-what-is-ai.md"
 ---
 
@@ -316,7 +316,7 @@ else:
 
 ## Наступний модуль
 
-Перейдіть до [Що таке ВММ?](./module-1.2-what-are-llms/), щоб дізнатися, чому сучасні чат-боти можуть відповідати природною мовою і чому ця здатність корисна, але не означає гарантованого розуміння.
+Перейдіть до [Що таке ВММ?](/uk/ai/foundations/module-1.2-what-are-llms/), щоб дізнатися, чому сучасні чат-боти можуть відповідати природною мовою і чому ця здатність корисна, але не означає гарантованого розуміння.
 
 ## Джерела
 
