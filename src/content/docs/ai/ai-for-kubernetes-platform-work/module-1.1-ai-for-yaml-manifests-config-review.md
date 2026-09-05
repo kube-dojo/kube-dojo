@@ -718,4 +718,4 @@ Success criteria:
 
 ## Next Module
 
-Continue to [AI for Kubernetes Troubleshooting and Triage](./module-1.2-ai-for-kubernetes-troubleshooting-and-triage/) to practice using AI for incident investigation without letting the assistant outrank cluster evidence.
+Continue to [AI for Kubernetes Troubleshooting and Triage](../module-1.2-ai-for-kubernetes-troubleshooting-and-triage/) to practice using AI for incident investigation without letting the assistant outrank cluster evidence.

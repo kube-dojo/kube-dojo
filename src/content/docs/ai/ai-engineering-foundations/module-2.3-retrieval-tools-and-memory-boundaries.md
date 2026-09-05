@@ -931,6 +931,6 @@ Each item should be answerable from code, configuration, traces, or a documented
 
 ## Next Module
 
-Next module: [Dynamic Context Orchestration](module-2.4-dynamic-context-orchestration/).
+Next module: [Dynamic Context Orchestration](../module-2.4-dynamic-context-orchestration/).
 
 That module ties retrieval, tools, and memory together at request time so a harness can choose what to load, evict, summarize, or refresh on each turn instead of following one fixed context recipe for every task.
