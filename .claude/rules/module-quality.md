@@ -49,7 +49,7 @@ paths:
 - Do NOT add a Markdown `# Module ...` heading after frontmatter. Starlight renders the page H1 from `title:` frontmatter, so a source H1 creates a duplicate visible title.
 - The top-of-module metadata must be a blockquote immediately after frontmatter:
   `> **Complexity**: ...`, blank quoted line, `> **Time to Complete**: ...`, blank quoted line, `> **Prerequisites**: ...`, then `---`, then `## What You'll Be Able to Do`.
-- 600-800+ lines of CONTENT minimum (250+ for KCNA theory modules). Visual aids (ASCII diagrams, code blocks for illustration) do NOT count toward the minimum — they supplement teaching, not substitute for it.
+- Depth follows the topic scope, measurable outcomes, runnable examples, assessment alignment, and verified evidence. Length estimates may guide planning and routing, but are not evidence of factual support, learning effectiveness, or acceptance. Do not pad with repeated prose, decorative structure, or unsupported facts. If verified material is insufficient, state the shortfall for review rather than claiming completion; a concise module does not automatically pass. Visual aids supplement teaching and do not replace explanation.
 - Explain "why" before "what"
 - All code must be runnable (not pseudocode)
 - Code blocks specify language (```bash, ```yaml, ```go)
