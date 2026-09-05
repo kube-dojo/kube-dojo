@@ -417,29 +417,36 @@ Robustness handles known failures well within designed limits, but can collapse 
 
 ### 4.2 The Four Resilience Capabilities
 
-Resilience engineering identifies four capabilities that enable systems to adapt under uncertainty, and mature teams instrument all four instead of treating resilience as a synonym for redundancy.
+Erik Hollnagel's [2010 introduction to the Resilience Analysis Grid, printed pp. 2–4](https://hal.science/hal-00613986/document#page=3), describes four abilities: respond, monitor, anticipate, and learn. He proposes assessing them through questions tailored to the organization. This is broader than collecting telemetry. The following platform examples are teaching applications of that framework.
 
-**Respond** addresses disturbances as they occur by asking what the system can do when things go wrong. Good implementations include circuit breakers, graceful degradation, and failover paths; weak implementations throw hard errors to users when a dependency slows, even though a cached or partial response would preserve core function.
+**Respond:** What can the team and system do when conditions change, and are the necessary resources available? In platform work, candidate mechanisms include circuit breakers, degradation paths, and failover. Assess whether each preserves the required operation under the conditions at hand; a cached or partial response is not appropriate for every request.
 
-**Monitor** asks what signals reveal emerging trouble before catastrophe. Business metrics, user-journey success, saturation, and retry rates are leading indicators; CPU-only dashboards often stay green while customers suffer.
+**Monitor:** What changes should the team look for in the system and its environment? User-journey outcomes, saturation, and retry rates are possible observations. Hollnagel warns against mistaking correlations for valid leading indicators: naming a metric does not establish that it reliably precedes the event you want to detect.
 
-**Anticipate** asks what might go wrong before customers discover it. Chaos experiments, load tests, game days, and threat modeling surface latent interactions; assuming "it never failed before" is not anticipation—it is hope.
+**Anticipate:** What developments beyond current operations could change the demands, resources, or conditions the system faces? A load test, game day, or threat-model discussion can explore a particular possibility. State what it covers and what it leaves uncertain; no single exercise establishes readiness for every future condition.
 
-**Learn** asks how the organization improves after surprises. Blameless postmortems, systemic contributing-factor analysis, and Safety-II study of everyday success encode adaptation into culture; labeling incidents "human error" and closing tickets guarantees repetition.
+**Learn:** What changes because of experience? Hollnagel includes learning from successful activity as well as failures. For a platform team, an incident review or examination of everyday work can identify assumptions to revise. Closing a ticket with a label alone does not show that the contributing conditions have changed; it also does not prove the incident must recur.
 
 ### 4.3 Chaos Engineering—Practicing Failure Before It Happens
 
-Chaos Engineering deliberately introduces failures to discover weaknesses before real incidents.
+The [Principles of Chaos Engineering](https://principlesofchaos.org/) describes controlled experiments intended to uncover systemic weaknesses and build confidence in behavior under turbulent production conditions. Variables include faults and non-failure events such as traffic spikes or scaling. Treat the following as guidance for designing an experiment, not an instruction to disrupt a running service.
 
-> **Stop and think**: What would happen if your primary database instances were suddenly terminated right now? Would the system recover automatically, or require human intervention?
+**Hypothetical planning exercise:** In a disposable training environment, you propose stopping one API replica while sending a fixed test workload. You can observe latency, errors, and whether the replica returns. Before running anything, what baseline, hypothesis, stop condition, and recovery procedure would you write down? What would this exercise leave unknown about production?
 
-1. **Start with a hypothesis**: "If we kill 30% of API pods, latency should stay under 200ms." This lets you learn regardless of outcome.
-2. **Use production-like conditions**: Real chaos happens in production because staging lacks real user behavior and data volumes.
-3. **Minimize blast radius**: Start small. Build confidence. Expand gradually.
-4. **Run experiments continuously**: Systems drift. Regular chaos experiments detect this drift.
-5. **Build confidence, not heroics**: The goal is a boring incident response because you've seen it before.
+<details>
+<summary>Compare your experiment plan</summary>
 
-Chaos engineering tools that randomly terminate production instances, described in the [Principles of Chaos Engineering](https://principlesofchaos.org/), push teams to design for survivability rather than assuming instance permanence. Making instance loss routine does not merely test resilience—it forces resilient design. KubeDojo covers the specific tools and the discipline in depth in [Chaos Principles](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/).
+Record baseline measurements for the stated workload, define the behavior you expect during the intervention, and choose measurable stop conditions before acting. Check that the intervention targets only the training environment and that recovery is understood. Compare the observations with the hypothesis. The result supplies evidence for those conditions; it does not establish behavior under production traffic, different dependencies, or every combination of failures. This is an authored planning example, not a reported experiment.
+
+</details>
+
+1. **Define the hypothesis:** The Principles begins with a measurable steady state and comparison between control and experimental groups. Choose measurements and thresholds for the particular system; example numbers are not universal targets.
+2. **Choose the environment deliberately:** The Principles strongly prefers production traffic for representative behavior. That preference does not require every exercise to run in production. Explain how your chosen environment and workload limit the conclusions.
+3. **Contain the effects:** The Principles explicitly requires minimizing and containing fallout. For an operational application, identify the authorized scope, observations, abort conditions, and recovery procedure before introducing a disturbance.
+4. **Treat automation as an advanced practice:** Continuous automated experiments are an advanced recommendation in the Principles. Automation retains the need for containment and reassessment; it does not guarantee detection of all drift.
+5. **Use results to revise a claim:** An experiment can challenge a hypothesis or reveal a weakness. Neither repetition nor a successful run guarantees future recovery.
+
+Instance loss is one possible variable, not the definition of the discipline. The value comes from the question, observations, and resulting changes rather than from random termination itself. Continue with [Chaos Principles](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/) for the discipline in more depth.
 
 **Common Chaos Experiments:**
 
@@ -496,7 +503,7 @@ Before you leave this module, walk through a checklist on a service you operate 
 |---------|---------|----------|
 | Treating complex as complicated | Applying "best practices" where they don't work | Use Cynefin to identify domain first |
 | Searching for "root cause" | Oversimplifies, misses contributing factors, enables blame | Look for multiple contributing factors |
-| Assuming safety from testing | Tests find known issues, not emergent behavior | Add chaos engineering, observe production |
+| Assuming safety from testing | Passing checks establish evidence only for the scenarios and properties covered | Examine coverage and unresolved interactions; choose appropriate observations or bounded experiments |
 | Blaming individuals | Misses systemic issues, creates fear, prevents learning | Blameless postmortems, focus on systems |
 | Preventing all failures | Impossible, creates brittleness, false confidence | Design for recovery, not just prevention |
 | Ignoring near-misses | Loses learning opportunities, waits for disaster | Study near-misses as seriously as incidents |
@@ -552,7 +559,7 @@ Before you leave this module, walk through a checklist on a service you operate 
    <details>
    <summary>Answer</summary>
 
-   Chaos testing cannot guarantee prevention of novel emergent failures. **WHY?** Safety-I methods reduce known failure modes, but complex systems generate new interaction patterns as code, traffic, and human behavior change. Chaos experiments and game days improve anticipation and learning—they reveal latent weaknesses, train response, and validate degradation paths—but resilience is continuous adaptation, not a one-time certificate. The honest promise is faster learning, smaller blast radius, and better recovery, not permanent immunity from surprise.
+   No experiment guarantees prevention of the next outage. **WHY?** Its observations concern a particular hypothesis, workload, environment, and intervention. Use the result to identify supported conclusions and unresolved questions. In Hollnagel's framework, ask how the work supports responding, monitoring, anticipating, and learning; do not promise that applying those labels necessarily produces faster recovery. Studying successful operations can also reveal useful adaptations, but it is evidence to investigate rather than proof of immunity.
    </details>
 
 8. **Two latent conditions exist in production: an alert muted last month and a retry policy doubled during a previous incident. Neither alone caused customer impact until today's traffic mix shifted. Which models from this module explain why the incident occurred, and what remediation style fits?**
