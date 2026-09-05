@@ -760,4 +760,4 @@ kind delete cluster --name cks-gvisor
 
 ## Next Module
 
-[Module 5.1: Image Security](../part5-supply-chain-security/module-5.1-image-security/) - Shift from runtime isolation to supply-chain hardening by auditing container images, reducing image attack surface, and controlling which artifacts are allowed into the cluster.
+[Module 5.1: Image Security](../../part5-supply-chain-security/module-5.1-image-security/) - Shift from runtime isolation to supply-chain hardening by auditing container images, reducing image attack surface, and controlling which artifacts are allowed into the cluster.
