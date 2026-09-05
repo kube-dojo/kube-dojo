@@ -6,6 +6,7 @@ import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { routeManifestIntegration } from './scripts/quality/route-manifest-integration.mjs';
+import { progressIntegration } from './scripts/progress-integration.mjs';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const ignoredDevWatchPaths = [
@@ -693,5 +694,6 @@ export default defineConfig({
       ],
     }),
     routeManifestIntegration(),
+    progressIntegration(),
   ],
 });
