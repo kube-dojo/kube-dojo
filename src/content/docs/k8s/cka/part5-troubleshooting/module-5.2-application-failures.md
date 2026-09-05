@@ -686,7 +686,7 @@ Identify the failing container first, then read its logs with `-c`. Run `kubectl
 
 ## Hands-On Exercise: Application Failure Scenarios
 
-Exercise scenario: you will create a small namespace with four intentionally broken workloads, diagnose each failure, and apply the smallest correction that proves the root cause. The scenarios are deliberately simple, but the path mirrors real troubleshooting: describe the Pod, read Events, choose the relevant logs or state field, and then fix the object or missing dependency. Run these commands in a disposable cluster or lab environment because several examples intentionally create failing Pods.
+Exercise scenario: diagnose three failing Pods in `app-debug-lab` and a failed Deployment rollout in a separate fresh namespace. For each, inspect Events and relevant state before choosing a repair. Run these deliberately broken workloads in a disposable lab environment.
 
 ### Setup
 
@@ -782,43 +782,170 @@ kubectl get pod config-app -n app-debug-lab
 
 </details>
 
-### Scenario 3: Wrong Image Tag
+### Scenario 3: Failed Deployment Rollout
 
-This Pod uses an nginx tag that does not exist, so kubelet cannot create the container. There should be no useful application logs because the process never starts. The correct evidence is the failed pull Event, and the quickest lab fix is to recreate the standalone Pod with a valid image tag.
+Hypothetical scenario: a new image tag breaks a release. This controlled
+exercise uses its own fresh namespace, separate from `app-debug-lab`, so you
+can inspect a failed revision while the healthy revision remains available.
+
+Prerequisites: Bash, `jq`, namespace permissions, and a dedicated disposable
+Kubernetes 1.35 context with a supported `kubectl` client. Set
+`KUBEDOJO_LAB_CONTEXT` and a fresh `KUBEDOJO_LAB_NAMESPACE`; calls use the
+dedicated context explicitly. The namespace is constrained to a DNS-1123 label
+before any mutation. Context strings remain quoted command arguments and are
+serialized with `jq --arg`, so arbitrary context text is never interpolated
+into YAML.
 
 ```bash
-cat <<'EOF' | kubectl apply -f -
-apiVersion: v1
-kind: Pod
+(
+  set -euo pipefail
+  : "${KUBEDOJO_LAB_CONTEXT:?Set a dedicated disposable context}"
+  : "${KUBEDOJO_LAB_NAMESPACE:?Set a fresh namespace name}"
+  if (( ${#KUBEDOJO_LAB_NAMESPACE} > 63 )) || [[ ! "$KUBEDOJO_LAB_NAMESPACE" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+    echo "Namespace must be a fresh DNS-1123 label (lowercase letters, digits, hyphens; max 63 characters)" >&2
+    exit 1
+  fi
+  KUBEDOJO_LAB_OWNER=cka52-2337
+  if existing_namespace=$(kubectl --context "$KUBEDOJO_LAB_CONTEXT" get namespace "$KUBEDOJO_LAB_NAMESPACE" -o json --ignore-not-found); then
+    if [ -n "$existing_namespace" ]; then
+      echo "Refusing an existing namespace; choose a fresh lab namespace" >&2
+      exit 1
+    fi
+  else
+    status=$?
+    echo "Namespace preflight failed; refusing to continue (kubectl status $status)" >&2
+    exit "$status"
+  fi
+  jq -n \
+    --arg name "$KUBEDOJO_LAB_NAMESPACE" \
+    --arg owner "$KUBEDOJO_LAB_OWNER" \
+    --arg context "$KUBEDOJO_LAB_CONTEXT" \
+    '{apiVersion:"v1",kind:"Namespace",metadata:{name:$name,labels:{"kubedojo.io/lab-owner":$owner},annotations:{"kubedojo.io/lab-context":$context}}}' |
+    kubectl --context "$KUBEDOJO_LAB_CONTEXT" create -f -
+  cat <<EOF | kubectl --context "$KUBEDOJO_LAB_CONTEXT" apply -f -
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: image-app
-  namespace: app-debug-lab
+  name: image-rollout
+  namespace: $KUBEDOJO_LAB_NAMESPACE
 spec:
-  containers:
-  - name: app
-    image: nginx:v99.99.99
+  replicas: 2
+  progressDeadlineSeconds: 30
+  selector:
+    matchLabels:
+      app: image-rollout
+  template:
+    metadata:
+      labels:
+        app: image-rollout
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.25
 EOF
+  kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" rollout status deployment/image-rollout --timeout=90s
+)
 ```
 
-**Task**: Diagnose and fix the image pull failure.
+Record the successful baseline:
+
+```bash
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get deployment image-rollout
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get pods -l app=image-rollout
+```
+
+Before the change, predict what will happen to the two ready Pods if the new
+image cannot be pulled. Induce failure without deleting the healthy revision:
+
+```bash
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" set image deployment/image-rollout app=nginx:tag-does-not-exist
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" rollout status deployment/image-rollout --timeout=45s
+```
+
+A progress-deadline error or command timeout prompts inspection; a non-zero
+status alone is not proof. Inspect
+Deployment conditions, ReplicaSets/Pods, and namespaced Events before repair:
+
+```bash
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get deployment image-rollout
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" describe deployment image-rollout
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get pods -l app=image-rollout -o wide
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get events --sort-by=.lastTimestamp
+```
+
+Accept only actual output tying the new ReplicaSet/Pod to the bad image and an
+image-pull failure such as `ErrImagePull`/`ImagePullBackOff`. Stop on API,
+authentication, context, or registry-access errors.
+
+Choose the object you would repair and explain why deleting a failing Pod
+would not correct its controller's image template.
 
 <details>
-<summary>Solution</summary>
+<summary>Check your repair: roll back the Deployment</summary>
+
+Repair the owning Deployment and verify readiness:
 
 ```bash
-# Diagnose
-kubectl describe pod image-app -n app-debug-lab | grep -A 5 "Failed\|Error"
-# "manifest for nginx:v99.99.99 not found"
-
-# Fix - delete and recreate with correct image
-kubectl delete pod image-app -n app-debug-lab --force
-kubectl run image-app -n app-debug-lab --image=nginx:1.25
-
-# Verify
-kubectl get pod image-app -n app-debug-lab
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" rollout undo deployment/image-rollout
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" rollout status deployment/image-rollout --timeout=90s
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get deployment image-rollout
+kubectl --context "$KUBEDOJO_LAB_CONTEXT" -n "$KUBEDOJO_LAB_NAMESPACE" get pods -l app=image-rollout
 ```
 
+Success requires 2 ready baseline replicas, observed failed-image evidence,
+then 2 ready replicas after rollback. Record actual output; do not prescribe
+Event wording. In the validation run below, the two old Pods stayed ready while the new
+ReplicaSet could not pull its image; rollback restored the old template.
+
 </details>
+
+Cleanup must be independently runnable after interruption, use the same
+explicit dedicated context, and avoid resetting the user's global context:
+
+```bash
+(
+  set -euo pipefail
+  : "${KUBEDOJO_LAB_CONTEXT:?Set the dedicated disposable context}"
+  : "${KUBEDOJO_LAB_NAMESPACE:?Set the lab namespace}"
+  if (( ${#KUBEDOJO_LAB_NAMESPACE} > 63 )) || [[ ! "$KUBEDOJO_LAB_NAMESPACE" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+    echo "Namespace must be the DNS-1123 label used by this lab" >&2
+    exit 1
+  fi
+  KUBEDOJO_LAB_OWNER=cka52-2337
+  if namespace_name=$(kubectl --context "$KUBEDOJO_LAB_CONTEXT" get namespace "$KUBEDOJO_LAB_NAMESPACE" -o jsonpath='{.metadata.name}' --ignore-not-found); then :; else
+    status=$?
+    echo "Namespace lookup failed; refusing cleanup (kubectl status $status)" >&2
+    exit "$status"
+  fi
+  [ -z "$namespace_name" ] && { echo "Lab namespace is already absent"; exit 0; }
+  if namespace_owner=$(kubectl --context "$KUBEDOJO_LAB_CONTEXT" get namespace "$KUBEDOJO_LAB_NAMESPACE" -o jsonpath="{.metadata.labels['kubedojo\.io/lab-owner']}" --ignore-not-found); then :; else
+    status=$?
+    echo "Owner lookup failed; refusing cleanup (kubectl status $status)" >&2
+    exit "$status"
+  fi
+  if namespace_context=$(kubectl --context "$KUBEDOJO_LAB_CONTEXT" get namespace "$KUBEDOJO_LAB_NAMESPACE" -o jsonpath="{.metadata.annotations['kubedojo\.io/lab-context']}" --ignore-not-found); then :; else
+    status=$?
+    echo "Context lookup failed; refusing cleanup (kubectl status $status)" >&2
+    exit "$status"
+  fi
+  if [ "$namespace_owner" != "$KUBEDOJO_LAB_OWNER" ] || [ "$namespace_context" != "$KUBEDOJO_LAB_CONTEXT" ]; then
+    echo "Refusing cleanup: namespace ownership or context marker does not match" >&2
+    exit 1
+  fi
+  kubectl --context "$KUBEDOJO_LAB_CONTEXT" delete namespace "$KUBEDOJO_LAB_NAMESPACE" --wait=true
+)
+```
+
+[Deployment progress and rollback](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/deployment/):
+a stalled Deployment reports its condition and keeps retrying; it does not
+automatically roll back. [JSONPath keys containing periods](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/jsonpath/)
+need the escaping shown in cleanup.
+
+Validation: 2026-09-05, kind Kubernetes 1.35.0 on Linux/arm64 with kubectl
+1.35.0. The six command blocks produced two ready baseline replicas, a new
+ReplicaSet/Pod with the unavailable tag and `ImagePullBackOff`, then two ready
+replicas after rollback. Namespace and disposable cluster cleanup passed.
+Registry availability and error wording can differ in your environment.
 
 ### Scenario 4: Resource Constraint (OOM)
 
@@ -870,7 +997,7 @@ kubectl get pod oom-app -n app-debug-lab
 
 - [ ] Diagnose application failures by identifying `crash-app` exit code as `1` using previous logs and container state.
 - [ ] Fix application failures caused by missing ConfigMaps by creating `app-settings` in the correct namespace.
-- [ ] Debug image-based Pod failures by correcting the wrong `image-app` tag and confirming the Pod starts.
+- [ ] Diagnose the new ReplicaSet's image-pull failure, roll back `image-rollout`, and verify two ready replicas in its dedicated namespace.
 - [ ] Trace resource-limit failure evidence by identifying `OOMKilled` for `oom-app` before increasing the memory limit.
 
 ### Cleanup
