@@ -1,5 +1,11 @@
 # Sources: Chapter 6 — The Cybernetics Movement
 
+## Supplemental evidence for the closing note
+
+[Modern-lineage evidence packet](modern-lineage-evidence.md), reviewed at `7cad1840a66b972863919499d16a7bbce0b03104` in PR #2429, extends this contract for two bounded claims. The CSULB-hosted original1943 paper, printed19/PDF3, describes existing engineering feedback terminology and the error-relative-to-goal sense selected by the authors. Jim Skeen's NASA institutional retrospective, “Flying with NASA – Digital-Fly-By-Wire” (June6,2023), paragraph following the second F-8 photograph, documents the Apollo digital computer/inertial-sensing core and the program's May25,1972 first flight. Exact URLs, artifact hashes, source classes and access limits are in the packet; the scan differs from the archive.org artifact below.
+
+Independent Fable SOURCE review of the initial packet and Google SOURCE review of the final packet are recorded in PR #2429, comment5553768949. Acceptance covers these located claims only, not the sources as a whole, global flight-control priority, measured timing, a universal hardware taxonomy or influence from the1943 paper. The closing note requires its own editorial review. Other historical labels below retain their prior scope and are not refreshed by this supplement.
+
 ## Verification Key
 
 - **Green**: claim has a primary or canonical-secondary source with verified page/section anchor plus independent confirmation.
