@@ -522,18 +522,18 @@ Before you leave this module, walk through a checklist on a service you operate 
 
 ## Quiz
 
-1. **A team is managing a fleet of self-driving delivery robots. When a robot's battery degrades, it predictably runs out of power sooner. When a robot encounters an unexpected construction zone, it gets confused, stops, and causes other robots to reroute, creating a massive traffic jam that brings the whole fleet to a halt. Which of these issues is complicated and which is complex?**
+1. **Hypothetical scenario: a team manages self-driving delivery robots. Battery degradation predictably shortens a robot's operating time. An unexpected construction zone causes robots to stop and reroute, creating a fleet-wide traffic jam. Which observations suggest expert analysis, and which suggest investigating interactions?**
    <details>
    <summary>Answer</summary>
 
-   The battery degradation is a complicated problem, while the traffic jam is a complex problem. **WHY?** A complicated problem (battery) has fixed, knowable relationships. An expert can calculate exactly when it will fail based on chemistry and usage. A complex problem (traffic jam) involves dynamic interactions where cause-and-effect are only visible in hindsight. The traffic jam emerged from simple rerouting rules interacting in unexpected ways, a hallmark of complex systems. You cannot predict the system-wide traffic jam simply by looking at the code for one robot.
+   The predictable battery behavior suggests a complicated-domain approach: use relevant expertise and measurements to estimate operating time. **WHY?** Expertise can reveal useful cause-and-effect relationships without guaranteeing an exact failure time. The rerouting interaction suggests a complex-domain interpretation worth investigating: examine how robots influence one another rather than treating each robot's behavior as a sufficient explanation of the fleet outcome. These are working interpretations of the scenario, not permanent classifications of batteries or fleets. A pattern reconstructed after an event need not repeat in the next situation.
    </details>
 
-2. **During Black Friday, your payment gateway suddenly drops 100% of transactions. The dashboard is a sea of red. Your senior engineer says, "Let's gather the logs and spend 30 minutes analyzing the query plans before we touch anything." Which Cynefin domain are you in, and is this the right approach?**
+2. **Hypothetical scenario: during Black Friday, your payment gateway drops all transactions and the dashboard turns red. An engineer proposes spending 30 minutes analyzing query plans before considering any action. What can you conclude about the Cynefin domain, and what should the team establish before choosing a response?**
    <details>
    <summary>Answer</summary>
 
-   You are in the Chaotic domain, and this is the wrong approach. **WHY?** When 100% of transactions are dropping during a critical business event, cause-and-effect is currently imperceptible and the priority is stopping the bleeding. In the Chaotic domain, the correct pattern is Act → Sense → Respond. You should immediately attempt to stabilize (e.g., rollback the last deploy, failover to a backup gateway, restart the service) rather than analyzing logs, which is the strategy for the Complicated domain. Perfect analysis is useless if the business burns down while you do it.
+   The scenario establishes severe user impact, but not a Cynefin domain. **WHY?** Red dashboards do not tell you whether cause-and-effect is already understood, requires expert analysis, or cannot currently be discerned. Establish what the team knows, which containment actions it is authorized to take, and what risks those actions introduce. A compatible, rehearsed rollback might be suitable; a rollback that could damage data is not justified merely by urgency. If the situation is interpreted as chaotic, Act → Sense → Respond prioritizes establishing stability and observing the result. That interpretation must be revisited as evidence arrives. Neither a fixed 30-minute delay nor a blanket restart follows from the alert's severity.
    </details>
 
 3. **After a major database outage, management demands a "Root Cause Analysis" (RCA) document that identifies the single exact reason for the failure so they can fire the responsible person. Based on Richard Cook's principles, why is this request fundamentally flawed?**
@@ -557,11 +557,11 @@ Before you leave this module, walk through a checklist on a service you operate 
    Design B better reduces blast radius of emergent failures when you **evaluate architectural decisions** using **complexity theory**. **WHY?** Synchronous fan-out creates dense interaction graphs where one slow or failing dependency can stall the entire request path and amplify retries across the mesh. Asynchronous boundaries and bulkheads constrain how failures propagate, while cached fallbacks preserve partial user value during degradation. Design A may look simpler and fresher in demos, but it increases coupling density—the number of ways simple local rules can interact to produce surprising global outcomes. Complexity-aware architecture prefers controlled coupling and explicit degradation paths over maximal freshness with hidden interdependence.
    </details>
 
-6. **During an incident, metrics show database CPU at normal levels, yet checkout latency spikes and support tickets rise. An engineer proposes, "Database looks fine—must be frontend." What complexity-aware investigation steps should come next instead of jumping to that conclusion?**
+6. **Hypothetical scenario: database CPU stays at normal levels, yet checkout latency spikes and support tickets rise. An engineer proposes, "Database looks fine—must be frontend." What investigation steps should come next instead of jumping to that conclusion?**
    <details>
    <summary>Answer</summary>
 
-   Treat the situation as complex until proven otherwise. **WHY?** Emergent degradation often appears first in user journeys while component greens remain misleading. Next steps should include tracing checkout end-to-end, measuring pool wait time and retry rates, comparing segments (device, region, account type), and correlating with recent deploys or flag changes. The database may be "fine" by CPU while suffering lock contention, connection starvation, or hot keys. Premature convergence on frontend blame repeats the complicated-domain mistake on a complex symptom set.
+   Keep the explanation open and assess containment of user impact while investigating. **WHY?** Normal CPU does not establish that the database is healthy, and these symptoms alone do not select a Cynefin domain. Trace checkout end-to-end, inspect pool wait time and retry rates, compare affected segments, and check the timing of deploys or flag changes. Lock contention, connection starvation, and frontend behavior are candidate explanations to test, not diagnoses supplied by this question. Use the evidence to choose and revise the investigative approach; neither frontend blame nor a default complex label is justified yet.
    </details>
 
 7. **A leadership sponsor asks for a guarantee that chaos testing will prevent the next outage. What honest answer aligns with Safety-I and Safety-II thinking?**
