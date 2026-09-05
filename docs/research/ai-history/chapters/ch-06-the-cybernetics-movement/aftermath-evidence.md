@@ -1,6 +1,6 @@
 # Cybernetics' later trajectory: evidence boundary — #2405
 
-Scope: the chapter description, analog/parallel-program thesis and opening aftermath explanation. Machine construction details and Wiener's personal correspondence remain separately sourced. No comprehensive history of the field is accepted here.
+Scope: the chapter description, opening summary, analog/parallel-program thesis, and opening and closing aftermath synthesis. Align repeated versions of the same claims in the drafting brief. Machine construction details and Wiener's personal correspondence remain separately sourced. No comprehensive history of the field is accepted here.
 
 ## Sources inspected on 2026-09-05
 
