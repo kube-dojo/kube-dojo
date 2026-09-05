@@ -27,7 +27,7 @@ These four aids land on every chapter. They serve readers who want a fast on-ram
 
 Sits after the last prose paragraph.
 
-5. **Why this still matters today** — `:::note[Why this still matters today]` Starlight aside, **≤120 words**. Bridges the chapter's content to today's practitioner-visible technology. Keep claims high-level and verifiable ("every digital circuit descends from Boolean algebra"); do **not** name specific named systems with claimed citations. This is the single place forward-pointing language is permitted.
+5. **Why this still matters today** — `:::note[Why this still matters today]` Starlight aside, **≤120 words**. Bridges the chapter's content to today's practitioner-visible technology using inspected, accepted evidence. A specific named example with a supporting citation is welcome when it makes the connection clearer. Distinguish a conceptual analogy, a technical application and documented historical influence: similarity alone does not establish ancestry. Broad claims require evidence too. This is the single place forward-pointing language is permitted.
 
 ### Tier 2 — selected chapters only
 
@@ -67,7 +67,7 @@ Every claim in every aid must trace to one of:
 - the chapter's `timeline.md`
 - the chapter's `sources.md`
 
-If a fact is not in the contract, it does not appear in the aids. The single exception is the closing "Why this still matters today" aside, where the chapter is permitted high-level forward-pointing language at the level of "every digital circuit descends from Boolean algebra" — not at the level of "this maps directly to Postgres planner B" with a claimed citation. Keep the bridge honest.
+If a fact is not in the contract, it does not appear in the aids, including the closing "Why this still matters today" aside. An independently reviewed supplemental source packet can extend the contract: record the exact claim, inspected source and locator, source class, access limits and review provenance in the chapter's research materials, and link the packet from `sources.md`. A reachable URL, a source label or an existing citation is not evidence that the proposed claim was verified. Source acceptance does not accept the resulting prose; the aid still needs a distinct editorial review for fidelity, clarity and fit. Never invent a connection or citation to supply a closing note.
 
 When the contract conflicts (e.g. two sources disagree on a date), use the locution the chapter prose uses, or the resolution in `brief.md → Conflict Notes`. Do not promote a single-source ("Yellow") fact to a confident-sounding aid.
 
