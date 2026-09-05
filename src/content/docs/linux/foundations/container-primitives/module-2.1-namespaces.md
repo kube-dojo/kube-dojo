@@ -292,29 +292,7 @@ flowchart LR
     end
 ```
 
-The worked example below creates a mount namespace and mounts a temporary filesystem under `/tmp/ns-mount-lab`. The temporary mount exists only inside the namespace unless mount propagation settings intentionally share it. The file you create is real while the namespace exists, but the host mount table does not gain the same mount point.
-
-```bash
-sudo unshare --mount bash
-```
-
-Inside the new shell, run these commands. The `findmnt` output shows that `/tmp/ns-mount-lab` is a mount point in this namespace. The file write proves that the mounted tmpfs is usable.
-
-```bash
-mkdir -p /tmp/ns-mount-lab
-mount -t tmpfs tmpfs /tmp/ns-mount-lab
-echo "visible only through this mount namespace" > /tmp/ns-mount-lab/message.txt
-findmnt /tmp/ns-mount-lab
-cat /tmp/ns-mount-lab/message.txt
-exit
-```
-
-Back on the host, inspect the same path. Depending on whether the directory existed before and how your system handles cleanup, the directory may exist, but the tmpfs mount and its file should not be visible from the host namespace. The important observation is the mount table difference, not the directory name alone.
-
-```bash
-findmnt /tmp/ns-mount-lab || true
-cat /tmp/ns-mount-lab/message.txt
-```
+The [mount exercise in Part 4](#part-4-create-a-mount-namespace) makes this distinction observable: a child mounts a tmpfs at a newly created directory, writes a file through that mount, and exits. The parent then checks its own mount table and filesystem view. Predict what remains: the directory, the mount, or the file? A directory in the underlying filesystem is different from a mount attached to that path in one namespace.
 
 Mount namespaces interact heavily with security. Accidentally bind-mounting sensitive host paths into a container can defeat filesystem isolation even when the container has its own mount namespace. The namespace controls the view; the mounts placed into that view determine what data is exposed. A private view containing `/var/run/docker.sock` is still dangerous because the socket grants control over the container runtime.
 
@@ -799,34 +777,64 @@ ip netns list
 
 ### Part 4: Create a Mount Namespace
 
-Create a mount namespace and mount a temporary filesystem. This demonstrates that a process can see a mount that the host shell does not see in the same way.
+Use a **root Bash session on a disposable Linux lab machine** with util-linux and GNU coreutils installed. The block below was exercised as root in a kind node with util-linux 2.38.1; it does not test your machine's `sudo` policy. Here, “parent” means that Linux shell's mount namespace, not the Mac hosting a Linux VM.
+
+Before running it, predict why removing an empty directory should succeed even though the child wrote a file at that path. The block creates its own directory with `mktemp -d`, rather than adopting a fixed name. Cleanup uses `rmdir`, which refuses to remove a non-empty directory; see the installed `mktemp --help` and `rmdir --help`.
+
+Paste the complete block. `bash` is explicit because the script uses Bash syntax. `set -eu` stops on failed commands or unset variables inside this lab shell. The exit trap attempts to remove only the directory created by this run.
 
 ```bash
-sudo unshare --mount bash
+bash <<'LAB'
+set -eu
+for tool in unshare mount findmnt mktemp rmdir readlink; do
+    command -v "$tool" >/dev/null
+done
+lab_dir=$(mktemp -d /tmp/kd-mnt-lab.XXXXXX)
+printf 'Owned directory: %s\n' "$lab_dir"
+cleanup() {
+    status=$?
+    trap - EXIT
+    if ! rmdir -- "$lab_dir"; then
+        printf 'Cleanup refused; inspect this exact directory: %s\n' "$lab_dir" >&2
+        exit 1
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+printf 'Parent namespace: '; readlink /proc/self/ns/mnt
+unshare --mount --propagation private bash -eu -s -- "$lab_dir" <<'CHILD'
+lab_dir=$1
+printf 'Child namespace: '; readlink /proc/self/ns/mnt
+mount -t tmpfs -o size=1m tmpfs "$lab_dir"
+printf 'namespace mount data\n' > "$lab_dir/data.txt"
+findmnt --mountpoint "$lab_dir" -o TARGET,FSTYPE,PROPAGATION
+cat "$lab_dir/data.txt"
+CHILD
+parent_mounts=$(findmnt --kernel --noheadings --raw --output TARGET)
+while IFS= read -r target; do
+    if [ "$target" = "$lab_dir" ]; then
+        printf 'FAIL: unexpected parent mount\n' >&2
+        exit 1
+    fi
+done <<< "$parent_mounts"
+test ! -e "$lab_dir/data.txt"
+printf 'PASS: parent has neither the mount nor its file\n'
+LAB
 ```
 
-Inside the namespace, create and inspect the mount. Read the file through that mount table.
+Compare the two namespace identifiers and the child's `tmpfs`/`private` output. The final message checks the parent's view after the child exits; it is not a simultaneous observation from two shells. The directory survives until the exit trap removes it, while the file was written into the child's tmpfs. [Private propagation prevents mount events from propagating to other namespaces](https://man7.org/linux/man-pages/man7/mount_namespaces.7.html); [unshare has selected it by default since util-linux 2.27](https://man7.org/linux/man-pages/man1/unshare.1.html). The flag makes that choice explicit.
 
-```bash
-mkdir -p /tmp/kd-mnt-lab
-mount -t tmpfs tmpfs /tmp/kd-mnt-lab
-echo "namespace mount data" > /tmp/kd-mnt-lab/data.txt
-findmnt /tmp/kd-mnt-lab
-cat /tmp/kd-mnt-lab/data.txt
-exit
-```
+Why read the whole parent mount table? [`findmnt` returns 1 for errors as well as no match](https://man7.org/linux/man-pages/man8/findmnt.8.html). Treating every nonzero result as proof of absence could hide a broken check. Here the table read must succeed before the script searches its output.
 
-Back on the host, check whether the mount exists. The expected result is that the tmpfs mount is not present in your original mount namespace.
-
-```bash
-findmnt /tmp/kd-mnt-lab || true
-cat /tmp/kd-mnt-lab/data.txt
-```
+If setup fails, the exit trap still attempts cleanup and preserves the failure status unless cleanup itself fails. If cleanup refuses, inspect the exact printed path; do not replace `rmdir` with recursive deletion. Do not start background processes or persist this namespace: its lifetime can extend beyond the script if another process or reference holds it. SIGKILL cannot run the shell's trap, so an abrupt termination may leave the owned directory for manual inspection. The checks above do not certify arbitrary interruption or privilege configurations.
 
 #### Success Criteria for Part 4
 
 - [ ] You created a mount namespace and mounted a tmpfs inside it.
 - [ ] You observed that mount visibility depends on the mount namespace.
+- [ ] The owned directory was removed, or cleanup reported a failure that you investigated without deleting unrelated data.
 - [ ] You can explain why same-pod containers need shared volumes for shared files.
 
 ### Part 5: Create UTS and IPC Namespaces
@@ -889,6 +897,8 @@ Scenario D: A minimal image has no network tools, but you need to inspect its ro
 - [Linux pid_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/pid_namespaces.7.html)
 - [Linux network_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/network_namespaces.7.html)
 - [Linux mount_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/mount_namespaces.7.html)
+- [util-linux unshare: namespace lifetime and explicit propagation](https://man7.org/linux/man-pages/man1/unshare.1.html)
+- [util-linux findmnt: mount-table queries and exit status](https://man7.org/linux/man-pages/man8/findmnt.8.html)
 - [Linux user_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/user_namespaces.7.html)
 - [Linux ipc_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/ipc_namespaces.7.html)
 - [Linux uts_namespaces documentation, man7.org](https://man7.org/linux/man-pages/man7/uts_namespaces.7.html)
