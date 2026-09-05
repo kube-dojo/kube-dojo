@@ -622,4 +622,4 @@ Before you continue, explain how the three-pass strategy uses that scoreboard vi
 
 ## Next Module
 
-[Module 1.1: Network Policies](../part1-cluster-setup/module-1.1-network-policies/) - Start Part 1 by turning the exam strategy into concrete network isolation skills.
+[Module 1.1: Network Policies](../../part1-cluster-setup/module-1.1-network-policies/) - Start Part 1 by turning the exam strategy into concrete network isolation skills.

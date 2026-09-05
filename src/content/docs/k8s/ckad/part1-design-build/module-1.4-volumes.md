@@ -950,7 +950,7 @@ k delete namespace volumes-lab --ignore-not-found
 
 ## Next Module
 
-Continue to the [Part 1 Cumulative Quiz](./part1-cumulative-quiz/) to practice designing and debugging Pods, Jobs, multi-container patterns, and volume-backed workloads together.
+Continue to the [Part 1 Cumulative Quiz](../part1-cumulative-quiz/) to practice designing and debugging Pods, Jobs, multi-container patterns, and volume-backed workloads together.
 
 ## Sources
 

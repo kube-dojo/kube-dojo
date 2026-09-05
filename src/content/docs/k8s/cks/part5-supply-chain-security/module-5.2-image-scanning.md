@@ -560,4 +560,4 @@ When a scan returns more than one hundred CVEs and the timer is running, use a t
 
 ## Next Module
 
-[Module 5.3: Static Analysis with kubesec and OPA](./module-5.3-static-analysis/) - Scan Kubernetes manifests and enforce supply-chain policy before risky objects reach the API server.
+[Module 5.3: Static Analysis with kubesec and OPA](../module-5.3-static-analysis/) - Scan Kubernetes manifests and enforce supply-chain policy before risky objects reach the API server.
