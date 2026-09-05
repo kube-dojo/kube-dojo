@@ -572,108 +572,82 @@ Before you leave this module, walk through a checklist on a service you operate 
 
 ## Hands-On Exercise
 
-### Part A: Simple Chaos Experiment (15 minutes)
+### Part A: Observe Replica Recovery and HTTP Requests (15–25 minutes)
 
-This exercise uses a minimal Kubernetes deployment so you can observe emergent self-healing without reproducing a full production stack. You need a running Kubernetes v1.35+ cluster (kind, minikube, or managed). The learning goal is to experience how controllers, schedulers, and replicated pods produce system-level recovery behavior that no individual Pod manifest encodes explicitly.
+Use a disposable Kubernetes 1.35 cluster and kubectl 1.35, with permission to create namespaces. Save the script below as `recovery.sh`, inspect the context name, then run `bash recovery.sh YOUR_DISPOSABLE_CONTEXT`. It creates a unique namespace and deletes only that namespace instance on exit. Keep the printed evidence directory. If setup or cleanup fails, read the error and inspect the named namespace; do not substitute a broad delete command.
 
-1. **Create a resilient deployment** by applying the manifest below, which creates three nginx replicas with readiness and liveness probes in a dedicated namespace.
-
-```bash
-# Create a namespace for this experiment
-kubectl create namespace chaos-lab
-
-# Create a deployment with multiple replicas
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: resilience-test
-  namespace: chaos-lab
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: resilience-test
-  template:
-    metadata:
-      labels:
-        app: resilience-test
-    spec:
-      containers:
-      - name: web
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 2
-          periodSeconds: 3
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: resilience-test
-  namespace: chaos-lab
-spec:
-  selector:
-    app: resilience-test
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
-```
-
-2. **Verify all pods are running** and wait until each replica reports `Running` and `1/1 Ready`.
+Before running, predict two things separately: what will happen to Pod identities when one and then two Pods are deleted, and what the HTTP samples might show. A [Deployment manages ReplicaSets](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/deployment/); the [ReplicaSet controller creates replacement Pods](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/replicaset/). [Readiness affects Service endpoints](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/#readiness-probe), but a ready replica count alone does not measure client requests.
 
 ```bash
-kubectl get pods -n chaos-lab -w
-# Wait until all 3 pods show Running and 1/1 Ready
-# Press Ctrl+C to stop watching
+#!/usr/bin/env bash
+set -euo pipefail
+context=${1:?Pass the name of your disposable Kubernetes context}
+k() { kubectl --context="$context" --request-timeout=15s "$@"; }
+ns="kd-recovery-$(date +%s)-$$"
+logs=$(mktemp -d "${TMPDIR:-/tmp}/kubedojo-recovery.XXXXXX")
+printf 'Context=%s namespace=%s evidence=%s\n' "$context" "$ns" "$logs"
+k version -o yaml > "$logs/version.yaml"
+uid=$(k create namespace "$ns" -o jsonpath='{.metadata.uid}')
+cleanup() {
+  rc=$?
+  trap - EXIT
+  printf '{"apiVersion":"v1","kind":"DeleteOptions","preconditions":{"uid":"%s"}}' "$uid" |
+    k delete --raw "/api/v1/namespaces/$ns" -f - > "$logs/cleanup.json" || rc=1
+  k wait --for=delete "namespace/$ns" --timeout=120s || rc=1
+  printf 'Cleanup exit=%s; retain evidence in %s\n' "$rc" "$logs"
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+printf '%s\n' "$uid" > "$logs/namespace-uid.txt"
+k -n "$ns" create deployment resilience-test --image=nginx:1.28-alpine --replicas=3
+k -n "$ns" patch deployment resilience-test --type=strategic -p '{"spec":{"template":{"spec":{"containers":[{"name":"nginx","readinessProbe":{"httpGet":{"path":"/","port":80},"periodSeconds":3}}]}}}}'
+k -n "$ns" expose deployment resilience-test --port=80 --target-port=80
+k -n "$ns" run observer --image=busybox:1.36 --restart=Never --command -- sleep 600
+k -n "$ns" wait --for=condition=Ready pod/observer --timeout=120s
+ready_three() {
+  for attempt in $(seq 1 30); do
+    states=$(k -n "$ns" get pods -l app=resilience-test -o jsonpath='{range .items[*]}{.metadata.uid}{" "}{.metadata.deletionTimestamp}{" "}{.status.containerStatuses[0].ready}{"\n"}{end}')
+    if printf '%s\n' "$states" | awk 'NF==2 && $2=="true" {n++} END {exit !(NR==3 && n==3)}'; then return; fi
+    sleep 2
+  done
+  echo 'Three ready, non-terminating Pods were not observed within 30 polls' >&2
+  return 1
+}
+snapshot() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+  k -n "$ns" get deployment,replicaset,pods -o json
+}
+ready_three
+k -n "$ns" get pods -o json > "$logs/images-and-owners.json"
+for round in 1 2; do
+  snapshot > "$logs/before-$round.json.txt"
+  k --request-timeout=90s -n "$ns" exec observer -- sh -c '
+    for i in $(seq 1 20); do
+      date -u +%Y-%m-%dT%H:%M:%SZ
+      if wget -q -T 2 -O /dev/null http://resilience-test; then echo HTTP_OK; else echo HTTP_FAILED; fi
+      sleep 1
+    done' > "$logs/http-$round.txt" 2>&1 &
+  observer_pid=$!
+  sleep 2
+  pods=$(k -n "$ns" get pods -l app=resilience-test -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  selected=()
+  while IFS= read -r pod; do selected+=("$pod"); done < <(printf '%s\n' "$pods" | head -n "$round")
+  date -u '+%Y-%m-%dT%H:%M:%SZ' > "$logs/delete-$round.txt"
+  k -n "$ns" delete pod "${selected[@]}" --wait=true --timeout=120s >> "$logs/delete-$round.txt"
+  ready_three
+  snapshot > "$logs/after-$round.json.txt"
+  wait "$observer_pid"
+  cat "$logs/http-$round.txt"
+done
 ```
 
-3. **In a second terminal, watch pod events continuously** so you can observe recovery dynamics while injecting failure.
+Open the evidence files and compare your predictions with the run. In each before/after snapshot, compare Pod UIDs, `ownerReferences`, container readiness and ReplicaSet counts. Follow Pod → ReplicaSet → Deployment ownership. The initial Pod JSON also records image tags and resolved `imageID` values; tags can change, so preserve those identities alongside the client/server versions. A timeout or missing replica is a result to investigate, not permission to write “recovered.”
 
-```bash
-# Keep this running to observe the emergent behavior
-kubectl get pods -n chaos-lab -w
-```
+For each round, count `HTTP_OK` and `HTTP_FAILED`, inspect request timestamps and compare them with the deletion timestamp. The observer makes 20 attempts, with a two-second wget timeout and a one-second pause between attempts; execution and scheduling also affect the interval. These are samples through the Service, not continuous coverage. Even 20 successes cannot establish uninterrupted availability or predict the next run. If sampling ends before recovery, state that limitation.
 
-4. **Inject chaos by deleting one pod** and watch how the Deployment controller recreates capacity.
-
-```bash
-# Delete a pod (the first one in the list)
-POD=$(kubectl get pod -n chaos-lab -l app=resilience-test -o jsonpath='{.items[0].metadata.name}')
-echo "Killing pod: $POD"
-kubectl delete pod -n chaos-lab $POD --wait=false
-```
-
-In terminal 2 you should see the pod enter `Terminating`, a replacement pod appear almost immediately, and the new pod progress through `Pending`, `ContainerCreating`, and `Running` without manual intervention.
-
-5. **Inject stronger chaos by deleting two pods at once** to see how the same control loop responds under larger perturbation.
-
-```bash
-# Delete 2 pods simultaneously
-kubectl delete pod -n chaos-lab --wait=false \
-  $(kubectl get pod -n chaos-lab -l app=resilience-test -o jsonpath='{.items[0].metadata.name} {.items[1].metadata.name}')
-```
-
-6. **Observe emergent behavior** across both experiments: the cluster maintains desired replica count without human action, recreation timing varies with scheduler and node conditions, and you cannot predict exactly which pod names will appear even though the system-level outcome stabilizes.
-
-7. **Clean up** when finished so the experiment does not consume cluster resources.
-
-```bash
-kubectl delete namespace chaos-lab
-```
-
-What you experienced is emergence in miniature: system-level self-healing that no single pod possesses, a feedback loop where the Deployment controller detects actual state diverging from desired state and creates replacements, unpredictable timing at the pod level coupled with reliable recovery at the service level, and resilience that tolerates brief degradation while converging back toward the declared replica count.
+Explain the observed controller coordination without claiming that this small experiment proves a general theory of emergence. Which evidence shows replacement? Which evidence describes client experience? What remains unknown about failures, capacity or image-pull conditions outside this run? Finally, check the cleanup result: the script uses a server-side [UID deletion precondition](https://github.com/kubernetes/apimachinery/blob/v0.35.0/pkg/apis/meta/v1/types.go) and a bounded deletion wait. A failed cleanup is unfinished work, not a successful exercise.
 
 ---
 
@@ -721,8 +695,8 @@ Compare two plausible hypotheses without declaring either a demonstrated cause. 
 Complete Part B with a justified working interpretation, an evidence ledger comparing hypotheses, and questions for all four abilities. Choose one next step and explain what its result could establish, what would remain uncertain, and how you would check any proposed change. These are teaching applications of the frameworks, not a diagnosis supplied by them.
 
 **Success Criteria**:
-- [ ] Part A: Successfully killed and observed pod recovery
-- [ ] Part A: Can explain what "emergence" you observed
+- [ ] Part A: Compared Pod identities, ownership and readiness before/after both deletions; reported failures honestly
+- [ ] Part A: Interpreted HTTP samples separately, retained version/image evidence and verified owned-namespace cleanup
 - [ ] Part B: Working interpretation justified by evidence, with unknowns stated
 - [ ] Part B: Observations separated from two candidate explanations and their evidence needs
 - [ ] Part B: No invented causes, logs or outcomes; timing and responder knowledge considered
