@@ -3,7 +3,7 @@ title: "KCA - Kyverno Certified Associate"
 sidebar:
   order: 0
   label: "KCA"
-slug: uk/k8s/kca/index
+slug: uk/k8s/kca
 en_commit: "7e01a3686e7eed601474920f79697275be77476d"
 en_file: "src/content/docs/k8s/kca/index.md"
 calque_review:

@@ -1,6 +1,6 @@
 ---
 title: "Розгортання на Bare Metal"
-slug: "uk/on-premises/provisioning/index"
+slug: "uk/on-premises/provisioning"
 sidebar:
   order: 0
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"

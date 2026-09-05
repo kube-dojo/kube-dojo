@@ -1,6 +1,6 @@
 ---
 title: "Хмарні керовані сервіси"
-slug: uk/cloud/managed-services/index
+slug: uk/cloud/managed-services
 sidebar:
   order: 0
   label: "Керовані сервіси"

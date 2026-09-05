@@ -3,7 +3,7 @@ title: "CBA - Certified Backstage Associate"
 sidebar:
   order: 0
   label: "CBA"
-slug: uk/k8s/cba/index
+slug: uk/k8s/cba
 en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
 en_file: "src/content/docs/k8s/cba/index.md"
 calque_review:

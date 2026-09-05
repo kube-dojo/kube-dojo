@@ -1,6 +1,6 @@
 ---
 title: "PCA — Prometheus Certified Associate"
-slug: uk/k8s/pca/index
+slug: uk/k8s/pca
 sidebar:
   order: 0
   label: "PCA"
