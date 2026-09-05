@@ -672,7 +672,7 @@ The busiest rule is not automatically the broken rule; it is the rule most traff
 
 ## Next Module
 
-[Next Module: Security](../../security/) moves from packet-level controls to process and kernel hardening with AppArmor, SELinux, seccomp, and practical host defense.
+[Next Module: Security](../../../security/) moves from packet-level controls to process and kernel hardening with AppArmor, SELinux, seccomp, and practical host defense.
 
 ## Sources
 

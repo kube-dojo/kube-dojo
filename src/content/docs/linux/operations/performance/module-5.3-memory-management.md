@@ -780,7 +780,7 @@ docker rm -f mem-test
 
 ## Next Module
 
-[Module 5.4: I/O Performance](module-5.4-io-performance/) shows how disk I/O, filesystems, block devices, and storage latency shape the memory symptoms you just learned to read.
+[Module 5.4: I/O Performance](../module-5.4-io-performance/) shows how disk I/O, filesystems, block devices, and storage latency shape the memory symptoms you just learned to read.
 
 ## Sources
 

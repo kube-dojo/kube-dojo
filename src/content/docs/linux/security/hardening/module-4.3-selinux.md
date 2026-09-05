@@ -760,7 +760,7 @@ sudo rm -rf /srv/testapp
 
 ## Next Module
 
-Next, read [Module 4.4: seccomp Profiles](./module-4.4-seccomp/) to learn how system call filtering blocks dangerous kernel interactions even when the process, file labels, and Linux permissions would otherwise allow execution.
+Next, read [Module 4.4: seccomp Profiles](../module-4.4-seccomp/) to learn how system call filtering blocks dangerous kernel interactions even when the process, file labels, and Linux permissions would otherwise allow execution.
 
 ## Sources
 

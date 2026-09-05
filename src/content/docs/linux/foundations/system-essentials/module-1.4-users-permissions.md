@@ -495,7 +495,7 @@ kubectl delete namespace users-perms-lab
 
 ## Next Module
 
-[Container Primitives](../container-primitives/) shows how namespaces, cgroups, capabilities, and filesystems combine with the identity and permission model from this module to create container isolation.
+[Container Primitives](../../container-primitives/) shows how namespaces, cgroups, capabilities, and filesystems combine with the identity and permission model from this module to create container isolation.
 
 ## Sources
 

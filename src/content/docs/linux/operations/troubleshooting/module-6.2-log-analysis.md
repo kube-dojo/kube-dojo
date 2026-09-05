@@ -847,7 +847,7 @@ The retention commands help you design rather than merely consume logs. If a jou
 
 ## Next Module
 
-[Module 6.3: Process Debugging](./module-6.3-process-debugging/) shows how to trace process behavior with `strace`, inspect `/proc`, and debug hung or misbehaving processes when logs tell you where to look but not what the process is doing.
+[Module 6.3: Process Debugging](../module-6.3-process-debugging/) shows how to trace process behavior with `strace`, inspect `/proc`, and debug hung or misbehaving processes when logs tell you where to look but not what the process is doing.
 
 ## Sources
 
