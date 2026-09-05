@@ -465,18 +465,66 @@ Start with the **private subnet NACL inbound rules** for ephemeral ports (typica
 
 In this exercise you will use the AWS CLI to build a production-style VPC: multiple Availability Zones, public subnets for edge components, private subnets for compute, per-AZ NAT Gateways for resilient outbound access, chained security groups, and a restrictive NACL on the private tier. The diagram summarizes the target topology you will create with the commands that follow:
 
+### Preflight: Account, Region, Cost, and Cleanup
+
+Run this preflight in a Bash shell before creating anything. Use AWS CLI v2 with an isolated AWS account and a role authorized to create and delete the lab resources. Confirm that the role permits the EC2 networking create/describe/delete operations used below, `iam:PassRole` for the later flow-log task, and the required CloudWatch Logs operations. Review your VPC/NAT/EIP quotas and confirm that `10.0.0.0/16` does not overlap with connected networks you need to keep reachable. Check command exit status and returned data: stop on any non-zero result, and record every resource ID as soon as it is returned so a partial run can be cleaned up.
+
+Read the cleanup section before starting. Keep an inventory of resources actually created, including resources left by a failed step; only delete this exercise's resources. Before provisioning, confirm that you can supply the same-account [flow-log IAM role](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html) required by Task 8. The identity check below does not prove all these permissions are available.
+
+Two NAT Gateways and two Elastic IPs are billable. Choose a spending limit and cleanup deadline before starting. Budget separately for NAT Gateway hours, processed data, transfer, public IPv4/EIP usage, and any CloudWatch Logs ingestion or storage. Check the current regional rates in [AWS VPC pricing](https://aws.amazon.com/vpc/pricing/) and [NAT Gateway pricing](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html) before provisioning; this page supplies no default budget or universal hourly quote. Stopping your terminal does not delete billable resources.
+
+Set your chosen region first, for example `export AWS_REGION=us-east-1`, and keep the AWS CLI variables consistent. The function discovers two available standard zones using [`describe-availability-zones`](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-availability-zones.html). It returns a failure instead of closing an interactive shell; do not continue after a failure message.
+
+```bash
+vpc_preflight() {
+  if [[ -z "${AWS_REGION:-}" && -z "${AWS_DEFAULT_REGION:-}" ]]; then
+    printf '%s\n' 'Set AWS_REGION (or AWS_DEFAULT_REGION) before continuing.' >&2
+    return 1
+  fi
+  if [[ -n "${AWS_REGION:-}" && -n "${AWS_DEFAULT_REGION:-}" && "$AWS_REGION" != "$AWS_DEFAULT_REGION" ]]; then
+    printf 'AWS_REGION (%s) and AWS_DEFAULT_REGION (%s) differ; choose one region.\n' "$AWS_REGION" "$AWS_DEFAULT_REGION" >&2
+    return 1
+  fi
+  export AWS_REGION="${AWS_REGION:-$AWS_DEFAULT_REGION}"
+  export AWS_DEFAULT_REGION="$AWS_REGION"
+  export AWS_PAGER=""
+
+  AWS_VERSION=$(aws --version 2>&1) || return 1
+  if [[ "$AWS_VERSION" != aws-cli/2.* ]]; then
+    printf 'AWS CLI v2 is required; found %s.\n' "$AWS_VERSION" >&2
+    return 1
+  fi
+  printf '%s\n' "$AWS_VERSION"
+  aws sts get-caller-identity --query '{Account:Account,Arn:Arn,UserId:UserId}' --output table || return 1
+
+  AZ_LIST=$(aws ec2 describe-availability-zones \
+    --region "$AWS_REGION" \
+    --filters "Name=state,Values=available" "Name=zone-type,Values=availability-zone" \
+    --query 'sort_by(AvailabilityZones,&ZoneName)[].ZoneName' --output text) || return 1
+  AZ_NAMES=$(printf '%s\n' "$AZ_LIST" | awk '{for (i = 1; i <= NF; i++) print $i}')
+  AZ1=$(printf '%s\n' "$AZ_NAMES" | sed -n '1p')
+  AZ2=$(printf '%s\n' "$AZ_NAMES" | sed -n '2p')
+  if [[ -z "$AZ1" || -z "$AZ2" ]]; then
+    printf 'Region %s has fewer than two available standard Availability Zones; stop here.\n' "$AWS_REGION" >&2
+    return 1
+  fi
+  printf 'Using %s and %s in %s.\n' "$AZ1" "$AZ2" "$AWS_REGION"
+}
+vpc_preflight
+```
+
 ```mermaid
 flowchart TB
     subgraph VPC ["VPC: 10.0.0.0/16 (Dojo-Prod-VPC)<br>Security: ALB-SG → App-SG → DB-SG (chained)<br>NACL: Block known-bad CIDR on private subnets<br>Internet: IGW → Public Subnets → NAT-GW → Private Subnets"]
         direction TB
         
-        subgraph AZ1 ["AZ: us-east-1a"]
+        subgraph AZ1 ["AZ 1 (selected by preflight)"]
             Pub1["Public: 10.0.1.0/24 [ALB, NAT-GW]"]
             Priv1["Private: 10.0.10.0/24 [App Servers]"]
             Pub1 --> Priv1
         end
         
-        subgraph AZ2 ["AZ: us-east-1b"]
+        subgraph AZ2 ["AZ 2 (selected by preflight)"]
             Pub2["Public: 10.0.2.0/24 [ALB, NAT-GW]"]
             Priv2["Private: 10.0.20.0/24 [App Servers]"]
             Pub2 --> Priv2
@@ -532,12 +580,10 @@ echo "IGW $IGW_ID attached to VPC $VPC_ID"
 
 ### Task 3: Create the Subnets Across Two AZs
 
-Next carve four `/24` subnets—two public and two private—each pinned to a different Availability Zone so the exercise mirrors a minimal multi-AZ layout even though the narrative diagrams showed three AZs for teaching purposes.
+Next carve four `/24` subnets—two public and two private—across the two Availability Zones selected by the preflight. The `AZ1` and `AZ2` variables below come from that gate; do not replace them with hardcoded names.
 
 ```bash
-# Define availability zones (adjust if your default region is different)
-AZ1="us-east-1a"
-AZ2="us-east-1b"
+# AZ1 and AZ2 were selected by the preflight in the explicit AWS_REGION.
 
 # --- Public Subnets ---
 
@@ -651,8 +697,6 @@ aws ec2 create-tags --resources $PRIV_RT2_ID --tags Key=Name,Value=Private-Route
 aws ec2 create-route --route-table-id $PRIV_RT2_ID --destination-cidr-block 0.0.0.0/0 --nat-gateway-id $NAT2_ID
 aws ec2 associate-route-table --subnet-id $PRIV_SUB2_ID --route-table-id $PRIV_RT2_ID
 ```
-
-> **Cost Warning**: NAT Gateways cost ~$0.045/hr each. Two NAT Gateways running 24/7 cost ~$65/month before data charges. Delete them when you finish this exercise!
 
 ### Task 6: Configure Layered Security Groups
 
