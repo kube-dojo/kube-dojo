@@ -56,6 +56,7 @@ function routeRecord(route: (typeof routes)[number], value: ReturnType<typeof co
   const source = route.entry.filePath;
   if (source.startsWith('/') || source.split('/').includes('..')) unsupported(`Starlight source is not site-relative: ${source}`);
   const url = runtimeUrlFromPathname(value.site, value.base, slugToPathname(route.id));
+  if (url.origin !== new URL(value.site as string).origin || url.search || url.hash) unsupported(`route id does not produce a same-origin pathname: ${route.id}`);
   const canonical = formatCanonical(url.href, { format: value.buildFormat, trailingSlash: value.trailingSlash });
   return { id: route.id, url: canonical, pathname: new URL(canonical).pathname, source, sourceSha256: hashSource(source), isFallback: route.isFallback === true, locale: route.locale ?? null, lang: route.lang ?? null };
 }
