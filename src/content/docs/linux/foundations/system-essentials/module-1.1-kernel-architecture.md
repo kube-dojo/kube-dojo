@@ -786,4 +786,4 @@ A strong judgment might say, "This host is a reasonable candidate for a lab node
 
 ## Next Module
 
-Continue to [Module 1.2: Processes & systemd](./module-1.2-processes-systemd/), where you will connect the kernel's process model to services, PID 1, supervision, and the way containers behave as isolated Linux processes.
+Continue to [Module 1.2: Processes & systemd](../module-1.2-processes-systemd/), where you will connect the kernel's process model to services, PID 1, supervision, and the way containers behave as isolated Linux processes.

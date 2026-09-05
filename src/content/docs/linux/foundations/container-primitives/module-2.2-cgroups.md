@@ -679,4 +679,4 @@ This optional exercise should be done only on a disposable host or lab VM. If th
 
 ## Next Module
 
-[Next Module: Capabilities & Linux Security Modules](./module-2.3-capabilities-lsms/) shows how Linux narrows what a process may do even after namespaces shape its view and cgroups constrain its resource use.
+[Next Module: Capabilities & Linux Security Modules](../module-2.3-capabilities-lsms/) shows how Linux narrows what a process may do even after namespaces shape its view and cgroups constrain its resource use.
