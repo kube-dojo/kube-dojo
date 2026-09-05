@@ -32,7 +32,7 @@ fi
 CONTEXT="$CONTEXT
 KEY REMINDERS:
   - .venv/bin/python only (hook enforces this)
-  - Quality: 29/35 sum + every dimension >= 4
+  - Quality: 33/40 sum + every dimension >= 4 (D1-D8)
   - Workflow: Gemini writes, Claude reviews strictly
   - Pipeline: .venv/bin/python scripts/v1_pipeline.py status
   - UK sync: .venv/bin/python scripts/uk_sync.py detect

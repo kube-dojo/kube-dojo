@@ -22,7 +22,7 @@ For upgrade work, a module is **not review-passed** until it satisfies all of th
 3. important factual claims are traceable to cited sources
 4. the formal rubric score still passes:
    - every dimension `>= 4`
-   - total `>= 29/35`
+   - total `>= 33/40` across all eight dimensions in `docs/quality-rubric.md`
 
 ## What Must Be Cited
 

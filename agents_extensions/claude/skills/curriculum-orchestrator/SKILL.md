@@ -112,7 +112,7 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 - Never act on a file or directory without understanding its purpose.
 - Never modify a pipeline without reading design docs first.
 - Density gates are MINIMUMS, not targets (median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%). Expand content; do not lower the gate ([[feedback_388_verifier_first_pilot_then_volume]]).
-- Verifier ≠ pedagogical quality. A module that passes the verifier can still fail the 7-dimension rubric ([[feedback_teaching_not_listicles]]).
+- Verifier ≠ pedagogical quality. A module that passes the verifier can still fail the 8-dimension rubric ([[feedback_teaching_not_listicles]]).
 - "Heuristic-green" ≠ "reviewed by composer-2.5". Two different axes on the `/quality` dashboard.
 - Never switch branches in the main project dir; all branch work in `.worktrees/`.
 - Don't add Jenkins modules — cover GHA + GitLab CI + ArgoCD instead ([[feedback_skip_jenkins_prefer_modern_cicd]]).

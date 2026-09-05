@@ -10,7 +10,7 @@ Run a rigorous PR review on KubeDojo code or content. **Different model family t
 
 > **Routing source-of-truth precedence**: `docs/review-protocol.md` defines the cross-family *principle* but its concrete pairings (Claude → Codex etc.) predate Decision Card C (2026-05-24). The active routing table below + [`STATUS.md`](../../../STATUS.md) "Active policies" supersede the stale defaults in `review-protocol.md` until that doc is refreshed.
 
-This skill describes the **review contract**. For pedagogical content scoring against the 7-dim rubric, layer in [[module-quality-reviewer]].
+This skill describes the **review contract**. For pedagogical content scoring against the 8-dim rubric (D1-D8), layer in [[module-quality-reviewer]].
 
 ## Routing table (Decision Card C, 2026-05-24; gemini-cli retired ~2026-06-15 → the Google seat is agy)
 
@@ -29,7 +29,7 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 
 1. **Pull the PR locally** (or read the diff via `gh pr diff <N>`).
 2. **Read changed files in full**, not just the hunk. A diff hides surrounding-context bugs.
-3. **For curriculum content**: also run [[module-quality-reviewer]] (7-dim rubric).
+3. **For curriculum content**: also run [[module-quality-reviewer]] (8-dim rubric).
 4. **For code**: run the relevant linter + tests (`.venv/bin/ruff check`, `npx tsc --noEmit`, `npx eslint`, `.venv/bin/pytest`, `npm test`).
 5. **For workflows** (`.github/workflows/**`): `uvx zizmor --offline --strict-collection .github/` ([[.claude/rules/github-actions-security]]).
 6. **For modules**: `.venv/bin/python scripts/quality/verify_module.py <path>` for density gates.
@@ -108,7 +108,7 @@ For contested NEEDS_CHANGES (author defends, reviewer blocks, repeat), trigger `
 
 ## References
 
-- [[module-quality-reviewer]] — pedagogical 7-dim rubric for content reviews.
+- [[module-quality-reviewer]] — pedagogical 8-dim rubric for content reviews.
 - [[curriculum-writer]] — what the author was contracted to deliver.
 - [[dispatch-router]] — picking the right reviewer agent.
 - [`docs/review-protocol.md`](../../../docs/review-protocol.md) — cross-family review contract.

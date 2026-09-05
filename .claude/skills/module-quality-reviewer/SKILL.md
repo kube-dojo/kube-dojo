@@ -1,6 +1,6 @@
 ---
 name: module-quality-reviewer
-description: Review KubeDojo modules against the 7-dim pedagogical rubric. For ANY agent acting as reviewer (codex, composer-2.5, agy, claude). Use when reviewing, scoring, or checking modules. Triggers on "review module", "check quality", "score module".
+description: Review KubeDojo modules against the 8-dimension (D1-D8) pedagogical rubric. For ANY agent acting as reviewer (codex, composer-2.5, agy, claude). Use when reviewing, scoring, or checking modules. Triggers on "review module", "check quality", "score module".
 last_calibrated: 2026-05-24
 ---
 
@@ -24,7 +24,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 
 1. **Read the module fully** — line-by-line, not skim ([[code-editing-safety §3]]).
 2. **Run the verifier first**: `.venv/bin/python scripts/quality/verify_module.py <path>`. Density gates failing (median_wpp < 28, mean_wpp < 30, short-para > 20%) = immediate NEEDS_CHANGES, no rubric needed yet.
-3. **Score against ALL 7 rubric dimensions** (1-5 each).
+3. **Score against ALL 8 rubric dimensions** (1-5 each).
 4. **Be STRICT** — a 4 means genuinely good, a 5 is exceptional.
 5. **Flag specific issues with line numbers** — vague critique is reviewer-malpractice.
 6. **Verify all external facts**. Burden of proof on keeping: if a citation `supports` the claim → keep; partial/no/fetch-fail/ambiguous → flag for removal ([[feedback_citation_verify_or_remove]]).
@@ -41,6 +41,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 | **Assessment Alignment** | Do quiz questions test understanding (scenarios) or recall (what is X?)? |
 | **Cognitive Load** | Well-chunked? Diagrams integrated? Or information dump? |
 | **Engagement** | Memorable tone? Would you recommend this to a colleague? Or dry/robotic? |
+| **Practitioner Depth** (complexity-scaled) | Apply D8 in `docs/quality-rubric.md` for the module's complexity marker: purpose and honest tradeoffs for `[QUICK]`, patterns and decision guidance for `[MEDIUM]`, deeper failure analysis and architectural reasoning for advanced tiers. |
 
 ## Structure Checklist
 
@@ -60,10 +61,10 @@ Do not penalize a module solely for omitting a story or analogy. When used, veri
 
 ## Passing Criteria
 
-- Average score >= 3.5/5
-- No single dimension scores 1
-- Active Learning >= 3
-- Assessment Alignment >= 3
+Per the repository-root `docs/quality-rubric.md` (D1-D8), a module passes only when **both** hold:
+
+- **Sum >= 33 out of 40** (8 dimensions, 1-5 each)
+- **Every dimension >= 4** — a 3 anywhere is an automatic fail, regardless of sum
 
 ## Output Format
 
@@ -83,7 +84,8 @@ Do not penalize a module solely for omitting a story or analogy. When used, veri
 | Assessment Alignment | /5 | |
 | Cognitive Load | /5 | |
 | Engagement | /5 | |
-| **Average** | **/5** | |
+| Practitioner Depth | /5 | (complexity-scaled) |
+| **Sum** | **/40** | pass: sum >= 33 AND every dimension >= 4 |
 
 ### Structure Checklist
 - [x] or [ ] for each required element
@@ -98,6 +100,8 @@ Do not penalize a module solely for omitting a story or analogy. When used, veri
 ```
 
 ## Reference Modules (Gold Standard)
+
+> The listed five-point scores do not establish acceptance under the current eight-dimension contract. Verify current evidence before treating these modules as passing references.
 
 - **Platform: What is Systems Thinking?** (4.6/5) — narrative voice, inline exercises, scenario-based assessment
 - **On-Prem: The Case for On-Prem** (4.4/5) — balanced perspective, deliberate quiz traps, TCO exercise
