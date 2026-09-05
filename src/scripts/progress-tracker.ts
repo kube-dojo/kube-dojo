@@ -7,45 +7,33 @@
  * Decorates sidebar links with checkmarks for completed modules.
  */
 
-const STORAGE_KEY = 'kubedojo-progress';
+import { loadLessonCatalog } from './progress-client';
+import type { Lesson } from './progress-catalog';
+import type { ProgressData } from './progress-data';
+import { lessonIsComplete, PROGRESS_KEY, readSavedProgress, setLessonComplete } from './progress-state';
 
-interface ProgressData {
-  [slug: string]: number; // timestamp of completion
-}
+let catalog: Lesson[] = [];
+const storage = () => window.localStorage;
 
 // ===== Core API =====
 
 function getProgress(): ProgressData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveProgress(data: ProgressData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // localStorage full or unavailable — fail silently
-  }
+  const result = readSavedProgress(storage);
+  if (!result.ok) throw new Error('Saved progress could not be read. Your existing data has not been changed.');
+  return result.data;
 }
 
 function markComplete(slug: string): void {
-  const data = getProgress();
-  data[slug] = Date.now();
-  saveProgress(data);
+  if (!setLessonComplete(storage, catalog, slug, true).ok) throw new Error('Progress could not be saved.');
 }
 
 function markIncomplete(slug: string): void {
-  const data = getProgress();
-  delete data[slug];
-  saveProgress(data);
+  if (!setLessonComplete(storage, catalog, slug, false).ok) throw new Error('Progress could not be saved.');
 }
 
 function isComplete(slug: string): boolean {
-  return slug in getProgress();
+  const lesson = catalog.find(item => item.keys.includes(slug));
+  return !!lesson && lessonIsComplete(lesson, getProgress());
 }
 
 // ===== UI: Mark Complete Button =====
@@ -63,12 +51,11 @@ function injectCompleteButton(): void {
   if (!slug) return;
 
   // Don't add to non-module pages (changelog, landing pages)
-  if (slug === 'changelog' || slug === 'uk/changelog') return;
+  if (!catalog.some(lesson => lesson.keys.includes(slug))) return;
 
   // Find the pagination nav (prev/next) or end of content
   const pagination = document.querySelector('.pagination-links') ||
                      document.querySelector('[class*="pagination"]');
-  const target = pagination || content;
 
   // Don't duplicate
   if (document.querySelector('.kd-complete-wrapper')) return;
@@ -82,13 +69,16 @@ function injectCompleteButton(): void {
   updateButtonState(btn, slug);
 
   btn.addEventListener('click', () => {
-    if (isComplete(slug)) {
-      markIncomplete(slug);
-    } else {
-      markComplete(slug);
-    }
-    updateButtonState(btn, slug);
-    decorateSidebar();
+    try {
+      if (isComplete(slug)) {
+        markIncomplete(slug);
+      } else {
+        markComplete(slug);
+      }
+      updateButtonState(btn, slug);
+      decorateSidebar();
+      document.getElementById('kd-progress-error')?.remove();
+    } catch (error) { showError(error); }
   });
 
   wrapper.appendChild(btn);
@@ -117,7 +107,8 @@ function decorateSidebar(): void {
   links.forEach((link) => {
     const href = (link as HTMLAnchorElement).pathname;
     const slug = href.replace(/^\/|\/$/g, '');
-    if (data[slug]) {
+    const lesson = catalog.find(item => item.keys.includes(slug));
+    if (lesson && lessonIsComplete(lesson, data)) {
       link.setAttribute('data-completed', 'true');
     } else {
       link.removeAttribute('data-completed');
@@ -127,9 +118,40 @@ function decorateSidebar(): void {
 
 // ===== Init =====
 
-function init(): void {
-  injectCompleteButton();
-  decorateSidebar();
+function showError(error: unknown): void {
+  const complete = document.querySelector<HTMLButtonElement>('.kd-complete-btn');
+  if (complete) {
+    complete.disabled = true;
+    complete.removeAttribute('aria-pressed');
+    complete.textContent = 'Progress unavailable';
+  }
+  document.querySelectorAll('[data-completed]').forEach(link => link.removeAttribute('data-completed'));
+  let note = document.getElementById('kd-progress-error');
+  if (!note) {
+    note = document.createElement('p');
+    note.id = 'kd-progress-error';
+    note.setAttribute('role', 'alert');
+    document.querySelector('.sl-markdown-content')?.appendChild(note);
+  }
+  note.textContent = error instanceof Error ? error.message : 'Progress is unavailable.';
+  const retry = document.createElement('button');
+  retry.textContent = 'Retry progress';
+  retry.addEventListener('click', () => { void init(); });
+  note.append(' ', retry);
+}
+
+export async function init(): Promise<void> {
+  try {
+    catalog = await loadLessonCatalog();
+    injectCompleteButton();
+    decorateSidebar();
+    const btn = document.querySelector<HTMLButtonElement>('.kd-complete-btn');
+    if (btn) {
+      updateButtonState(btn, location.pathname.replace(/^\/|\/$/g, ''));
+      btn.disabled = false;
+    }
+    document.getElementById('kd-progress-error')?.remove();
+  } catch (error) { showError(error); }
 }
 
 if (document.readyState === 'loading') {
@@ -140,3 +162,6 @@ if (document.readyState === 'loading') {
 
 // Re-run on Astro page transitions
 document.addEventListener('astro:page-load', init);
+window.addEventListener('storage', event => {
+  if (event.key === PROGRESS_KEY || event.key === null) void init();
+});
