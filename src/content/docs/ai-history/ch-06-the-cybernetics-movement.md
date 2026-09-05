@@ -18,7 +18,7 @@ Between 1940 and 1953 a parallel research program took shape — built on physic
 | Julian Bigelow | 1913–2003 | MIT-trained electrical engineer; hired by Wiener in January 1941 for the AA-predictor circuits. Designed the deliberately-sluggish "pilot" control stick that mimicked human reaction lag in the 1941 light-spot tracking apparatus. Co-author of the 1943 paper. |
 | Arturo Rosenblueth | 1900–1970 | Cardiologist and physiologist; with Wiener at the Harvard Medical School discussion group until 1944. Co-author of "Behavior, Purpose and Teleology." |
 | Warren McCulloch | 1898–1969 | Neurophysiologist; chairman and intellectual moderator of the Macy Conferences from 1946. Architect of the strict disciplinary-parity attendance policy. Cross-link to Ch5 for the 1943 Pitts-McCulloch logical calculus. |
-| W. Ross Ashby | 1903–1972 | Director of Research, Barnwood House Hospital, Gloucester. Designed the Homeostat (first published 1948 in *Electronic Engineering*; formalised in the 1952 *Design for a Brain* book). Presented "Homeostasis" at the ninth Macy Conference (1952). Refused to call his machine "intelligent" — only "ultrastable." |
+| W. Ross Ashby | 1903–1972 | Director of Research, Barnwood House Hospital, Gloucester. Designed the Homeostat (formalised in the 1952 *Design for a Brain* book). Published an article titled ["Design for a Brain" in *Electronic Engineering*, December 1948](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-34). Presented "Homeostasis" at the ninth Macy Conference (1952). Refused to call his machine "intelligent" — only "ultrastable." |
 | Gregory Bateson | 1904–1980 | Anthropologist; co-organiser of the second Macy meeting on "Teleological Mechanisms in Society" (20 September 1946). Coined the closing line: "I think that cybernetics is the biggest bite out of the fruit of the Tree of Knowledge that mankind has taken in the last 2000 years." |
 
 </details>
@@ -42,7 +42,7 @@ timeline
          : Sept 20 — second Macy meeting (Bateson co-organiser)
     1947 : Summer — Wiener coins "cybernetics" from Greek kybernētēs
     1948 : Wiener publishes Cybernetics: Or Control and Communication in the Animal and the Machine
-         : Dec — Ashby's first published Homeostat description in Electronic Engineering
+         : Dec — Ashby publishes Design for a Brain in Electronic Engineering
     1949 : Sixth Macy conference — first stenographically recorded; series renames to "Cybernetics"
     1952 : Ashby's Design for a Brain published; ninth Macy "Homeostasis" presentation
     1953 : Apr 22–24 — tenth and final Macy conference
@@ -126,7 +126,7 @@ That asymmetry matters for the historian. The meetings that made the institution
 
 ## The Homeostat
 
-While the Macy meetings provided the theoretical and social infrastructure, the cybernetics movement also required physical demonstration. If the anti-aircraft predictor was the movement's foundational engineering artifact, its canonical machine was the Homeostat, designed by W. Ross Ashby, the Director of Research at Barnwood House Hospital in Gloucester, England. Ashby's bibliography places a first published description in a December 1948 paper in *Electronic Engineering*, but the verified construction account for this chapter comes from his 1952 book *Design for a Brain* (heavily revised in its 1960 second edition) and his 1956 *An Introduction to Cybernetics*.
+While the Macy meetings provided the theoretical and social infrastructure, the cybernetics movement also required physical demonstration. If the anti-aircraft predictor was the movement's foundational engineering artifact, its canonical machine was the Homeostat, designed by W. Ross Ashby, the Director of Research at Barnwood House Hospital in Gloucester, England. A [holding archive's catalogue](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-34) records his article "Design for a Brain" in *Electronic Engineering* in December 1948; the [Ashby archive's bibliography](https://www.ashby.info/bibliography.html) gives volume 20, pages 379–383. These records establish the publication entry, not what the article describes or whether it was first. The construction account used in this chapter comes from his 1952 book *Design for a Brain* (heavily revised in its 1960 second edition) and his 1956 *An Introduction to Cybernetics*.
 
 Ashby's aim was not to build a machine that reasoned in propositions. He wanted a physical display of an ultrastable system: a system that could survive disturbance by finding a new configuration in which its essential variables returned within limits. The Homeostat was therefore not a model of symbol manipulation. It was a model of adaptive equilibrium. Its drama lay in watching a physical system search its own couplings until its needles settled.
 
