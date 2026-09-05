@@ -153,6 +153,52 @@ The year 1936 was not the year the computer was invented. No physical machine wa
 Every computer in production today is, at its lowest level of abstraction, a Turing-style universal machine: a fixed processor reading instructions stored in the same memory as its data. The program-as-data framing of §6 is what makes compilers, interpreters, virtual machines, and containers possible — they are all programs that read other programs as input. The negative result still bites, too: the print-symbol/circle-free decision problem is the reason no static analyser can perfectly decide every program's behaviour, the reason no antivirus can definitively classify every binary, and the reason formal verification stops at proof-decidable subsets of code. Hilbert asked whether mathematics could be reduced to a procedure; the answer is no, and that "no" set the architecture of computing.
 :::
 
+:::tip[Optional: run one tiny machine by hand]
+
+Turing’s §3 Example I gives a four-state machine that prints `0101…` from a blank
+tape. The table below is adapted from his [source table](https://www.cs.virginia.edu/~robins/Turing_Paper_1936.pdf)
+(printed p. 233; PDF p. 4).
+
+For this teaching version, cells are numbered `…, -1, 0, 1, 2, …`; cell `0` is
+initially scanned, every cell is blank (`□`), and the initial state is `b`. `P0` writes
+`0` on the scanned cell, `P1` writes `1`, and `R` scans the next cell to the right.
+The state changes after all operations in a row:
+
+| State | Scanned symbol | Operations | Next state |
+| --- | --- | --- | --- |
+| `b` | `□` | `P0, R` | `c` |
+| `c` | `□` | `R` | `e` |
+| `e` | `□` | `P1, R` | `f` |
+| `f` | `□` | `R` | `b` |
+
+**Try it first:** predict the state, head cell, and printed bit after each of the first eight
+table transitions. `P0, R` counts as one transition with two operations.
+
+<details>
+<summary>Reveal the trace</summary>
+
+| Transition | Before (state, head) | Operations | After (state, head) | Printed bit |
+| ---: | --- | --- | --- | --- |
+| 1 | `b, 0` | `P0, R` | `c, 1` | `0` |
+| 2 | `c, 1` | `R` | `e, 2` | — |
+| 3 | `e, 2` | `P1, R` | `f, 3` | `1` |
+| 4 | `f, 3` | `R` | `b, 4` | — |
+| 5 | `b, 4` | `P0, R` | `c, 5` | `0` |
+| 6 | `c, 5` | `R` | `e, 6` | — |
+| 7 | `e, 6` | `P1, R` | `f, 7` | `1` |
+| 8 | `f, 7` | `R` | `b, 8` | — |
+
+The printed bits are `0101`; the intervening cells remain blank. After four transitions the state is back to `b`,
+with the head four cells farther right. The same rules then repeat the pattern on fresh
+blank cells.
+
+</details>
+
+The indexed cells and `□` are teaching notation; Turing’s printed table uses his own
+page layout and the terms “m-configuration,” “symbol,” `P`, and `R`.
+
+:::
+
 ## Sources
 
 These references support the Gödel–Rosser distinction and the separation of formal equivalence from the Church–Turing thesis. Access and locator checks were recorded on September 5, 2026. Some historical dates and claims about physical computers still need stronger support; the [open research review](https://github.com/kube-dojo/kube-dojo.github.io/issues/2329) records those gaps.
