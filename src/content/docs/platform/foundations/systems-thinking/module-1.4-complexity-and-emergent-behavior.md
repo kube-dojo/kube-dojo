@@ -19,7 +19,7 @@ After completing this module, you will be able to apply complexity thinking to p
 
 1. **Distinguish** between complicated systems (predictable, decomposable) and complex systems (emergent, non-linear) in real infrastructure
 2. **Analyze** how simple component interactions produce emergent behaviors that cannot be predicted from specifications alone
-3. **Design** observability and safeguards for systems operating at the edge of chaos where emergent failures are most likely
+3. **Design** observability that connects service symptoms with retry, queue, and resource interactions, and propose safeguards to test
 4. **Evaluate** architectural decisions through the lens of complexity theory to reduce the blast radius of unexpected interactions
 
 ---
@@ -465,13 +465,22 @@ Traditional safety (**Safety-I**) focuses on what goes wrong. It counts errors, 
 
 Resilience engineering (**Safety-II**) also studies what goes right. It recognizes that most operations succeed despite latent failures. Operators constantly work around issues to keep the system running. By asking "Why does this usually work?" we can learn from successful adaptations and amplify them.
 
-### 4.5 Observability for Edge-of-Chaos Operations
+### 4.5 Observe Symptoms, Investigate Interactions
 
-Systems at the "edge of chaos" sit between rigid order and total disorder: enough structure to function, enough coupling that small perturbations can produce large effects. That is where many revenue-critical platforms live during growth phases. Observability design for this regime prioritizes **leading indicators** and **interaction metrics** over static thresholds on individual machines.
+Start with what users experience, then investigate the mechanisms behind it. Google's [Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/) distinguishes symptoms from causes and recommends watching latency, traffic, errors, and saturation. Latency distributions can expose slow requests hidden by an average; internal signals can reveal failures masked by retries. These are useful starting points, not proof that a particular dashboard will predict the next incident.
 
-Leading indicators include retry amplification, pool wait time, queue age, error budget burn relative to traffic, and saturation of shared resources such as connection pools, thread pools, and API rate limits. Interaction metrics include cross-service traces that show fan-out depth, correlation between deploy times and tail latency shifts, and segment-specific failure rates when global aggregates look acceptable. Dashboards that only turn red when a single service crosses a threshold will systematically miss complex degradation.
+Google's [Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/) explains how retries add load and how insufficient capacity can increase queue latency. For a service you operate, consider comparing original requests with downstream attempts, queue waiting time, and constrained-resource use. Choose signals your instrumentation can actually measure. A correlation gives you a hypothesis to investigate; it does not establish a cause by itself.
 
-Alert design should encode domain thinking. Clear-domain alerts can page with runbook links. Complicated-domain alerts should attach recent change context and key dependency graphs. Complex-domain alerts should often route to learning workflows: ticket plus experiment template, not only "fix immediately" paging, because premature fixes can worsen emergent loops. This does not mean ignoring user pain; it means pairing customer-impact alerts with explicit stabilization timers.
+As an operational application, tie urgent response to user impact and actionable symptoms under your incident process. Include relevant diagnostic context, but do not let a “complex” label postpone containment. Investigations and proposed experiments need an owner and appropriate change controls; a Cynefin category alone does not decide whether to page someone or open a learning ticket.
+
+**Hypothetical diagnostic exercise:** users report slower responses. Your observations show unchanged incoming request volume, more downstream attempts per original request, and longer queue waits. No measurements from a real incident are implied. What would you inspect next, and what safeguard would you propose testing in a disposable training environment?
+
+<details>
+<summary>Compare your diagnostic plan</summary>
+
+A retry loop is one candidate explanation; the observations do not prove it initiated the slowdown. Separate original requests from retries and compare their timing with errors and queue waits. Check whether the downstream service slowed before retry traffic rose. Propose a bounded retry-budget or backoff experiment with an explicit hypothesis, baseline, stop condition, and recovery check. Describe what evidence would challenge your hypothesis before running the experiment.
+
+</details>
 
 ### 4.6 Game Days and Organizational Learning
 
