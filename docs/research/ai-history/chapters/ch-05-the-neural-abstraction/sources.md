@@ -2,6 +2,8 @@
 
 ## Verification Key
 
+EDVAC reassessment (2026-09-05): the later `edvac-source-reassessment-2026-09-05.md` supersedes the earlier Green classification for citation uniqueness. Direct page images confirm the citation at printed12–13 (archive PDF35/37); the old two-pattern OCR search does not establish that it is the sole journal citation. Uniqueness and the broader influence/priority claims remain unverified. Independent review of the new scoped evidence is pending; earlier dated records below are retained as history.
+
 - **Green**: claim has primary evidence with verified page/section anchor plus independent confirmation.
 - **Yellow**: claim has one strong source, page anchor pending verification, or unresolved attribution nuance.
 - **Red**: claim should not be drafted yet.
