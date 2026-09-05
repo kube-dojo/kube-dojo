@@ -10,7 +10,7 @@ The artifact is the same 735-page PDF used for the meeting-format packet: SHA256
 
 | Locator on printed page 15 | What it supports | Prose disposition |
 |---|---|---|
-| First paragraph after the asterisk, opening two sentences | Pias identifies a set of models with three elements: Pitts–McCulloch's neuronal calculus, Shannon's information theory, and Wiener–Bigelow–Rosenblueth's behavioral theory. | Retain the three-part list with explicit attribution to Pias's retrospective account. |
+| First paragraph after the asterisk, opening sentence | Pias identifies a set of models with three elements: Pitts–McCulloch's neuronal calculus, Shannon's information theory, and Wiener–Bigelow–Rosenblueth's behavioral theory. | Retain the three-part list with explicit attribution to Pias's retrospective account. |
 | Same paragraph, sentence beginning “In other words” | Pias supplies broader digital, symbolic and teleological characterizations and describes a theory claiming applicability across several domains. | These are the editor's interpretive compression, not automatically a unanimous meeting position or successful explanation of those domains. Attribute any retained cross-domain ambition. |
 | Same sentence's domain list | The account ranges across organisms, machines, economic, psychological, sociological and aesthetic phenomena. | A short paraphrase of the ambition can convey its breadth. Do not upgrade a claim of validity into demonstrated explanatory success or an unqualified “explain everything.” |
 
