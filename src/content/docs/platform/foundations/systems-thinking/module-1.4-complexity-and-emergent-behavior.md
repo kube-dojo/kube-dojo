@@ -387,33 +387,23 @@ Each decision seems small. Each is locally rational. Together, they erode safety
 
 ## Part 4: Designing for Resilience
 
-### 4.1 Resilience vs Robustness—A Critical Distinction
+### 4.1 Robustness, Resilience, and Operating Limits
 
-**Robustness** means resisting known failures within designed limits, while **resilience** means adapting when the failure mode was not predicted or when multiple stresses combine in novel ways.
+Start with the operation you need to preserve. Does a catalog page still show useful information when its database slows? Does a payment operation still meet its correctness requirements? Calling either system "robust" becomes useful only when you specify the property, the disturbance, and what counts as acceptable performance.
 
-```mermaid
-graph TD
-    subgraph Robust System: The Fortress
-        R_Low[Low Stress] --> R_Perf1[100% Performance]
-        R_Med[Medium Stress] --> R_Perf2[100% Performance]
-        R_High[High Stress] --> R_Perf3[100% Performance]
-        R_Unk[Unknown Stress] --> R_Fail[Catastrophic FAILURE]
-        style R_Fail fill:#ff9999
-    end
-```
+In [*Four concepts for resilience* (2015), sections 2.2–2.3 of this manuscript copy](https://maritimesafetyinnovationlab.org/wp-content/uploads/2021/06/4sensesofresiliencepublic.pdf#page=3), David Woods distinguishes effective responses within a system's operating envelope from the capacity to stretch when events challenge that envelope. He calls the latter **graceful extensibility**. Boundaries can move as conditions and capabilities change; success within a prepared range does not settle what happens beyond it.
 
-```mermaid
-graph TD
-    subgraph Resilient System: The Reed
-        Re_Low[Low Stress] --> Re_Perf1[100% Performance]
-        Re_Med[Medium Stress] --> Re_Perf2[90% Performance]
-        Re_High[High Stress] --> Re_Perf3[70% Performance]
-        Re_Unk[Unknown Stress] --> Re_Perf4[40% Performance: Degrades Gracefully]
-        style Re_Perf4 fill:#99ff99
-    end
-```
+Woods organizes uses of *resilience* into four concepts: recovery after disruption, robustness, graceful extensibility, and sustained adaptability over time. He critiques treating these as interchangeable. This is his conceptual account; the platform questions below are teaching applications.
 
-Robustness handles known failures well within designed limits, but can collapse when stress exceeds those limits. Resilience adapts imperfectly to novel or combined stresses, preserving partial function rather than all-or-nothing failure. **For complex systems, you need both:** robust controls for known failure modes (timeouts, validation, capacity limits) plus resilient adaptation for the unknown (graceful degradation, fallbacks, learning loops). Neither alone is sufficient.
+| Question to investigate | Evidence to look for |
+|---|---|
+| Which operation must continue, under which disturbances? | Explicit correctness, latency, or availability requirements and observations under the specified conditions. |
+| What does the prepared fallback actually preserve? | The response users receive, its freshness and correctness, and the conditions under which the fallback itself stops meeting requirements. |
+| What happens when prepared responses are insufficient? | How people and systems mobilize additional capacity or change their response, including where that adaptation runs out. |
+
+**Try this thought exercise:** a team proposes serving cached data during database delays. Before praising or rejecting it, name the operation. A product description and a payment authorization can have different correctness requirements. Ask which requirements the proposed response preserves and which it compromises. Then identify what observation would show that the fallback is failing its purpose.
+
+Woods distinguishes graceful extensibility from graceful degradation: adaptation at a boundary can create new capacity to succeed, beyond accepting a reduced service. A planned fallback demonstrates its specified behavior when tested; broader claims about adaptability need broader evidence. Neither the label *resilient* nor a successful fallback implies unlimited capacity to handle unknown stress.
 
 ### 4.2 The Four Resilience Capabilities
 
@@ -543,11 +533,11 @@ Before you leave this module, walk through a checklist on a service you operate 
    The request is flawed because complex systems do not fail due to a single "root cause." **WHY?** In complex systems, catastrophe requires multiple defenses to fail simultaneously (the Swiss Cheese model). The incident was likely caused by a combination of individually harmless factors (e.g., a latent bug in a recent PR, a muted alert from last month, a peak load spike, and random timing) that happened to align perfectly. Searching for a single root cause, especially to assign blame, ignores the systemic conditions that made the failure possible and guarantees the real vulnerabilities will remain unaddressed. Blameless postmortems that seek to understand how the system allowed the failure are required to genuinely improve resilience.
    </details>
 
-4. **Team A builds an API that rigidly rejects any request taking longer than 500ms, causing the entire frontend to crash with a 500 Error when the database slows down. Team B builds an API that returns cached, slightly stale data if the database takes longer than 500ms, allowing the user to continue using the app. Which team built a robust system and which built a resilient system?**
+4. **Hypothetical scenario: both teams set a 500ms database timeout. Team A's timeout produces a frontend error; Team B returns cached data and keeps the page usable. What do these observations establish, and what would you need to know before judging robustness or adaptability?**
    <details>
    <summary>Answer</summary>
 
-   Team A built a robust system, while Team B built a resilient system. **WHY?** A robust system (Team A) is designed like a fortress to resist known failures up to a specific threshold, but when it encounters unexpected stress (like a database slow down that pushes past its rigid limits), it fails catastrophically (crashing the frontend). A resilient system (Team B) is designed to adapt and bend like a reed; it accepts that failures will happen and degrades gracefully (returning stale data) rather than collapsing completely. For complex systems, robustness and resilience are complementary: Team A's rigid timeout is a reasonable robust guard for known latency bounds, while Team B's fallback adds resilient adaptation when those bounds are exceeded. The best design combines both—strict limits where you understand the failure mode, graceful degradation where you do not.
+   The scenario establishes two different responses to a prepared latency limit: an error and continued display using cached data. **WHY?** Neither observation alone measures robustness of a specified property across a range of disturbances. Establish what the operation requires, whether stale data meets those requirements, and how each response behaves as conditions vary. Team B's planned fallback may preserve a useful function, but this vignette does not demonstrate Woods's graceful extensibility when prepared capabilities become insufficient. Team A's error likewise does not establish that the system lacks every robust property. Evaluate the required behavior and its limits before assigning a whole-system label or selecting a design.
    </details>
 
 5. **Your platform team must evaluate two architectural decisions for a new checkout service through the lens of complexity theory. Design A synchronously calls five downstream services on every request to maximize data freshness. Design B uses asynchronous boundaries, bulkheads, and cached fallbacks that may serve slightly stale prices during dependency trouble. Which design better reduces blast radius of unexpected interactions, and why?**
