@@ -12,7 +12,7 @@ Author skill for new KubeDojo curriculum modules. Ensures consistent structure, 
 - Creating new curriculum modules
 - Expanding existing module content
 - Writing theory sections, exercises, or quizzes
-- Rewriting modules failing the verifier (`median_wpp < 28` etc.) or the 7-dimension rubric
+- Rewriting modules failing the verifier (`median_wpp < 28` etc.) or the 8-dimension rubric
 
 ## Author lanes (who writes what — 2026-05-24 snapshot)
 
@@ -27,7 +27,7 @@ Author skill for new KubeDojo curriculum modules. Ensures consistent structure, 
 | Drafter (needs Claude expansion) | agy (gemini-3.1-pro-high) | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
 | Source-fidelity expansion | claude opus (post-2026-06-15 inline) OR codex (pre, danger mode) | Strict-source rewrites | [[feedback_codex_default_prose_expander]] |
 
-**Important**: every author lane is bound by the same density gates and 7-dim rubric below. The agent identity changes the dispatch wrapper, not the content contract.
+**Important**: every author lane is bound by the same density gates and 8-dim rubric below. The agent identity changes the dispatch wrapper, not the content contract.
 
 ## Author contract (every lane)
 
@@ -47,7 +47,7 @@ Every authored/rewritten module MUST satisfy ALL of:
 9. **No personal framing**: no interview/job/role narrative ([[feedback_no_personal_framing]]).
 10. **Pedagogy over listicles**: modules must TEACH, not dump facts ([[feedback_teaching_not_listicles]]).
 
-The 7-dimension rubric (Learning Outcomes, Scaffolding, Active Learning, Real-World Connection, Assessment Alignment, Cognitive Load, Engagement) is the reviewer's contract — see [[module-quality-reviewer]]. Author for ≥3.5 average with no dimension at 1.
+The 8-dimension rubric (Learning Outcomes, Scaffolding, Active Learning, Real-World Connection, Assessment Alignment, Cognitive Load, Engagement, Practitioner Depth — complexity-scaled) is the reviewer's contract — see [[module-quality-reviewer]] and `docs/quality-rubric.md`. Author for sum ≥ 33/40 with every dimension ≥ 4.
 
 ## Track-Specific Guidelines
 
@@ -469,7 +469,7 @@ Same shape as codex via `.venv/bin/python scripts/dispatch_smart.py draft --agen
 
 ## References
 
-- [[module-quality-reviewer]] — the 7-dimension rubric your authored module is graded against.
+- [[module-quality-reviewer]] — the 8-dimension rubric your authored module is graded against.
 - [[cross-family-reviewer]] — post-author review protocol.
 - [[dispatch-router]] — agent routing decisions.
 - [[k8s-cert-expert]] — domain expertise for k8s/cert content.
