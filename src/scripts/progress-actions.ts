@@ -54,13 +54,27 @@ export function initProgressActions(): void {
     catch { message('The selected file could not be read. Existing progress was not changed.'); }
     finally { input.value = ''; }
   });
-  document.getElementById('kd-clear-btn')?.addEventListener('click', () => {
-    if (!window.confirm('Remove all progress saved in this browser? Export a backup first if you want to restore it later.')) return;
-    try {
-      window.localStorage.removeItem(PROGRESS_KEY);
-      message('Saved progress removed from this browser.');
-      changed();
-    } catch { message('Progress could not be reset. Browser storage is unavailable.'); }
+  const resetButton = document.getElementById('kd-clear-btn');
+  resetButton?.addEventListener('click', () => {
+    const target = document.getElementById('kd-progress-actions-status');
+    if (!target) return;
+    message('Remove all saved progress? Export a backup first if you want to restore it later. ');
+    const confirm = document.createElement('button');
+    confirm.id = 'kd-progress-reset-confirm';
+    confirm.textContent = 'Confirm reset';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel reset';
+    cancel.addEventListener('click', () => { message('Reset cancelled.'); resetButton.focus(); });
+    confirm.addEventListener('click', () => {
+      try {
+        window.localStorage.removeItem(PROGRESS_KEY);
+        message('Saved progress removed from this browser.');
+        changed();
+      } catch { message('Progress could not be reset. Browser storage is unavailable.'); }
+      resetButton.focus();
+    });
+    target.append(confirm, ' ', cancel);
+    cancel.focus();
   });
 }
 
