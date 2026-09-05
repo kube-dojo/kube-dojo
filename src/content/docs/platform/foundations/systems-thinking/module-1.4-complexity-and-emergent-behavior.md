@@ -681,56 +681,52 @@ What you experienced is emergence in miniature: system-level self-healing that n
 
 Apply complex systems thinking to a recent incident from your organization, or use the hypothetical scenario below if you do not have a suitable recent example. **Hypothetical scenario:** users report checkout failing intermittently; error rates are elevated but remain below alert thresholds; some engineers reproduce the issue while others cannot; symptoms began within the last few days but the exact start time is unclear.
 
-**Section 1: Cynefin Classification (10 minutes)**
+**Section 1: Choose an Investigative Approach (10 minutes)**
 
 Answer these questions:
 
-1. What domain is this scenario in initially? Why?
+1. Separate the reported observations from what you still need to establish. Which response approach does the current evidence support?
 
-   > **Domain**: ________________
+   > **Working interpretation**: ________________
    >
-   > **Evidence**:
-   > - Cause-effect is: clear / analyzable / only in hindsight
-   > - Experts can: definitely solve it / might need experiments
-   > - The urgency is: low / medium / critical
+   > **Evidence and limits**:
+   > - What is observed, and how was it recorded?
+   > - Which cause-and-effect relationships are established, and which are hypotheses?
+   > - What user impact requires attention while you investigate?
 
-2. What specific actions would help move to a better-understood domain?
+2. Use Cynefin to explain your choice of approach. If the information does not support a domain interpretation yet, state what you need to learn. The symptoms alone do not require a particular label.
 
-3. What signals would indicate the situation has shifted domains?
+3. Identify a next step and the evidence that could change your interpretation. For a proposed intervention, state its authorization, prerequisites and possible effects before treating it as suitable.
 
-**Section 2: Contributing Factors Analysis (10 minutes)**
+**Section 2: Build an Evidence Ledger (10 minutes)**
 
-Instead of finding "root cause," list all potential contributing factors:
+Apply Cook's distinction between contributors and a complete explanation. Record observations separately from candidate explanations; an empty evidence cell is a research task, not permission to invent a result.
 
-| Factor | Category | Was It New? | Was It Known? |
-|--------|----------|-------------|---------------|
-| | Software (code, config) | | |
-| | Infrastructure (compute, network) | | |
-| | Process (deployment, review) | | |
-| | Human (knowledge, attention) | | |
-| | Environment (load, time, dependencies) | | |
-| | Timing (sequence, coincidence) | | |
+| Observation and its source | Candidate explanation | Evidence that would support it | Evidence that would challenge it |
+|---|---|---|---|
+| | | | |
+| | | | |
 
-Write short answers explaining which factors individually seem harmless, which combination might have created the incident, and which latent failures might remain even after a narrow fix.
+Compare two plausible hypotheses without declaring either a demonstrated cause. For the supplied hypothetical scenario, list the records or observations you would seek; do not fabricate logs or outcomes. Explain how timing and the information available to responders would affect your account. Avoid assuming that a configuration was harmless before the incident merely because no earlier impact was reported.
 
-**Section 3: Resilience Improvements (5 minutes)** — for the scenario, identify one improvement for each resilience capability in the table below and note which capability gap would have made the intermittent checkout failure visible earlier.
+**Section 3: Questions for the Four Abilities (5 minutes)** — use Hollnagel's framework to ask what the team can establish about responding, monitoring, anticipating and learning. Identify evidence needed before diagnosing a gap or recommending an improvement. You may leave a gap unresolved when the scenario does not supply enough information.
 
-| Capability | Current Gap | Proposed Improvement |
-|------------|-------------|---------------------|
+| Ability | Question to investigate | Evidence needed before a change |
+|---------|-------------------------|---------------------------------|
 | **Respond** | | |
 | **Monitor** | | |
 | **Anticipate** | | |
 | **Learn** | | |
 
-Complete Part B successfully when you can explain the Cynefin domain with evidence, name at least five contributing factors across categories, and propose resilience improvements for all four capabilities.
+Complete Part B with a justified working interpretation, an evidence ledger comparing hypotheses, and questions for all four abilities. Choose one next step and explain what its result could establish, what would remain uncertain, and how you would check any proposed change. These are teaching applications of the frameworks, not a diagnosis supplied by them.
 
 **Success Criteria**:
 - [ ] Part A: Successfully killed and observed pod recovery
 - [ ] Part A: Can explain what "emergence" you observed
-- [ ] Part B: Correct Cynefin domain identification with reasoning
-- [ ] Part B: At least 5 contributing factors identified across categories
-- [ ] Part B: Recognized that "individually harmless" factors combine
-- [ ] Part B: Resilience improvements for all 4 capabilities
+- [ ] Part B: Working interpretation justified by evidence, with unknowns stated
+- [ ] Part B: Observations separated from two candidate explanations and their evidence needs
+- [ ] Part B: No invented causes, logs or outcomes; timing and responder knowledge considered
+- [ ] Part B: Questions for all four abilities and one justified next step
 
 ---
 
