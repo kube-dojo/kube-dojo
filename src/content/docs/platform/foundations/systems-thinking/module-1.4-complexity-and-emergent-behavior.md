@@ -574,7 +574,7 @@ Before you leave this module, walk through a checklist on a service you operate 
 
 ### Part A: Observe Replica Recovery and HTTP Requests (15–25 minutes)
 
-Use a disposable Kubernetes 1.35 cluster and kubectl 1.35, with permission to create namespaces. Save the script below as `recovery.sh`, inspect the context name, then run `bash recovery.sh YOUR_DISPOSABLE_CONTEXT`. It creates a unique namespace and deletes only that namespace instance on exit. Keep the printed evidence directory. If setup or cleanup fails, read the error and inspect the named namespace; do not substitute a broad delete command.
+Use a disposable Kubernetes 1.35 cluster and kubectl 1.35, with permission to create namespaces. Save the script below as `recovery.sh`, use `kubectl config get-contexts` to check the context name, then run `bash recovery.sh YOUR_DISPOSABLE_CONTEXT`. It creates a unique namespace and deletes only that namespace instance on exit. Keep the printed evidence directory. If setup or cleanup fails, read the error and inspect the named namespace; do not substitute a broad delete command.
 
 Before running, predict two things separately: what will happen to Pod identities when one and then two Pods are deleted, and what the HTTP samples might show. A [Deployment manages ReplicaSets](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/deployment/); the [ReplicaSet controller creates replacement Pods](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/replicaset/). [Readiness affects Service endpoints](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/#readiness-probe), but a ready replica count alone does not measure client requests.
 
@@ -643,7 +643,7 @@ for round in 1 2; do
 done
 ```
 
-Open the evidence files and compare your predictions with the run. In each before/after snapshot, compare Pod UIDs, `ownerReferences`, container readiness and ReplicaSet counts. Follow Pod → ReplicaSet → Deployment ownership. The initial Pod JSON also records image tags and resolved `imageID` values; tags can change, so preserve those identities alongside the client/server versions. A timeout or missing replica is a result to investigate, not permission to write “recovered.”
+Open the evidence files and compare your predictions with the run. In each before/after snapshot, compare Pod UIDs, `ownerReferences`, container readiness and ReplicaSet counts. Follow Pod → ReplicaSet → Deployment ownership. Setup patches the Pod template to add a readiness probe, triggering a rollout; an older ReplicaSet with zero replicas may already appear in the before snapshot, so do not attribute its presence to the deletion experiment. The initial Pod JSON also records image tags and resolved `imageID` values; tags can change, so preserve those identities alongside the client/server versions. A timeout or missing replica is a result to investigate, not permission to write “recovered.”
 
 For each round, count `HTTP_OK` and `HTTP_FAILED`, inspect request timestamps and compare them with the deletion timestamp. The observer makes 20 attempts, with a two-second wget timeout and a one-second pause between attempts; execution and scheduling also affect the interval. These are samples through the Service, not continuous coverage. Even 20 successes cannot establish uninterrupted availability or predict the next run. If sampling ends before recovery, state that limitation.
 
