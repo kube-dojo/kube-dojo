@@ -797,7 +797,7 @@ Stop API writes before replacing the etcd data directory, usually by moving the 
 
 ## Hands-On Exercise: Control Plane Troubleshooting
 
-This exercise is designed for a kubeadm-based sandbox where you have root access to a control plane node. Do not run the destructive portions on a shared production cluster. The goal is to connect symptoms to layers: static pod files, certificates, scheduler behavior, etcd health, and cleanup discipline.
+Tasks 1–3 show inspection and health checks for a kubeadm-based sandbox with control-plane access; follow your environment's change policy for any etcd health action. Task 4 is a separate, optional, explicitly destructive local Docker/kind fixture: it does not run in the hosted Killercoda scenario and it does not touch a host scheduler manifest. Do not run the destructive portions of either path on a shared or production cluster.
 
 ### Setup
 
@@ -882,48 +882,196 @@ sudo ETCDCTL_API=3 etcdctl \
 ```
 </details>
 
-### Task 4: Design recovery workflows by simulating scheduler failure
+### Task 4: Design recovery workflows in an owned local kind fixture
 
-Intentionally stop the scheduler in the sandbox, create a test pod, and observe how scheduling failure differs from API failure. Restore the manifest promptly so the cluster returns to a healthy state.
+The hosted Killercoda lab does not execute this local experiment. Use it only when Docker, kind, kubectl, and jq are installed, a Docker daemon is available, the cached `kindest/node:v1.35.0` image is present, and the kubectl client is 1.34–1.36 ([version-skew policy](https://kubernetes.io/releases/version-skew-policy/#kubectl)). The fixture pins the Docker provider and that image, creates a unique cluster and private kubeconfig, and changes a scheduler manifest only inside that fixture's verified control-plane container. It never changes the user's kubeconfig or a host path. Run the complete Bash block as one script so its interruption trap remains active. The Pod checks test scheduling: `PodScheduled` and `spec.nodeName` are the signals; the Pod need not become `Ready` and its `pause` image is configured not to pull.
 
 <details>
 <summary>View Solution</summary>
 
 ```bash
-# First, note a normal pod's behavior.
-kubectl run test-scheduler --image=nginx
-kubectl get pods test-scheduler
-
-# Temporarily rename scheduler manifest; this stops the static pod.
-sudo mv /etc/kubernetes/manifests/kube-scheduler.yaml /tmp/kube-scheduler.yaml.hold
-
-# Wait 30 seconds, then create another pod.
-sleep 30
-kubectl run test-scheduler-2 --image=nginx
-
-# Check status; it should remain Pending while the scheduler is absent.
-kubectl get pods test-scheduler-2
-kubectl describe pod test-scheduler-2 | grep -A 5 Events
-
-# Restore scheduler.
-sudo mv /tmp/kube-scheduler.yaml.hold /etc/kubernetes/manifests/kube-scheduler.yaml
-
-# Wait for scheduler to restart and bind the pod.
-sleep 30
-kubectl get pods test-scheduler-2
+set -Eeuo pipefail
+RUN_ID="$(date -u +%Y%m%d%H%M%S)-$$"
+CLUSTER="cka53-scheduler-${RUN_ID}"
+NAMESPACE="cka53-${RUN_ID}"
+KUBECONFIG_PATH="$PWD/.cka53-${RUN_ID}.kubeconfig"
+CONTROL_PLANE=""
+MANIFEST=/etc/kubernetes/manifests/kube-scheduler.yaml
+HOLD_DIR="/tmp/cka53-scheduler-${RUN_ID}"
+HOLD="$HOLD_DIR/kube-scheduler.yaml"
+BASE_POD="baseline-${RUN_ID}"
+BLOCKED_POD="blocked-${RUN_ID}"
+CLUSTER_ATTEMPTED=0
+CONFIG_OWNED=0
+NAMESPACE_ATTEMPTED=0
+MANIFEST_MOVE_ATTEMPTED=0
+die() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
+file_state() {
+  local state
+  if ! state="$(docker exec "$CONTROL_PLANE" sh -c '
+    manifest=$1; hold=$2
+    if [ -f "$manifest" ] && [ ! -e "$hold" ]; then printf present
+    elif [ -f "$hold" ] && [ ! -e "$manifest" ]; then printf held
+    elif [ -e "$manifest" ] || [ -e "$hold" ]; then printf ambiguous
+    else printf missing
+    fi
+  ' sh "$MANIFEST" "$HOLD")"; then
+    return 1
+  fi
+  case "$state" in present|held) printf '%s' "$state";; *) return 1;; esac
+}
+restore_manifest() {
+  local state after
+  if ! state="$(file_state)"; then return 1; fi
+  case "$state" in
+    present) return 0 ;;
+    held)
+      if ! docker exec "$CONTROL_PLANE" sh -c 'manifest=$1; hold=$2; test -f "$hold" && test ! -e "$manifest" && mv "$hold" "$manifest"' sh "$MANIFEST" "$HOLD"; then
+        return 1
+      fi
+      if ! after="$(file_state)"; then return 1; fi
+      [[ "$after" == present ]]
+      ;;
+    *) return 1 ;;
+  esac
+}
+scheduler_json() {
+  if ! SCHEDULER_JSON="$(docker exec "$CONTROL_PLANE" crictl ps --name kube-scheduler -o json 2>/dev/null)"; then
+    return 1
+  fi
+  jq -e '(type == "object") and ((.containers | type) == "array")' <<<"$SCHEDULER_JSON" >/dev/null
+}
+scheduler_absent() {
+  scheduler_json && jq -e '(.containers | length) == 0' <<<"$SCHEDULER_JSON" >/dev/null
+}
+scheduler_present() {
+  scheduler_json && jq -e '(.containers | length) > 0' <<<"$SCHEDULER_JSON" >/dev/null
+}
+wait_scheduler() {
+  local wanted=$1
+  for _ in {1..60}; do
+    if [[ "$wanted" == absent ]] && scheduler_absent; then return 0; fi
+    if [[ "$wanted" == present ]] && scheduler_present; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+k() { kubectl --kubeconfig "$KUBECONFIG_PATH" --request-timeout=10s "$@"; }
+api_ready() { k get --raw=/readyz >/dev/null; }
+create_probe_pod() {
+  local name=$1
+  k create -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name
+  namespace: $NAMESPACE
+spec:
+  restartPolicy: Never
+  containers:
+  - name: probe
+    image: registry.k8s.io/pause:3.10
+    imagePullPolicy: Never
+EOF
+}
+cleanup() {
+  local rc=$? cleanup_rc=0 clusters cluster_deleted=0 namespace_cleanup_ok=1
+  trap - EXIT INT TERM
+  set +e
+  if [[ "$MANIFEST_MOVE_ATTEMPTED" -eq 1 ]] && ! restore_manifest; then
+    printf 'Recovery unknown: use docker exec %s to inspect manifest=%s and hold=%s; retain cluster and private kubeconfig=%s until restored.\n' "$CONTROL_PLANE" "$MANIFEST" "$HOLD" "$KUBECONFIG_PATH" >&2
+    exit 1
+  fi
+  if [[ "$NAMESPACE_ATTEMPTED" -eq 1 ]]; then
+    if ! k delete namespace "$NAMESPACE" --wait=true --timeout=30s >/dev/null; then
+      printf 'Cleanup failed for owned namespace %s; preserving the named cluster/config boundary.\n' "$NAMESPACE" >&2
+      cleanup_rc=1
+      namespace_cleanup_ok=0
+    fi
+  fi
+  if [[ "$CLUSTER_ATTEMPTED" -eq 1 && "$namespace_cleanup_ok" -eq 1 ]]; then
+    if ! clusters="$(KIND_EXPERIMENTAL_PROVIDER=docker kind get clusters 2>/dev/null)"; then
+      printf 'Cannot determine whether owned cluster %s exists; preserving it and %s.\n' "$CLUSTER" "$KUBECONFIG_PATH" >&2
+      cleanup_rc=1
+    elif printf '%s\n' "$clusters" | grep -Fxq "$CLUSTER"; then
+      if KIND_EXPERIMENTAL_PROVIDER=docker kind delete cluster --name "$CLUSTER" --kubeconfig "$KUBECONFIG_PATH" >/dev/null; then
+        if ! clusters="$(KIND_EXPERIMENTAL_PROVIDER=docker kind get clusters 2>/dev/null)"; then
+          printf 'Cannot confirm deletion of owned cluster %s; preserving %s.\n' "$CLUSTER" "$KUBECONFIG_PATH" >&2
+          cleanup_rc=1
+        elif printf '%s\n' "$clusters" | grep -Fxq "$CLUSTER"; then
+          printf 'Owned cluster %s still exists after delete; preserving it and %s.\n' "$CLUSTER" "$KUBECONFIG_PATH" >&2
+          cleanup_rc=1
+        else
+          cluster_deleted=1
+        fi
+      else
+        printf 'Cleanup failed for owned kind cluster %s; preserving %s.\n' "$CLUSTER" "$KUBECONFIG_PATH" >&2
+        cleanup_rc=1
+      fi
+    else
+      cluster_deleted=1
+    fi
+  fi
+  if [[ "$CONFIG_OWNED" -eq 1 && "$cluster_deleted" -eq 1 && -e "$KUBECONFIG_PATH" ]]; then
+    rm -f -- "$KUBECONFIG_PATH" || cleanup_rc=1
+  fi
+  if [[ "$cleanup_rc" -ne 0 ]]; then exit 1; fi
+  exit "$rc"
+}
+trap 'exit 130' INT TERM
+trap cleanup EXIT
+for tool in kind docker kubectl jq; do command -v "$tool" >/dev/null || die "missing required command: $tool"; done
+kubectl version --client=true -o json | jq -e '(.clientVersion.major == "1") and ((.clientVersion.minor | sub("[^0-9].*";"") | tonumber) >= 34) and ((.clientVersion.minor | sub("[^0-9].*";"") | tonumber) <= 36)' >/dev/null || die 'kubectl client 1.34-1.36 required for v1.35 fixture'
+docker info >/dev/null || die 'Docker daemon is unavailable'
+docker image inspect kindest/node:v1.35.0 >/dev/null || die 'kindest/node:v1.35.0 is not available locally'
+[[ ! -e "$KUBECONFIG_PATH" ]] || die "refusing existing kubeconfig path: $KUBECONFIG_PATH"
+if ! existing_clusters="$(KIND_EXPERIMENTAL_PROVIDER=docker kind get clusters 2>/dev/null)"; then die 'cannot inspect existing kind clusters'; fi
+if printf '%s\n' "$existing_clusters" | grep -Fxq "$CLUSTER"; then die "refusing existing cluster: $CLUSTER"; fi
+CONFIG_OWNED=1
+CLUSTER_ATTEMPTED=1
+KIND_EXPERIMENTAL_PROVIDER=docker kind create cluster --name "$CLUSTER" --image kindest/node:v1.35.0 --kubeconfig "$KUBECONFIG_PATH" --wait 120s >/dev/null
+nodes="$(docker ps --filter "label=io.x-k8s.kind.cluster=$CLUSTER" --format '{{.Names}}')"
+[[ "$(printf '%s\n' "$nodes" | sed '/^$/d' | wc -l | tr -d '[:space:]')" == 1 ]] || die 'expected exactly one running owned control-plane container'
+CONTROL_PLANE="$(printf '%s\n' "$nodes" | sed -n '1p')"
+[[ "$(docker inspect --format '{{ index .Config.Labels "io.x-k8s.kind.cluster" }}' "$CONTROL_PLANE")" == "$CLUSTER" ]] || die 'control-plane cluster label mismatch'
+[[ "$(docker inspect --format '{{ index .Config.Labels "io.x-k8s.role" }}' "$CONTROL_PLANE")" == control-plane ]] || die 'control-plane role label mismatch'
+k config current-context | grep -Fxq "kind-$CLUSTER" || die 'private kubeconfig context mismatch'
+docker exec "$CONTROL_PLANE" sh -c 'command -v crictl >/dev/null && test -f /etc/kubernetes/manifests/kube-scheduler.yaml' || die 'fixture lacks crictl or scheduler manifest'
+docker exec "$CONTROL_PLANE" sh -c 'mkdir -p "$1" && test ! -e "$2"' sh "$HOLD_DIR" "$HOLD" || die 'owned hold path is not clean'
+[[ "$(file_state)" == present ]] || die 'scheduler manifest state is not unambiguous'
+scheduler_present || die 'scheduler presence is unknown before the experiment'
+NAMESPACE_ATTEMPTED=1; k create namespace "$NAMESPACE" >/dev/null
+create_probe_pod "$BASE_POD"
+api_ready || die 'API readiness failed before scheduler test'
+k wait -n "$NAMESPACE" --for=condition=PodScheduled "pod/$BASE_POD" --timeout=30s >/dev/null
+MANIFEST_MOVE_ATTEMPTED=1; docker exec "$CONTROL_PLANE" sh -c 'manifest=$1; hold=$2; test -f "$manifest" && test ! -e "$hold" && mv "$manifest" "$hold"' sh "$MANIFEST" "$HOLD"
+wait_scheduler absent || die 'scheduler absence was not proven by valid empty crictl JSON'
+create_probe_pod "$BLOCKED_POD"
+api_pending=0
+for _ in {1..30}; do
+  phase="$(k get pod "$BLOCKED_POD" -n "$NAMESPACE" -o jsonpath='{.status.phase}')" || die 'could not read blocked Pod'
+  node="$(k get pod "$BLOCKED_POD" -n "$NAMESPACE" -o jsonpath='{.spec.nodeName}')" || die 'could not read Pod assignment'
+  if api_ready && [[ "$phase" == Pending && -z "$node" ]]; then api_pending=1; break; fi
+  sleep 1
+done
+[[ "$api_pending" -eq 1 ]] || die 'blocked Pod did not demonstrate an API-ready unassigned Pending state'
+k describe pod "$BLOCKED_POD" -n "$NAMESPACE"
+restore_manifest || die 'scheduler manifest restoration failed'
+wait_scheduler present || die 'scheduler recovery was not proven by valid crictl JSON'
+k wait -n "$NAMESPACE" --for=condition=PodScheduled "pod/$BLOCKED_POD" --timeout=60s >/dev/null
+node="$(k get pod "$BLOCKED_POD" -n "$NAMESPACE" -o jsonpath='{.spec.nodeName}')" || die 'could not verify recovered Pod assignment'
+[[ -n "$node" ]] || die 'scheduler recovered without a node assignment'
+printf 'Scheduler failure/recovery observation complete in owned cluster %s; cleanup follows on exit.\n' "$CLUSTER"
 ```
 </details>
 
 ### Cleanup
 
-Remove the test artifacts and confirm that the scheduler has resumed normal operation before leaving the lab.
+The script owns its namespace, kind cluster, private kubeconfig, and in-container hold path. Its exit and interrupt traps restore the scheduler manifest before deleting those resources. If restoration or ownership cannot be confirmed, it preserves the named resources and prints a recovery boundary; it never deletes a host scheduler path or the user's kubeconfig. `crictl` errors, malformed JSON, missing `containers`, or a non-array `containers` field are unknown states, not proof of scheduler absence.
 
 <details>
 <summary>View Solution</summary>
-
-```bash
-kubectl delete pod test-scheduler test-scheduler-2
-```
+The final success line is evidence only after the block has shown API readiness, a valid empty running-scheduler array, an unassigned `Pending` Pod, a restored manifest, a valid non-empty running-scheduler array, and a recovered `PodScheduled` condition. The block does not claim that the Pod became `Ready` or that an application image was pulled.
 </details>
 
 ### Practice Drills: Rapid Incident Response
@@ -1021,6 +1169,7 @@ Before you restore control plane service, explain why this command changes the h
 
 ## Sources
 
+- [kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/) and [kind configuration](https://kind.sigs.k8s.io/docs/user/configuration/) — Backs the local Docker/kind fixture's provider, image, unique name, wait, and kubeconfig options.
 - [Certificate Management with kubeadm](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/)
 - [Kubernetes ports and protocols](https://kubernetes.io/docs/reference/networking/ports-and-protocols/)
 - [ComponentStatus v1 API reference](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/component-status-v1/)
